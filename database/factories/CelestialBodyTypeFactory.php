@@ -20,8 +20,9 @@ class CelestialBodyTypeFactory extends Factory
     public function definition(): array
     {
         return [
-            'name'        => $this->faker->word,
-            'description' => $this->faker->sentence(),
+            'name'        => $this->faker->name(),
+            'description' => $this->faker->text(),
+            'weight'      => $this->faker->randomFloat(0, 0, 9),
         ];
     }
 }

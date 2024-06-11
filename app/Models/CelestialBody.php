@@ -22,6 +22,7 @@ class CelestialBody extends Model
         'name',                     // Optional because this can be named by the user at a later date.
         'x_coordinate',
         'y_coordinate',
+        ''
         // More to come at a later date and time maybe quantity of resources remaining, (this will have to be held in
         // cache somewhere otherwise can you imagine what's going to happen?
     ];

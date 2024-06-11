@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'providers' => [
+        App\Providers\FakerServiceProvider::class,
+    ],
+
 ];
