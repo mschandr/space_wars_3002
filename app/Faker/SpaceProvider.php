@@ -7,7 +7,11 @@ use Faker\Provider\Base;
 class SpaceProvider extends Base
 {
     protected static array $romanNumerals = [
-        'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII',
+        'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+        'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX',
+        'XXI', 'XXII', 'XXIII', 'XXIV', 'XXV', 'XXVI', 'XXVII', 'XXVIII', 'XXIX', 'XXX',
+        'XXXI', 'XXXII', 'XXXIII', 'XXXIV', 'XXXV', 'XXXVI', 'XXXVII', 'XXXVIII', 'XXXIX', 'XL',
+        'XLI', 'XLII', 'XLIII', 'XLIV', 'XLV', 'XLVI', 'XLVII', 'XLVIII', 'XLIX', 'L',
     ];
     protected static array $greekLetters = [
         'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu',
@@ -23,7 +27,7 @@ class SpaceProvider extends Base
         '40 Eridani B', 'HIP 70828', 'GJ 887', 'GJ 1152', 'GJ 205', 'GJ 412', 'GJ 1005', 'GJ 629', 'LTT 1235',
         'GJ 806', 'WISE 0350-5627', 'GJ 1267', 'GJ 380', 'GJ 272', 'HIP 11662', 'GJ 674', 'GJ 390', 'GJ 876',
         'WISE 0202+6048', 'GJ 831', 'GJ 251', 'GJ 433', 'GJ 1069', 'Deneb Kaitos', 'LP 686-60', 'GJ 696', 'GJ 849',
-        'WISE 1237-6337', 'GJ 1245', 'GJ 406',  'SCR 1845-6358', 'WISE 0855+0145', 'GJ 270', 'HIP 79977', 'GJ 1002',
+        'WISE 1237-6337', 'GJ 1245', 'GJ 406', 'SCR 1845-6358', 'WISE 0855+0145', 'GJ 270', 'HIP 79977', 'GJ 1002',
         'SCR 1845-6359', 'GJ 832', 'GJ 388', 'GJ 403', 'GJ 848', 'GJ 1281', 'SCR 1645-9276', 'GJ 387', 'GJ 207',
         'WISE 0359-3602', 'GJ 1252', 'GJ 1116', 'GJ 411', 'GJ 357', 'GJ 803', 'SCR 1845-6360', 'GJ 1071',
         'SCR 1645-9277', 'GJ 441', 'GJ 1283', "Teegarden's Star b", 'SCR 1845-6362', 'GJ 385', 'GJ 1248', 'GJ 404',
@@ -37,55 +41,65 @@ class SpaceProvider extends Base
 
     public function starName(): string
     {
-
-        return static::randomElement(static::$nebulae)." ".static::randomElement(static::$greekLetters).
+        return static::randomElement(static::$stars)." ".static::randomElement(static::$greekLetters).
             " ".static::randomElement(static::$romanNumerals);
+    }
+
+    public function unknownStar(): string
+    {
+        return "Unknown Star System";
     }
 
     public function nebulaeName(): string
     {
-        return static::randomElement(static::$nebulae)." ".static::randomElement(static::$greekLetters).
+        return static::randomElement(static::$nebulae)." Nebula ".static::randomElement(static::$greekLetters).
             " ".static::randomElement(static::$romanNumerals);
     }
 
     // @todo fill this in
-    public function asteroidName():string
+    public function asteroidName(): string
     {
         return "";
     }
 
     // @todo fill this in
-    public function cometName() :string
+    public function cometName(): string
     {
         return "";
     }
 
     // @todo fill this in
-    public function moonName():string
+    public function moonName(): string
     {
         return "";
     }
 
     // @todo fill this in
-    public function planetName():string
+    public function planetName(): string
     {
         return "";
     }
 
     // @todo fill this in
-    public function asteroidbeltName():string
+    public function asteroidbeltName(): string
     {
         return "";
     }
 
     // @todo fill this in
-    public function blackholeName():string
+    public function blackholeName(): string
     {
         return "";
     }
 
     // @todo fill this in
-    public function dwarfplanetName():string
+    public function dwarfplanetName(): string
+    {
+        return "";
+    }
+
+    // @todo file this in
+    public function supermassiveblackholeName(): string
     {
         return "";
     }

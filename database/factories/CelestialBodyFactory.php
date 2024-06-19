@@ -6,7 +6,7 @@ use App\Exceptions\CelestialBodyTypeException;
 use App\Models\CelestialBody;
 use App\Models\CelestialBodyType;
 use Illuminate\Database\Eloquent\Factories\Factory as DBFactory;
-use App\BodyType;
+use App\Enums\BodyType;
 use Faker\SpaceProvider;
 use FrankHouweling\WeightedRandom\WeightedRandomGenerator;
 
@@ -16,8 +16,8 @@ use FrankHouweling\WeightedRandom\WeightedRandomGenerator;
 class CelestialBodyFactory extends DBFactory
 {
     protected $model = CelestialBody::class;
-    protected array $celestial_body_type_ids;
-    protected int $celestial_body_types = 0;
+    protected array $celestialBodyTypeIds;
+    protected int $celestialBodyTypes = 0;
 
     /**
      * Define the model's default state.
@@ -43,7 +43,7 @@ class CelestialBodyFactory extends DBFactory
     public function getRandomWeightedCelestialBodyTypeId(): string
     {
         $celestial_bodies = CelestialBodyType::whereIn('name', BodyType::UniverseBodyTypes)
-                                             ->get(['id', 'universe_weight']);
+                                             ->get(['id', 'name']);
         $generator        = new WeightedRandomGenerator();
         try {
             foreach ($celestial_bodies as $k => $celestial_body_type) {
@@ -64,15 +64,17 @@ class CelestialBodyFactory extends DBFactory
     {
         $cbti = new CelestialBodyType();
         return match ($current_cbti_id) {
-            $cbti->getAsteriodBeltId()  => $this->faker->asteroidbeltName(),
-            $cbti->getAsteroidId()      => $this->faker->asteroidName(),
-            $cbti->getBlackHoleId()     => $this->faker->blackholeName(),
-            $cbti->getCometId()         => $this->faker->cometName(),
-            $cbti->getDwarfPlanetId()   => $this->faker->dwarfplanetName(),
-            $cbti->getMoonId()          => $this->faker->moonName(),
-            $cbti->getNebulaId()        => $this->faker->nebulaeName(),
-            $cbti->getPlanetId()        => $this->faker->planetName(),
-            $cbti->getStarId()          => $this->faker->starName(),
+            $cbti->getId(BodyType::ASTEROID_BELT)               => $this->faker->asteroidbeltName(),
+            $cbti->getId(BodyTYpe::ASTEROID)                    => $this->faker->asteroidName(),
+            $cbti->getId(BodyTYpe::BLACK_HOLE)                  => $this->faker->blackholeName(),
+            $cbti->getId(BodyTYpe::COMET)                       => $this->faker->cometName(),
+            $cbti->getId(BodyTYpe::DWARF_PLANET)                => $this->faker->dwarfplanetName(),
+            $cbti->getId(BodyTYpe::MOON)                        => $this->faker->moonName(),
+            $cbti->getId(BodyTYpe::NEBULA)                      => $this->faker->nebulaeName(),
+            $cbti->getId(BodyTYpe::PLANET)                      => $this->faker->planetName(),
+            $cbti->getId(BodyTYpe::STAR)                        => $this->faker->starName(),
+            $cbti->getId(BodyTYpe::SUPER_MASSIVE_BLACK_HOLE)    => $this->faker->supermassiveblackholeName(),
+            default => $this->faker->name(),
         };
     }
 }

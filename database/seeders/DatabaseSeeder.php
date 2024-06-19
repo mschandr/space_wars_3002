@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         User::factory(10)->create();
+        // Running the following script will cause a cascading delete of CelestialBody
         (new CelestialBodyTypeSeeder())->run();
         CelestialBody::factory(1000)->create();
     }

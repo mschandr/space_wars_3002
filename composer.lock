@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "33e40f6af717945ddbe126f71b70749c",
+    "content-hash": "2f6a61aed707262dba8283eaf242198d",
     "packages": [
         {
             "name": "beberlei/assert",
@@ -572,52 +572,6 @@
                 }
             ],
             "time": "2023-10-06T06:47:41+00:00"
-        },
-        {
-            "name": "frank-houweling/weighted-random",
-            "version": "1.0.1",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/FrankHouweling/weighted-random.git",
-                "reference": "4b4a3acb80a015743cf0b85139260a94e75f7ecb"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/FrankHouweling/weighted-random/zipball/4b4a3acb80a015743cf0b85139260a94e75f7ecb",
-                "reference": "4b4a3acb80a015743cf0b85139260a94e75f7ecb",
-                "shasum": ""
-            },
-            "require": {
-                "beberlei/assert": "^3.2",
-                "php": "^7.3"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^8",
-                "squizlabs/php_codesniffer": "^3.3",
-                "vimeo/psalm": "^3.4"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "FrankHouweling\\WeightedRandom\\": "lib/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "description": "Library for generating a weighted random sample",
-            "keywords": [
-                "php",
-                "random",
-                "sampling",
-                "weighted"
-            ],
-            "support": {
-                "issues": "https://github.com/FrankHouweling/weighted-random/issues",
-                "source": "https://github.com/FrankHouweling/weighted-random/tree/master"
-            },
-            "time": "2019-07-27T18:59:21+00:00"
         },
         {
             "name": "fruitcake/php-cors",
@@ -2028,6 +1982,50 @@
                 }
             ],
             "time": "2024-04-12T21:02:21+00:00"
+        },
+        {
+            "name": "mschandr/weighted-random",
+            "version": "1.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/mschandr/weighted-random.git",
+                "reference": "97a8869ab27409f55af13da73b60c31fefc454a7"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/mschandr/weighted-random/zipball/97a8869ab27409f55af13da73b60c31fefc454a7",
+                "reference": "97a8869ab27409f55af13da73b60c31fefc454a7",
+                "shasum": ""
+            },
+            "require": {
+                "beberlei/assert": "^3.2",
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^8",
+                "squizlabs/php_codesniffer": "^3.3",
+                "vimeo/psalm": "^3.4"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "mschandr\\WeightedRandom\\": "lib/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Library for generating a weighted random sample",
+            "keywords": [
+                "php",
+                "random",
+                "sampling",
+                "weighted"
+            ],
+            "support": {
+                "source": "https://github.com/mschandr/weighted-random/tree/1.2"
+            },
+            "time": "2024-06-14T13:39:36+00:00"
         },
         {
             "name": "nesbot/carbon",
@@ -6191,16 +6189,16 @@
         },
         {
             "name": "myclabs/deep-copy",
-            "version": "1.11.1",
+            "version": "1.12.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/myclabs/DeepCopy.git",
-                "reference": "7284c22080590fb39f2ffa3e9057f10a4ddd0e0c"
+                "reference": "3a6b9a42cd8f8771bd4295d13e1423fa7f3d942c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/myclabs/DeepCopy/zipball/7284c22080590fb39f2ffa3e9057f10a4ddd0e0c",
-                "reference": "7284c22080590fb39f2ffa3e9057f10a4ddd0e0c",
+                "url": "https://api.github.com/repos/myclabs/DeepCopy/zipball/3a6b9a42cd8f8771bd4295d13e1423fa7f3d942c",
+                "reference": "3a6b9a42cd8f8771bd4295d13e1423fa7f3d942c",
                 "shasum": ""
             },
             "require": {
@@ -6208,11 +6206,12 @@
             },
             "conflict": {
                 "doctrine/collections": "<1.6.8",
-                "doctrine/common": "<2.13.3 || >=3,<3.2.2"
+                "doctrine/common": "<2.13.3 || >=3 <3.2.2"
             },
             "require-dev": {
                 "doctrine/collections": "^1.6.8",
                 "doctrine/common": "^2.13.3 || ^3.2.2",
+                "phpspec/prophecy": "^1.10",
                 "phpunit/phpunit": "^7.5.20 || ^8.5.23 || ^9.5.13"
             },
             "type": "library",
@@ -6238,7 +6237,7 @@
             ],
             "support": {
                 "issues": "https://github.com/myclabs/DeepCopy/issues",
-                "source": "https://github.com/myclabs/DeepCopy/tree/1.11.1"
+                "source": "https://github.com/myclabs/DeepCopy/tree/1.12.0"
             },
             "funding": [
                 {
@@ -6246,7 +6245,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2023-03-08T13:26:56+00:00"
+            "time": "2024-06-12T14:39:25+00:00"
         },
         {
             "name": "nunomaduro/collision",

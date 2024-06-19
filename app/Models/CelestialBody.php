@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\BodyType;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class CelestialBody extends Model
@@ -42,5 +44,10 @@ class CelestialBody extends Model
     public function CelestialBodyType(): BelongsTo
     {
         return $this->belongsTo(CelestialBodyType::class);
+    }
+
+    public function getObjectsByCelestialBodyTypeId(BodyType $bodyType): Collection
+    {
+        return Collect(['ob', 'sga']);
     }
 }

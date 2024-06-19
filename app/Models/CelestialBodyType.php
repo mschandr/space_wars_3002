@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use App\Enums\BodyType;
+use Mockery\Exception;
 
 class CelestialBodyType extends Model
 {
@@ -20,8 +22,6 @@ class CelestialBodyType extends Model
         'id',               // uuid
         'name',             // Name of the celestial object (e.g. Star, Planet, Black Hole, Comet, Neutron whatever)
         'description',      // Optional description of the body of the type
-        'universe_weight',  // Weight of the universal item
-        'system_weight',    // Weight of the system objects
     ];
 
     protected static function boot(): void
@@ -32,15 +32,26 @@ class CelestialBodyType extends Model
         });
     }
 
+    // #[NoReturn]
     public function getWeight(): int
     {
-        return ($this->universe_weight!==0) ? $this->universe_weight : $this->system_weight;
+        $weight_type = BodyType::whatBodyTypeIs($this->name);
+        $path_string = "game_config.".strtolower($weight_type)."_weights.".strtolower(str_replace(' ', '_', $this->name))."_weight";
+        if  (config($path_string)===null) {
+            throw new Exception("path string = ".$path_string." doesn't exist");
+        }
+        return config($path_string);
     }
 
     // Define relationships here (optional for future features)
     public function celestialBodies(): HasMany
     {
         return $this->hasMany(CelestialBody::class);
+    }
+
+    public function getId(BodyType $bodyType): string
+    {
+        return CelestialBodyType::where('name', $bodyType->value)->first()->id;
     }
 
     public function getStarId(): string
@@ -86,5 +97,10 @@ class CelestialBodyType extends Model
     public function getDwarfPlanetId(): string
     {
         return CelestialBodyType::where('name', 'Dwarf Planet')->first()->id;
+    }
+
+    public function getSuperMassiveBlackHoleId(): string
+    {
+        return CelestialBodyType::where('name', 'Super Massive Black Hole')->first()->id;
     }
 }
