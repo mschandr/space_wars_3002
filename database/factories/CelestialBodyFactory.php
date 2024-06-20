@@ -8,7 +8,7 @@ use App\Models\CelestialBodyType;
 use Illuminate\Database\Eloquent\Factories\Factory as DBFactory;
 use App\Enums\BodyType;
 use Faker\SpaceProvider;
-use FrankHouweling\WeightedRandom\WeightedRandomGenerator;
+use mschandr\WeightedRandom\WeightedRandomGenerator;
 
 /**
  * @extends Factory <CelestialBody>

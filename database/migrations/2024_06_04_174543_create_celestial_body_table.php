@@ -21,6 +21,7 @@ return new class extends Migration
                   ->references('id', 'celestial_body_type')
                   ->on('celestial_body_type')
                   ->onDelete('cascade');
+            $table->unique(['x_coordinate', 'y_coordinate'], 'unique_celestial_body');
             $table->timestamps();
         });
     }

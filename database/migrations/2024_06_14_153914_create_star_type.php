@@ -11,15 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('star_type', function (Blueprint $table) {
+        Schema::create('star_type', function (Blueprint $table) {
             $table->char('id', 36)->unique();
-            $table->enum('classification', ['O','B','A','F','G','K','M'])->nullable(false);
-            $table->string('name')->nullable(false);
+            $table->enum('classification', ['O','B','A','F','G','K','M', 'N'])->nullable(false);
+            $table->string('name')->nullable(true);
             $table->mediumInteger('age_min')->unsigned()->nullable(false);
-            $table->mediumInteger('age_max')->unsigned()->nullable(false);
+            $table->mediumInteger('age_max')->unsigned()->nullable(true);
             $table->float('temperature_min', 2)->unsigned()->nullable(false);
             $table->float('temperature_max', 2)->unsigned()->nullable(false);
             $table->tinyInteger('magnetic_field')->nullable(false);
+            $table->timestamps();
         });
     }
 

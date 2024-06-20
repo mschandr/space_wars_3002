@@ -2,10 +2,9 @@
 
 namespace Database\Seeders;
 
-use App\Models\CelestialBody;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class StarSystemSeeder extends Seeder
 {

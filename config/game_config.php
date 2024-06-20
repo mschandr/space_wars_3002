@@ -26,6 +26,19 @@ return [
         ],
     ],
     [
+        // star type weights
+        'star_weights' => [
+            'O' => 0.00003,
+            'B' => 0.13,
+            'A' => 0.6,
+            'F' => 3.0,
+            'G' => 7.6,
+            'K' => 12.1,
+            'M' => 76.5,
+            'N' => 0.06997,
+        ]
+    ],
+    [
         'known_weight'  => 9,
         'unknown_weight' => 2,
         'known_vs_unknown_weight_total' => 10,

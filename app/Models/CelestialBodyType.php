@@ -14,10 +14,10 @@ class CelestialBodyType extends Model
 {
     use HasFactory, HasUuids;
 
-    protected $table = 'celestial_body_type';
-    protected $keyType = 'string'; // Set the primary key type to string
-    public $incrementing = false; // Disable auto-incrementing
-    public $primaryKey = 'id';
+    public $incrementing = false;
+    public $primaryKey = 'id'; // Set the primary key type to string
+    protected $table = 'celestial_body_type'; // Disable auto-incrementing
+    protected $keyType = 'string';
     protected $fillable = [
         'id',               // uuid
         'name',             // Name of the celestial object (e.g. Star, Planet, Black Hole, Comet, Neutron whatever)
@@ -32,12 +32,12 @@ class CelestialBodyType extends Model
         });
     }
 
-    // #[NoReturn]
     public function getWeight(): int
     {
         $weight_type = BodyType::whatBodyTypeIs($this->name);
-        $path_string = "game_config.".strtolower($weight_type)."_weights.".strtolower(str_replace(' ', '_', $this->name))."_weight";
-        if  (config($path_string)===null) {
+        $path_string = "game_config.".strtolower($weight_type)."_weights.".
+            strtolower(str_replace(' ', '_', $this->name))."_weight";
+        if (config($path_string) === null) {
             throw new Exception("path string = ".$path_string." doesn't exist");
         }
         return config($path_string);
