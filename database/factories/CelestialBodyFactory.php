@@ -37,7 +37,7 @@ class CelestialBodyFactory extends DBFactory
     }
 
     /**
-     * @return string
+     * @returns string
      * @throws CelestialBodyTypeException
      */
     public function getRandomWeightedCelestialBodyTypeId(): string
