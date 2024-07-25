@@ -4,8 +4,12 @@ namespace App\Faker;
 
 use Faker\Provider\Base;
 
+
 class SpaceProvider extends Base
 {
+    /**
+     * @var array|string[]
+     */
     protected static array $romanNumerals = [
         'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
         'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX',
@@ -13,11 +17,18 @@ class SpaceProvider extends Base
         'XXXI', 'XXXII', 'XXXIII', 'XXXIV', 'XXXV', 'XXXVI', 'XXXVII', 'XXXVIII', 'XXXIX', 'XL',
         'XLI', 'XLII', 'XLIII', 'XLIV', 'XLV', 'XLVI', 'XLVII', 'XLVIII', 'XLIX', 'L',
     ];
+
+    /**
+     * @var array|string[]
+     */
     protected static array $greekLetters = [
         'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu',
         'Xi', 'Omicron', 'Pi', 'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega'
     ];
 
+    /**
+     * @var array|string[]
+     */
     protected static array $stars = [
         'Proxima Centauri', 'Alpha Centauri A', 'Alpha Centauri B', "Barnard's Star", 'Wolf 359', 'Lalande 21185',
         'Sirius A', 'Sirius B', 'Luyten 726-8', 'Ross 154', 'Epsilon Eridani', '61 Cygni A', '61 Cygni B',
@@ -33,33 +44,48 @@ class SpaceProvider extends Base
         'SCR 1645-9277', 'GJ 441', 'GJ 1283', "Teegarden's Star b", 'SCR 1845-6362', 'GJ 385', 'GJ 1248', 'GJ 404',
     ];
 
+    /**
+     * @var array|string[]
+     */
     protected static array $nebulae = [
         'Pleiades', 'Lagoon', 'Trifid', 'Cone', 'Butterfly', "Cat's Eye", "Little Ghost", "Reflective",
         'Butterfly', 'Ghost of Jupiter', 'Blue Snowman', 'Flaming Star', 'Southern Crab', 'Monkey Head',
         'Waterfall', 'Orion', 'Crab', 'Carnia', 'Ring', 'Eagle', 'Lagoon', 'Horsehead', 'Tarantula', 'Helix',
     ];
 
+    /**
+     * @return string
+     */
     public function starName(): string
     {
-        return static::randomElement(static::$stars)." ".static::randomElement(static::$greekLetters).
-            " ".static::randomElement(static::$romanNumerals);
+        return  static::randomElement(static::$stars)." ".
+                static::randomElement(static::$greekLetters)." ".
+                static::randomElement(static::$romanNumerals);
     }
 
+    /**
+     * @return string
+     */
     public function unknownStar(): string
     {
         return "Unknown Star System";
     }
 
+    /**
+     * @return string
+     */
     public function nebulaeName(): string
     {
         return static::randomElement(static::$nebulae)." Nebula ".static::randomElement(static::$greekLetters).
             " ".static::randomElement(static::$romanNumerals);
     }
 
-    // @todo fill this in
+    /**
+     * @return string
+     */
     public function asteroidName(): string
     {
-        return "";
+        return "asteroid ".static::randomElement(static::$greekLetters);
     }
 
     // @todo fill this in
@@ -80,10 +106,9 @@ class SpaceProvider extends Base
         return "";
     }
 
-    // @todo fill this in
     public function asteroidbeltName(): string
     {
-        return "";
+        return "the asteroid belt";
     }
 
     // @todo fill this in

@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
+/**
+ * @method static insert(array[] $star_types)
+ */
 class StarType extends Model
 {
     use HasUuids;
@@ -34,7 +37,6 @@ class StarType extends Model
     protected static function boot(): void
     {
         parent::boot();
-
         static::creating(function ($model) {
             $model->id = (string) Str::uuid();
         });
