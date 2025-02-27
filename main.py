@@ -132,7 +132,7 @@ class PlanetGenerator:
 @app.route('/trade_hub/<hub_id>')
 def trade_hub(hub_id):
     universe = Universe(num_stars=20)
-    trade_hub = next((hub for hub in universe.trade_hubs if hub["Hub ID"] == hub_id), None)
+    trade_hub = next((hub for hub in universe.trade_hubs if hub["HubID"] == hub_id), None)
     if not trade_hub:
         return "Trade Hub Not Found", 404
 
