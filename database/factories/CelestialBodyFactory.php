@@ -40,7 +40,7 @@ class CelestialBodyFactory extends DBFactory
         } while ($check);
         return [
             'celestial_body_type_id' => $current_cbti_id,
-            'name'                   => $this->getName($current_cbti_id),
+            'name'                   => $this->getName($current_cbti_id, $x, $y),
             'x_coordinate'           => $x,
             'y_coordinate'           => $y,
         ];
@@ -62,24 +62,26 @@ class CelestialBodyFactory extends DBFactory
     }
 
     /**
-     * @param  string|null  $current_cbti_id
+     * @param  string $current_cbti_id
+     * @param  int  $x
+     * @param  int  $y
      *
      * @return string
      */
-    public function getName(string $current_cbti_id = null): string
+    public function getName(string $current_cbti_id, int $x, int $y): string
     {
         $cbti = new CelestialBodyType();
         $name = match ($current_cbti_id) {
             $cbti->getId(BodyType::ASTEROID_BELT)   => $this->faker->asteroidbeltName(),
             $cbti->getId(BodyTYpe::ASTEROID)        => $this->faker->asteroidName(),
-            $cbti->getId(BodyTYpe::BLACK_HOLE)      => $this->faker->blackholeName(),
+            $cbti->getId(BodyTYpe::BLACK_HOLE)      => $this->faker->blackholeName($x, $y),
             $cbti->getId(BodyTYpe::COMET)           => $this->faker->cometName(),
             $cbti->getId(BodyTYpe::DWARF_PLANET)    => $this->faker->dwarfplanetName(),
             $cbti->getId(BodyTYpe::MOON)            => $this->faker->moonName(),
             $cbti->getId(BodyTYpe::NEBULA)          => $this->faker->nebulaeName(),
             $cbti->getId(BodyTYpe::PLANET)          => $this->faker->planetName(),
             $cbti->getId(BodyTYpe::STAR)            => $this->faker->starName(),
-            $cbti->getId(BodyTYpe::SUPER_MASSIVE_BLACK_HOLE) => $this->faker->supermassiveblackholeName(),
+            $cbti->getId(BodyTYpe::SUPER_MASSIVE_BLACK_HOLE) => $this->faker->supermassiveblackholeName($x, $y),
             default => $this->faker->name(),
         };
         if ($name == "" || (new CelestialBody())->checkForNameCollision($name)) {
