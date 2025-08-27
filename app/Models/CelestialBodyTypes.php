@@ -10,16 +10,12 @@ use Illuminate\Support\Str;
 use App\Enums\BodyType;
 use Mockery\Exception;
 
-class CelestialBodyType extends Model
+class CelestialBodyTypes extends Model
 {
     use HasFactory, HasUuids;
 
-    public $incrementing = false;
-    public $primaryKey = 'id'; // Set the primary key type to string
-    protected $table = 'celestial_body_type'; // Disable auto-incrementing
-    protected $keyType = 'string';
+    protected $table = 'celestial_body_types'; // Disable auto-incrementing
     protected $fillable = [
-        'id',               // uuid
         'name',             // Name of the celestial object (e.g. Star, Planet, Black Hole, Comet, Neutron whatever)
         'description',      // Optional description of the body of the type
     ];
@@ -28,7 +24,7 @@ class CelestialBodyType extends Model
     {
         parent::boot();
         static::creating(function ($model) {
-            $model->id = (string) Str::uuid();
+            $model->uuid = (string) Str::uuid();
         });
     }
 
@@ -51,56 +47,56 @@ class CelestialBodyType extends Model
 
     public function getId(BodyType $bodyType): string
     {
-        return CelestialBodyType::where('name', $bodyType->value)->first()->id;
+        return CelestialBodyTypes::where('name', $bodyType->value)->first()->id;
     }
 
     public function getStarId(): string
     {
-        return CelestialBodyType::where('name', 'Star')->first()->id;
+        return CelestialBodyTypes::where('name', 'Star')->first()->id;
     }
 
     public function getNebulaId(): string
     {
-        return CelestialBodyType::where('name', 'Nebula')->first()->id;
+        return CelestialBodyTypes::where('name', 'Nebula')->first()->id;
     }
 
     public function getMoonId(): string
     {
-        return CelestialBodyType::where('name', 'Moon')->first()->id;
+        return CelestialBodyTypes::where('name', 'Moon')->first()->id;
     }
 
     public function getAsteriodBeltId(): string
     {
-        return CelestialBodyType::where('name', 'Asteroid Belt')->first()->id;
+        return CelestialBodyTypes::where('name', 'Asteroid Belt')->first()->id;
     }
 
     public function getBlackHoleId(): string
     {
-        return CelestialBodyType::where('name', 'Black Hole')->first()->id;
+        return CelestialBodyTypes::where('name', 'Black Hole')->first()->id;
     }
 
     public function getPlanetId(): string
     {
-        return CelestialBodyType::where('name', 'Planet')->first()->id;
+        return CelestialBodyTypes::where('name', 'Planet')->first()->id;
     }
 
     public function getCometId(): string
     {
-        return CelestialBodyType::where('name', 'Comet')->first()->id;
+        return CelestialBodyTypes::where('name', 'Comet')->first()->id;
     }
 
     public function getAsteroidId(): string
     {
-        return CelestialBodyType::where('name', 'Asteroid')->first()->id;
+        return CelestialBodyTypes::where('name', 'Asteroid')->first()->id;
     }
 
     public function getDwarfPlanetId(): string
     {
-        return CelestialBodyType::where('name', 'Dwarf Planet')->first()->id;
+        return CelestialBodyTypes::where('name', 'Dwarf Planet')->first()->id;
     }
 
     public function getSuperMassiveBlackHoleId(): string
     {
-        return CelestialBodyType::where('name', 'Super Massive Black Hole')->first()->id;
+        return CelestialBodyTypes::where('name', 'Super Massive Black Hole')->first()->id;
     }
 }

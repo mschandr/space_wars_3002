@@ -11,20 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('star_system', function (Blueprint $table) {
-            $table->char('id', 36)->unique();
-            $table->char('star_type_id', 36)->nullable(false);
-            $table->char('celestial_body_id', 36)->nullable(false);
+        Schema::create('star_systems', function (Blueprint $table) {
+            $table->id();
+            $table->uuid('uuid')->index();
+
+            $table->foreignId('star_type_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('galaxy_id')->constrained()->cascadeOnDelete();
+
             $table->bigInteger('x_coordinate')->nullable(false);
             $table->bigInteger('y_coordinate')->nullable(false);
-            $table->foreign('celestial_body_id', 'celestial_body_fk_2')
-                  ->references('id')
-                  ->on('celestial_body')
-                  ->onDelete('cascade');
-            $table->foreign('star_type_id', 'star_type_fk')
-                  ->references('id')
-                  ->on('star_type')
-                  ->onDelete('cascade');
+
             $table->boolean('has_planets')->nullable(false)->default(null);
             $table->boolean('has_asteroid_belt')->nullable(true)->default(null);
             $table->timestamps();

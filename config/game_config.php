@@ -1,46 +1,30 @@
 <?php
-
 return [
-    'universe_weights' => [
-        'star_weight'                    => 12,
-        'nebula_weight'                  => 5,
-        'black_hole_weight'              => 2,
-        'super_massive_black_hole_weight'=> 1,
-        'comet_weight'                   => 3,
-
-        // star_weight + nebulae_weight + black_hole_weight + super_massive_black_hole_weight
-        'universe_weight_total'         => 23,
-    ],
-    [
-        'system_weights' => [
-            'asteroid_weight'           => 8,
-            'asteroid_belt_weight'      => 9,
-            'comet_weight'              => 5,
-            'dwarf_planet_weight'       => 6,
-            'moon_weight'               => 8,
-            'planet_weight'             => 5,
-
-            // asteroid_weight + asteroid_belt_weight + comet_weight + dwarf_planet_weight +
-            // moon_weight + planet_weight
-            'system_weight_total'       => 41,
+    'galaxy' => [
+        'width'  => 300,
+        'height' => 300,
+        'stars'  => [
+            'count' => 3000,
+            'system_probability' => 0.80,
+            'max_multiplicity' => 3,
+            'min_degree' => 2,
+            'max_degree' => 4,
         ],
+        'star_classes' => [
+            'red_giant' => 0.10, 'main_sequence' => 0.75, 'white_dwarf' => 0.15,
+        ],
+        'world_weights' => [
+            'red_giant'     => ['very_hot'=>35,'hot'=>30,'mild'=>20,'cold'=>10,'very_cold'=>5],
+            'main_sequence' => ['very_hot'=>10,'hot'=>25,'mild'=>40,'cold'=>20,'very_cold'=>5],
+            'white_dwarf'   => ['very_hot'=>2, 'hot'=>8, 'mild'=>20,'cold'=>35,'very_cold'=>35],
+        ],
+        'markets' => ['station_ratio'=>0.30, 'listed_ore_fraction'=>0.50],
     ],
-    [
-        // star type weights
-        'star_weights' => [
-            'O' => 0.00003,
-            'B' => 0.13,
-            'A' => 0.6,
-            'F' => 3.0,
-            'G' => 7.6,
-            'K' => 12.1,
-            'M' => 76.5,
-            'N' => 0.06997,
-        ]
+    'ores' => [
+        ['key'=>'ferrite',  'name'=>'Ferrite',  'rarity'=>'common',  'base_price'=>15,   'origins'=>['hot','mild']],
+        ['key'=>'silicate', 'name'=>'Silicate', 'rarity'=>'common',  'base_price'=>12,   'origins'=>['hot','mild','cold']],
+        ['key'=>'iridium',  'name'=>'Iridium',  'rarity'=>'rare',    'base_price'=>120,  'origins'=>['very_hot']],
+        ['key'=>'frostium', 'name'=>'Frostium', 'rarity'=>'uncommon','base_price'=>60,   'origins'=>['cold','very_cold']],
     ],
-    [
-        'known_weight'  => 9,
-        'unknown_weight' => 2,
-        'known_vs_unknown_weight_total' => 10,
-    ]
 ];
+

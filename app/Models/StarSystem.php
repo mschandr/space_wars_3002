@@ -11,14 +11,9 @@ class StarSystem extends Model
 {
     use HasFactory, HasUuids;
 
-    protected $table = 'star_system';
-    public $incrementing = false;   // Set the primary key type to string
-    protected $keyType = 'string';  // Disable auto-incrementing
-    public $primaryKey = 'id';
     protected $fillable = [
-        'id',                       // Uuid
+        'star_system_uuid',         // uuid -> to prevent url hacking
         'celestial_body_id',        // Uuid -> external foreign key
-        'template_id',              // Uuid -> template id for the system
     ];
 
     protected static function boot(): void
@@ -26,7 +21,7 @@ class StarSystem extends Model
         parent::boot();
 
         static::creating(function ($model) {
-            $model->id = (string) Str::uuid();
+            $model->uuid = (string) Str::uuid();
         });
     }
 }

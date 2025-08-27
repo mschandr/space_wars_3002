@@ -5,10 +5,11 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
-        "laravel/framework": "^11.10",
+        "php": "^8.3",
+        "laravel/framework": "^12.3",
         "laravel/tinker": "^2.9",
-        "mschandr/weighted-random": "^1.2"
+        "mschandr/weighted-random": "^1.2",
+        "symfony/yaml": "^7.3"
     },
      "repositories": [
         {

@@ -19,12 +19,7 @@ class StarType extends Model
     const STAR_MAGNETIC_LEVEL_WEAK          = 4;
     const STAR_MAGNETIC_LEVEL_VERY_WEAK     = 5;
 
-    protected $table = 'star_type';
-    public $incrementing = false;   // Set the primary key type to string
-    protected $keyType = 'string';  // Disable auto-incrementing
-    public $primaryKey = 'id';
     protected $fillable = [
-        'id',                // Uuid
         'classification',    // enum
         'name',
         'age_min',

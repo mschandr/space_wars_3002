@@ -11,15 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('star_type', function (Blueprint $table) {
-            $table->char('id', 36)->unique();
+        Schema::create('star_types', function (Blueprint $table) {
+            $table->id();
             $table->enum('classification', ['O','B','A','F','G','K','M', 'N'])->nullable(false);
             $table->string('name')->nullable(true);
-            $table->mediumInteger('age_min')->unsigned()->nullable(false);
-            $table->mediumInteger('age_max')->unsigned()->nullable(true);
-            $table->float('temperature_min', 2)->unsigned()->nullable(false);
-            $table->float('temperature_max', 2)->unsigned()->nullable(false);
-            $table->tinyInteger('magnetic_field')->nullable(false);
+
+            $table->unsignedMediumInteger('age_min')->unsigned()->nullable(false);
+            $table->unsignedMediumInteger('age_max')->unsigned()->nullable(true);
+            $table->unsignedMediumInteger('temperature_min');
+            $table->unsignedMediumInteger('temperature_max');
+
+            $table->unsignedTinyInteger('magnetic_field')->nullable(false);
             $table->timestamps();
         });
     }
@@ -29,8 +31,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('star_type', function (Blueprint $table) {
-            //
-        });
+        Schema::dropIfExists('star_types');
     }
 };

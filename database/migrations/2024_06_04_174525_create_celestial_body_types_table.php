@@ -11,9 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('celestial_body_type', function (Blueprint $table) {
-            $table->char('id', 36)->unique();
-            $table->string('name')->nullable()->default(null);
+        Schema::create('celestial_body_types', function (Blueprint $table) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->string('name')->unique();
             $table->string('description')->nullable()->default(null);
             $table->timestamps();
         });
@@ -24,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('celestial_body_type');
+        Schema::dropIfExists('celestial_body_types');
     }
 };

@@ -2,16 +2,13 @@
 
 namespace Database\Factories;
 
-use App\Models\CelestialBodyTypes;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<CelestialBodyTypes>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Galaxy>
  */
-class CelestialBodyTypeFactory extends Factory
+class GalaxyFactory extends Factory
 {
-    protected $model = CelestialBodyTypes::class;
-
     /**
      * Define the model's default state.
      *
@@ -20,8 +17,7 @@ class CelestialBodyTypeFactory extends Factory
     public function definition(): array
     {
         return [
-            'name'        => $this->faker->name(),
-            'description' => $this->faker->text(),
+            //
         ];
     }
 }

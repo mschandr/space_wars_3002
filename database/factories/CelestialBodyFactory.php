@@ -4,7 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\BodyType;
 use App\Exceptions\CelestialBodyException;
-use App\Models\{CelestialBody, CelestialBodyType};
+use App\Models\{CelestialBody, CelestialBodyTypes};
 use Faker\SpaceProvider;
 use Illuminate\Database\Eloquent\Factories\Factory as DBFactory;
 use mschandr\WeightedRandom\WeightedRandomGenerator;
@@ -51,7 +51,7 @@ class CelestialBodyFactory extends DBFactory
      */
     public function getRandomWeightedCelestialBodyTypeId(): string
     {
-        $celestial_bodies = CelestialBodyType::whereIn('name', BodyType::UniverseBodyTypes)
+        $celestial_bodies = CelestialBodyTypes::whereIn('name', BodyType::UniverseBodyTypes)
                                              ->get(['id', 'name']);
         $generator        = new WeightedRandomGenerator();
 
@@ -70,7 +70,7 @@ class CelestialBodyFactory extends DBFactory
      */
     public function getName(string $current_cbti_id, int $x, int $y): string
     {
-        $cbti = new CelestialBodyType();
+        $cbti = new CelestialBodyTypes();
         $name = match ($current_cbti_id) {
             $cbti->getId(BodyType::ASTEROID_BELT)   => $this->faker->asteroidbeltName(),
             $cbti->getId(BodyTYpe::ASTEROID)        => $this->faker->asteroidName(),
