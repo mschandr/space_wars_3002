@@ -57,7 +57,8 @@ final class PoissonDisk
         int   $N,
         float $k,
         int   $seed,
-        array $opts = []
+        array $opts = [],
+        string $engineKey = 'mt19937'
     )
     {
         $this->width = max(1, $w);
@@ -70,7 +71,9 @@ final class PoissonDisk
             0,
             min((int)$this->options['margin'], (int)floor(min($this->width,$this->height)/4))
         );
-        $engineKey = config('game_config.random.engine', 'mt19937');
+        $engineKey = (function_exists('config') && app()?->bound('config'))
+            ? config('game_config.random.engine', 'mt19937')
+            : $engineKey;
         $engine = match ($engineKey) {
           'pcg'     => new PcgOneseq128XslRr64($seed),
           'xoshiro' => new Xoshiro256StarStar($seed),
@@ -85,18 +88,18 @@ final class PoissonDisk
     public function sample(): array
     {
         // --- derive radius & grid (trimmed; but not hyper-optimized) ---
-        $r = $this->radius($this->width, $this->height, $this->points, $this->spacing_factor);
-        $cell = $r / sqrt(2.0);
-        $gw = max(1, (int)ceil($this->width / $cell));
-        $gh = max(1, (int)ceil($this->height / $cell));
-        $grid = array_fill(0, $gw * $gh, -1);
+        $r      = $this->radius($this->width, $this->height, $this->points, $this->spacing_factor);
+        $cell   = $r / sqrt(2.0);
+        $gw     = max(1, (int)ceil($this->width / $cell));
+        $gh     = max(1, (int)ceil($this->height / $cell));
+        $grid   = array_fill(0, $gw * $gh, -1);
 
-        $attempts = (int)$this->options['attempts'];
-        $margin = (int)$this->options['margin'];
-        $floats = (bool)$this->options['returnFloats'];
+        $attempts   = (int)$this->options['attempts'];
+        $margin     = (int)$this->options['margin'];
+        $floats     = (bool)$this->options['returnFloats'];
 
-        $pts    = [];
-        $active = [];
+        $pts        = [];
+        $active     = [];
 
         $add = function (float $x, float $y) use (&$pts, &$active, &$grid, $cell, $gw, $gh) {
             $idx                    = count($pts);
@@ -161,7 +164,9 @@ final class PoissonDisk
             }
         }
 
-        if ($floats) return ['points' => $pts, 'r'=>$r];
+        if ($floats) {
+            return ['points' => $pts, 'r'=>$r];
+        }
         $snapped = array_map(fn($p) => [(int)round($p[0]), (int)round($p[1])], $pts);
         $uniq = [];
         foreach ($snapped as $p) {

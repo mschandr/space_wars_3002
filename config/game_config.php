@@ -1,5 +1,8 @@
 <?php
 return [
+    'random' => [
+        'engine' => 'mt19937',
+    ],
     'galaxy' => [
         'width'  => 300,
         'height' => 300,
