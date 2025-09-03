@@ -15,6 +15,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Seed Galaxy
+
         $attempts  = 0;
         $row_count = 2500;
         User::factory(10)->create();
