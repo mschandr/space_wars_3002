@@ -13,7 +13,7 @@ return [
         'points'    => 3000,       // number of Points of Interest
         'spacing'   => 0.75,       // spacing factor for generators
         'engine'    => 'mt19937',  // RNG engine: mt19937, pcg, xoshiro
-        'generator' => 'poisson',  // default: poisson, scatter, halton
+        'generator' => 'scatter',  // default: poisson, scatter, halton
     ],
 
     /*

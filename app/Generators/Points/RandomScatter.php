@@ -26,9 +26,9 @@ final class RandomScatter extends AbstractPointGenerator implements PointGenerat
                 ? $this->randomizer->getInt(0, $this->height - 1)
                 : mt_rand(0, $this->height - 1);
 
-            if ($this->isFarEnough([$x, $y], $pts)) {
+            //if ($this->isFarEnough([$x, $y], $pts)) {
                 $pts[] = [$x, $y];
-            }
+            //}
         }
 
         return $pts;
