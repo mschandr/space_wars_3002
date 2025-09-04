@@ -1,33 +1,107 @@
 <?php
-return [
-    'random' => [
-        'engine' => 'mt19937',
-    ],
-    'galaxy' => [
-        'width'  => 300,
-        'height' => 300,
-        'stars'  => [
-            'count' => 3000,
-            'system_probability' => 0.80,
-            'max_multiplicity' => 3,
-            'min_degree' => 2,
-            'max_degree' => 4,
-        ],
-        'star_classes' => [
-            'red_giant' => 0.10, 'main_sequence' => 0.75, 'white_dwarf' => 0.15,
-        ],
-        'world_weights' => [
-            'red_giant'     => ['very_hot'=>35,'hot'=>30,'mild'=>20,'cold'=>10,'very_cold'=>5],
-            'main_sequence' => ['very_hot'=>10,'hot'=>25,'mild'=>40,'cold'=>20,'very_cold'=>5],
-            'white_dwarf'   => ['very_hot'=>2, 'hot'=>8, 'mild'=>20,'cold'=>35,'very_cold'=>35],
-        ],
-        'markets' => ['station_ratio'=>0.30, 'listed_ore_fraction'=>0.50],
-    ],
-    'ores' => [
-        ['key'=>'ferrite',  'name'=>'Ferrite',  'rarity'=>'common',  'base_price'=>15,   'origins'=>['hot','mild']],
-        ['key'=>'silicate', 'name'=>'Silicate', 'rarity'=>'common',  'base_price'=>12,   'origins'=>['hot','mild','cold']],
-        ['key'=>'iridium',  'name'=>'Iridium',  'rarity'=>'rare',    'base_price'=>120,  'origins'=>['very_hot']],
-        ['key'=>'frostium', 'name'=>'Frostium', 'rarity'=>'uncommon','base_price'=>60,   'origins'=>['cold','very_cold']],
-    ],
-];
 
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Galaxy Generation
+    |--------------------------------------------------------------------------
+    */
+    'galaxy' => [
+        'width'     => 300,        // galaxy grid width
+        'height'    => 300,        // galaxy grid height
+        'points'    => 3000,       // number of Points of Interest
+        'spacing'   => 0.75,       // spacing factor for generators
+        'engine'    => 'mt19937',  // RNG engine: mt19937, pcg, xoshiro
+        'generator' => 'poisson',  // default: poisson, scatter, halton
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Point Generator Options
+    |--------------------------------------------------------------------------
+    */
+    'generator_options' => [
+        'attempts'     => 30,     // PoissonDisk candidate attempts
+        'margin'       => 0,      // safe margin from galaxy edges
+        'returnFloats' => false,  // whether to return float coords
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gates / Hidden Network
+    |--------------------------------------------------------------------------
+    */
+    'gates' => [
+        'hidden_chance'     => 0.1,   // % chance that a gate is hidden
+        'dead_gate_chance'  => 0.05,  // % chance hidden gate is a dead end
+        'jackpot_chance'    => 0.01,  // % chance hidden gate leads to relics
+        'scanner_bonus'     => 0.2,   // multiplier for scanners detecting gates
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ore & Economy
+    |--------------------------------------------------------------------------
+    */
+    'ores' => [
+        'types' => [
+            'iron', 'gold', 'titanium', 'uranium', 'exotic_matter'
+        ],
+        'price_base'    => 100,   // average credit value
+        'price_fluct'   => 0.25,  // ±25% local fluctuation
+        'scarcity_bias' => [
+            'exotic_matter' => 0.01,  // appears in 1% of systems
+            'iron'          => 0.8,   // very common
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Colonies
+    |--------------------------------------------------------------------------
+    */
+    'colonies' => [
+        'growth_rate' => 1.05,   // population growth multiplier per turn
+        'defenses'    => true,   // enable orbital defenses
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ships
+    |--------------------------------------------------------------------------
+    */
+    'ships' => [
+        'starting_credits' => 100_000,
+        'classes' => [
+            'scout' => [
+                'cargo' => 50,
+                'speed' => 5,
+                'combat' => 1,
+            ],
+            'freighter' => [
+                'cargo' => 200,
+                'speed' => 3,
+                'combat' => 2,
+            ],
+            'battleship' => [
+                'cargo' => 100,
+                'speed' => 2,
+                'combat' => 8,
+            ],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Victory Conditions
+    |--------------------------------------------------------------------------
+    */
+    'victory' => [
+        'merchant_credits'   => 1_000_000_000, // credits to win as Merchant Empire
+        'colonization_share' => 0.5,           // 50% of galactic population
+        'conquest_share'     => 0.6,           // 60% of systems controlled
+        'pirate_power'       => 0.7,           // 70% of outlaw hubs seized
+    ],
+
+];
