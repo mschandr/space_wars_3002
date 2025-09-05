@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Legacy;
 
+use App\Enums\Legacy\CelestialBody\BodyType;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
-use App\Enums\BodyType;
 use Mockery\Exception;
 
 class CelestialBodyTypes extends Model

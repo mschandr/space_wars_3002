@@ -2,10 +2,9 @@
 
 namespace Database\Seeders;
 
-use App\Models\CelestialBodyTypes;
+use App\Models\Legacy\CelestialBodyTypes;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class CelestialBodyTypeSeeder extends Seeder
 {

@@ -1,8 +1,8 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\Legacy;
 
-use App\Models\CelestialBodyTypes;
+use App\Models\Legacy\CelestialBodyTypes;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

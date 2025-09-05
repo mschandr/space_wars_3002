@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Enums;
+namespace App\Enums\Legacy\CelestialBody;
 
 enum PlanetType: string
 {

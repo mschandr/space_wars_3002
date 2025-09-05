@@ -1,10 +1,11 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\Legacy;
 
-use App\Enums\BodyType;
-use App\Exceptions\CelestialBodyException;
-use App\Models\{CelestialBody, CelestialBodyTypes};
+use App\Enums\Legacy\CelestialBody\BodyType;
+use App\Exceptions\Legacy\CelestialBodyException;
+use App\Models\{Legacy\CelestialBody, Legacy\CelestialBodyTypes};
+use Database\Factories\Factory;
 use Faker\SpaceProvider;
 use Illuminate\Database\Eloquent\Factories\Factory as DBFactory;
 use mschandr\WeightedRandom\WeightedRandomGenerator;

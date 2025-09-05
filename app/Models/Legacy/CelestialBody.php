@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Legacy;
 
-use App\Enums\BodyType;
+use App\Enums\Legacy\CelestialBody\BodyType;
 use Illuminate\Database\Eloquent\{Concerns\HasUuids, Factories\HasFactory, Model, Relations\BelongsTo};
 use Illuminate\Support\Str;
 use mschandr\WeightedRandom\WeightedRandomGenerator;

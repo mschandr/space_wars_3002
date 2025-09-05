@@ -2,7 +2,7 @@
 
 namespace App\Services\Galaxy;
 
-use App\Models\{Galaxy, StarSystem, Warp, Planet, Market, MarketListing, Ore};
+use App\Models\{Galaxy, Legacy\StarSystem, Market, MarketListing, Ore, Planet, Warp};
 use Illuminate\Support\Collection;
 
 final class GalaxyGenerator

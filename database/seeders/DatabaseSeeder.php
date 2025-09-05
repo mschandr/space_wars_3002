@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\CelestialBody;
+use App\Models\Legacy\CelestialBody;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Seeder;

@@ -1,8 +1,6 @@
 <?php
 
-namespace App\Enums;
-
-use App\Enums\PlanetType;
+namespace App\Enums\Legacy\CelestialBody;
 
 enum BodyType: string
 {
