@@ -7,9 +7,31 @@ use Faker\Provider\Base;
 
 class SpaceProvider extends Base
 {
+
     /**
      * @var array|string[]
      */
+    protected static array $galaxyName = [
+        "Andromeda", "Cygnus", "Orion", "Draco", "Scorpius",
+        "Cassiopeia", "Pegasus", "Hydra", "Ursa Major", "Canis Major",
+        "Lyra", "Taurus", "Leo", "Phoenix", "Centaurus", "Sagittarius",
+        "Nebula", "Pulsar", "Quasar", "Horizon", "Expanse", "Rift"
+    ];
+    /**
+     * @var array|string[]
+     */
+    protected static array $galaxyVerbs = [
+        "Rising", "Ascending", "Awakening", "Expanding", "Surging", "Spreading",
+        "Fading", "Burning", "Collapsing", "Dying", "Darkening", "Fracturing",
+        "Ignited", "Energized", "Pulsing", "Roaring", "Blazing", "Radiating",
+        "Whispering", "Shrouded", "Hidden", "Forgotten", "Veiled", "Forbidden"
+    ];
+    /**
+     * @var array|string[]
+     */
+    protected static array $galaxySuffix = [
+        "", " of Twilight", " of Shadows", " of Dawn", " of Silence", " of Eternity"
+    ];
     protected static array $romanNumerals = [
         'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
         'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX',
@@ -17,7 +39,6 @@ class SpaceProvider extends Base
         'XXXI', 'XXXII', 'XXXIII', 'XXXIV', 'XXXV', 'XXXVI', 'XXXVII', 'XXXVIII', 'XXXIX', 'XL',
         'XLI', 'XLII', 'XLIII', 'XLIV', 'XLV', 'XLVI', 'XLVII', 'XLVIII', 'XLIX', 'L',
     ];
-
     /**
      * @var array|string[]
      */
@@ -25,7 +46,6 @@ class SpaceProvider extends Base
         'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu',
         'Xi', 'Omicron', 'Pi', 'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega'
     ];
-
     /**
      * @var array|string[]
      */
@@ -43,7 +63,6 @@ class SpaceProvider extends Base
         'WISE 0359-3602', 'GJ 1252', 'GJ 1116', 'GJ 411', 'GJ 357', 'GJ 803', 'SCR 1845-6360', 'GJ 1071',
         'SCR 1645-9277', 'GJ 441', 'GJ 1283', "Teegarden's Star b", 'SCR 1845-6362', 'GJ 385', 'GJ 1248', 'GJ 404',
     ];
-
     /**
      * @var array|string[]
      */
@@ -52,7 +71,6 @@ class SpaceProvider extends Base
         'Butterfly', 'Ghost of Jupiter', 'Blue Snowman', 'Flaming Star', 'Southern Crab', 'Monkey Head',
         'Waterfall', 'Orion', 'Crab', 'Carnia', 'Ring', 'Eagle', 'Lagoon', 'Horsehead', 'Tarantula', 'Helix',
     ];
-
     protected static array $arabic_numerals = [
         '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
         '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
@@ -60,7 +78,6 @@ class SpaceProvider extends Base
         '31', '32', '33', '34', '35', '36', '37', '38', '39', '40',
         '41', '42', '43', '44', '45', '46', '47', '48', '49', '50'
     ];
-
     protected static array $astronomers = [
         'Bartelman', 'Blandford', 'Boesgaard', 'Bond', 'Bosma', 'Bouwens', 'Brandt', 'Brown', 'Bruzual', 'Burgasser',
         'Caldwell', 'Carr', 'Carroll', 'Casertano', 'Cen', 'Charlot', 'Charbonneau', 'Cheng', 'Chiosi', 'Churchwell',
@@ -105,12 +122,22 @@ class SpaceProvider extends Base
     ];
 
     /**
+     * GalaxyNameGeneration
+     */
+    public function generateGalaxyName(): string
+    {
+        return trim(static::randomElement(static::$galaxyName) . " " .
+            static::randomElement(static::$galaxyVerbs) . " " .
+            static::randomElement(static::$galaxySuffix));
+    }
+
+    /**
      * @return string
      */
     public function starName(): string
     {
-        return static::randomElement(static::$stars)." ".
-            static::randomElement(static::$greekLetters)." ".
+        return static::randomElement(static::$stars) . " " .
+            static::randomElement(static::$greekLetters) . " " .
             static::randomElement(static::$romanNumerals);
     }
 
@@ -132,8 +159,8 @@ class SpaceProvider extends Base
      */
     public function nebulaeName(): string
     {
-        return static::randomElement(static::$nebulae)." Nebula ".static::randomElement(static::$greekLetters).
-            " ".static::randomElement(static::$romanNumerals);
+        return static::randomElement(static::$nebulae) . " Nebula " . static::randomElement(static::$greekLetters) .
+            " " . static::randomElement(static::$romanNumerals);
     }
 
     /**
@@ -141,13 +168,13 @@ class SpaceProvider extends Base
      */
     public function asteroidName(): string
     {
-        return "asteroid ".static::randomElement(static::$greekLetters);
+        return "asteroid " . static::randomElement(static::$greekLetters);
     }
 
     public function cometName(): string
     {
-        return "Comet ".
-            static::randomElement(static::$astronomers)." ".
+        return "Comet " .
+            static::randomElement(static::$astronomers) . " " .
             static::randomElement(static::$arabic_numerals);
     }
 

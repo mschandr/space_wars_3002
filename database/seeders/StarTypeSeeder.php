@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\StarType;
+use App\Models\Legacy\StarType;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -124,7 +124,7 @@ class StarTypeSeeder extends Seeder
                 'updated_at'      => $now,
             ],
         ];
-        
+
         StarType::insert($star_types);
 
     }

@@ -5,10 +5,12 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
-        "laravel/framework": "^11.10",
-        "laravel/tinker": "^2.9",
-        "mschandr/weighted-random": "^1.2"
+        "php": "^8.3",
+        "inertiajs/inertia-laravel": "^2.0",
+        "laravel/framework": "^12.25",
+        "laravel/tinker": "^2.10.1",
+        "mschandr/weighted-random": "^1.2",
+        "symfony/yaml": "^7.3.2"
     },
      "repositories": [
         {
@@ -17,13 +19,13 @@
         }
     ],
     "require-dev": {
-        "fakerphp/faker": "^1.23.1",
-        "laravel/pint": "^1.16",
-        "laravel/sail": "^1.29.2",
-        "laravel/telescope": "^5.1",
+        "fakerphp/faker": "^1.24.1",
+        "laravel/pint": "^1.24",
+        "laravel/sail": "^1.44.0",
+        "laravel/telescope": "^5.11.3",
         "mockery/mockery": "^1.6.12",
-        "nunomaduro/collision": "^8.1.1",
-        "phpunit/phpunit": "^11.2.1"
+        "nunomaduro/collision": "^8.8.2",
+        "phpunit/phpunit": "^11.5.34"
     },
     "autoload": {
         "psr-4": {

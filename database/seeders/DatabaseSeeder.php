@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\CelestialBody;
+use App\Models\Legacy\CelestialBody;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Seeder;
@@ -15,6 +15,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Seed Galaxy
+
         $attempts  = 0;
         $row_count = 2500;
         User::factory(10)->create();
