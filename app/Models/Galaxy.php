@@ -5,16 +5,14 @@ namespace App\Models;
 use App\Enums\Galaxy\GalaxyDistributionMethod;
 use App\Enums\Galaxy\GalaxyRandomEngine;
 use App\Enums\Galaxy\GalaxyStatus;
-use App\Faker\SpaceProvider;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Faker\Common\GalaxySuffixes;
+use App\Faker\Common\RomanNumerals;
+use App\Faker\Providers\GalaxyNameProvider;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class Galaxy extends Model
 {
-    /** @use HasFactory<\Database\Factories\GalaxyFactory> */
-    use HasFactory;
-
     protected $fillable = [
         'galaxy_uuid',
         'name',
@@ -52,7 +50,7 @@ class Galaxy extends Model
 
     public function pointsOfInterest()
     {
-        return $this->hasMany(PointOfInterest::class);
+        //return $this->hasMany(PointOfInterest::class);
     }
 
     public function getGalaxyName(): string
@@ -60,8 +58,30 @@ class Galaxy extends Model
         return $this->name;
     }
 
-    public static function GenerateGalaxyName(): string
+    public static function generateUniqueName(): string
     {
-        return SpaceProvider::generateGalaxyName();
+        $base = GalaxyNameProvider::generateGalaxyName();
+        $name = $base;
+
+        if (Galaxy::where('name', $name)->exists()) {
+            // Try suffixes first
+            foreach (GalaxySuffixes::$suffixes as $suffix) {
+                $candidate = $base .' '. $suffix;
+                if (!Galaxy::where('name', $candidate)->exists()) {
+                    return $candidate;
+                }
+            }
+
+            // Fallback: add numerals
+            $i = 2;
+            do {
+                $candidate = $base . ' ' . RomanNumerals::romanize($i);
+                $i++;
+            } while (Galaxy::where('name', $candidate)->exists());
+
+            return $candidate;
+        }
+
+        return $name;
     }
 }

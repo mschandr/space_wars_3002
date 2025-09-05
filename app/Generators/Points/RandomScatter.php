@@ -15,22 +15,24 @@ final class RandomScatter extends AbstractPointGenerator implements PointGenerat
      */
     public function sample(): array
     {
-        $pts = [];
+        $points = [];
+        while (count($points) < $this->count) {
+            $attempts = 0;
+            do {
+                $x = $this->randomizer
+                    ? $this->randomizer->getInt(0, $this->width - 1)
+                    : mt_rand(0, $this->width - 1);
+                $y = $this->randomizer
+                    ? $this->randomizer->getInt(0, $this->height - 1)
+                    : mt_rand(0, $this->height - 1);
+                $key = $x . ':' . $y;
+                $attempts++;
+            } while (isset($points[$key]) && $attempts < 3);
 
-        while (count($pts) < $this->count) {
-            $x = $this->randomizer
-                ? $this->randomizer->getInt(0, $this->width - 1)
-                : mt_rand(0, $this->width - 1);
-
-            $y = $this->randomizer
-                ? $this->randomizer->getInt(0, $this->height - 1)
-                : mt_rand(0, $this->height - 1);
-
-            //if ($this->isFarEnough([$x, $y], $pts)) {
-                $pts[] = [$x, $y];
-            //}
+            // At this point: either unique, or forced duplicate after 3 tries
+            $points[$key] = [$x, $y];
         }
 
-        return $pts;
+        return array_values($points);
     }
 }

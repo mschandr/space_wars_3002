@@ -32,20 +32,11 @@ class SpaceProvider extends Base
     protected static array $galaxySuffix = [
         "", " of Twilight", " of Shadows", " of Dawn", " of Silence", " of Eternity"
     ];
-    protected static array $romanNumerals = [
-        'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
-        'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX',
-        'XXI', 'XXII', 'XXIII', 'XXIV', 'XXV', 'XXVI', 'XXVII', 'XXVIII', 'XXIX', 'XXX',
-        'XXXI', 'XXXII', 'XXXIII', 'XXXIV', 'XXXV', 'XXXVI', 'XXXVII', 'XXXVIII', 'XXXIX', 'XL',
-        'XLI', 'XLII', 'XLIII', 'XLIV', 'XLV', 'XLVI', 'XLVII', 'XLVIII', 'XLIX', 'L',
-    ];
+
     /**
      * @var array|string[]
      */
-    protected static array $greekLetters = [
-        'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu',
-        'Xi', 'Omicron', 'Pi', 'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega'
-    ];
+
     /**
      * @var array|string[]
      */
@@ -121,34 +112,6 @@ class SpaceProvider extends Base
         'Zhao', 'Zheng', 'Zhou', 'Zucker', 'Zwaan'
     ];
 
-    /**
-     * GalaxyNameGeneration
-     */
-    public function generateGalaxyName(): string
-    {
-        return trim(static::randomElement(static::$galaxyName) . " " .
-            static::randomElement(static::$galaxyVerbs) . " " .
-            static::randomElement(static::$galaxySuffix));
-    }
-
-    /**
-     * @return string
-     */
-    public function starName(): string
-    {
-        return static::randomElement(static::$stars) . " " .
-            static::randomElement(static::$greekLetters) . " " .
-            static::randomElement(static::$romanNumerals);
-    }
-
-    /**
-     * @return string
-     */
-    public function unknownStar(): string
-    {
-        return "Unknown Star System";
-    }
-
     public function unknownComet(): string
     {
         return "Unknown Comet";
@@ -159,7 +122,7 @@ class SpaceProvider extends Base
      */
     public function nebulaeName(): string
     {
-        return static::randomElement(static::$nebulae) . " Nebula " . static::randomElement(static::$greekLetters) .
+        //return static::randomElement(static::$nebulae) . " Nebula " . static::randomElement(static::$greekLetters) .
             " " . static::randomElement(static::$romanNumerals);
     }
 
@@ -168,7 +131,7 @@ class SpaceProvider extends Base
      */
     public function asteroidName(): string
     {
-        return "asteroid " . static::randomElement(static::$greekLetters);
+        //return "asteroid " . static::randomElement(static::$greekLetters);
     }
 
     public function cometName(): string

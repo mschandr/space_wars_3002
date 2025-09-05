@@ -11,15 +11,15 @@ use App\Contracts\PointGeneratorInterface;
 
 class PointGeneratorsTest extends TestCase
 {
-    private const int WIDTH     = 100;
-    private const int HEIGHT    = 100;
-    private const int COUNT     = 50;
+    private const int WIDTH = 100;
+    private const int HEIGHT = 100;
+    private const int COUNT = 50;
     private const float SPACING = 5.0;
-    private const int SEED      = 12345;
+    private const int SEED = 12345;
     private const array OPTIONS = [
-        'attempts'      => 30,
-        'margin'        => 0,
-        'returnFloats'  => false,
+        'attempts' => 30,
+        'margin' => 0,
+        'returnFloats' => false,
     ];
 
     /**
@@ -30,9 +30,9 @@ class PointGeneratorsTest extends TestCase
     public static function generatorProvider(): array
     {
         return [
-            'PoissonDisk'       => [PoissonDisk::class],
-            'RandomScatter'     => [RandomScatter::class],
-            'HaltonSequence'    => [HaltonSequence::class],
+            'PoissonDisk' => [PoissonDisk::class],
+            'RandomScatter' => [RandomScatter::class],
+            'HaltonSequence' => [HaltonSequence::class],
         ];
     }
 
@@ -70,6 +70,7 @@ class PointGeneratorsTest extends TestCase
 
         // No duplicates
         $unique = array_unique(array_map(fn($p) => $p[0] . ':' . $p[1], $points));
+        file_put_contents("/tmp/permlo.mark", "generator class = $generatorClass; count points = ". count($points). " unique points = ".count($unique)."\n", FILE_APPEND);
         $this->assertCount(
             count($points),
             $unique,
