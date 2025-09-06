@@ -70,7 +70,6 @@ class PointGeneratorsTest extends TestCase
 
         // No duplicates
         $unique = array_unique(array_map(fn($p) => $p[0] . ':' . $p[1], $points));
-        file_put_contents("/tmp/permlo.mark", "generator class = $generatorClass; count points = ". count($points). " unique points = ".count($unique)."\n", FILE_APPEND);
         $this->assertCount(
             count($points),
             $unique,
