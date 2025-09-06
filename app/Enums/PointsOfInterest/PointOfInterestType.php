@@ -4,6 +4,7 @@ namespace App\Enums\PointsOfInterest;
 
 enum PointOfInterestType: string
 {
+    case ANOMALY                    = 'Anomaly';
     case ASTEROID                   = 'Asteroid';
     case ASTEROID_BELT              = 'Asteroid Belt';
     case BLACK_HOLE                 = 'Black Hole';
@@ -18,7 +19,7 @@ enum PointOfInterestType: string
     case NEBULA                     = 'Nebula';
     case OCEAN                      = 'Ocean';
     case PLANET                     = 'Planet';
-    case ROGUE                      = 'Rogue';
+    case ROGUE_PLANET               = 'Rogue planet';
     case STAR                       = 'Star';
     case SUPER_EARTH                = 'Super Earth';
     case SUPER_MASSIVE_BLACK_HOLE   = 'Super Massive Black Hole';

@@ -3,13 +3,14 @@
 namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
+use App\Models\Galaxy;
 
 final class HaltonSequence extends AbstractPointGenerator implements PointGeneratorInterface
 {
     /**
      * @return array<int,array{0:int,1:int}>
      */
-    public function sample(): array
+    public function sample(Galaxy $galaxy): array
     {
         $pts = [];
         $i   = 1;

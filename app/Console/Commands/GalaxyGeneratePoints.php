@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Factories\PointGeneratorFactory;
 use App\Contracts\PointGeneratorInterface;
+use App\Models\Galaxy;
 
 class GalaxyGeneratePoints extends Command
 {
@@ -33,6 +34,7 @@ class GalaxyGeneratePoints extends Command
      */
     public function handle(): int
     {
+        $galaxy = null;
         // Use the factory to instantiate the correct generator
         $generator = PointGeneratorFactory::make(
             width:   $this->option('width')   ? (int)$this->option('width')   : null,
@@ -42,7 +44,9 @@ class GalaxyGeneratePoints extends Command
             seed:    $this->option('seed')    ? (int)$this->option('seed')    : null,
         );
 
-        $points = $generator->sample();
+        $galaxy = Galaxy::
+
+        $points = $generator->sample($galaxy);
 
         if ($this->option('format') === 'csv') {
             $this->line("x,y");

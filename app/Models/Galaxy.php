@@ -31,10 +31,10 @@ class Galaxy extends Model
     ];
 
     protected $casts = [
-        'status'              => GalaxyStatus::class,
+        'status' => GalaxyStatus::class,
         'distribution_method' => GalaxyDistributionMethod::class,
-        'engine'              => GalaxyRandomEngine::class,
-        'config'              => 'array',
+        'engine' => GalaxyRandomEngine::class,
+        'config' => 'array',
     ];
 
     public static function boot()
@@ -43,19 +43,40 @@ class Galaxy extends Model
 
         static::creating(function ($galaxy) {
             if (empty($galaxy->galaxy_uuid)) {
-                $galaxy->galaxy_uuid = (string) Str::uuid();
+                $galaxy->galaxy_uuid = (string)Str::uuid();
             }
         });
     }
 
     public function pointsOfInterest()
     {
-        //return $this->hasMany(PointOfInterest::class);
+        return $this->hasMany(PointOfInterest::class);
     }
 
     public function getGalaxyName(): string
     {
         return $this->name;
+    }
+
+    public function createWithPoints(array $galaxyData, array $points): self
+    {
+        $galaxy = self::create([
+            'uuid'                      => $galaxyData['uuid'],
+            'name'                      => self::generateUniqueName(),
+            'width'                     => $galaxyData['width'],
+            'height'                    => $galaxyData['height'],
+            'seed'                      => $galaxyData['seed'],
+            'distribution_method'       => GalaxyDistributionMethod::$galaxyData['distribution_method'],
+            'engine'                    => $galaxyData['engine'],
+            'status'                    => $galaxyData ['status'] ?? GalaxyStatus::DRAFT,
+            'turn_limit'                => $galaxyData['turn_limit'] ?? 0,
+            'version'                   => $galaxyData['version'] ?? '1.0',
+            'description'               => $galaxyData['description'] ?? null,
+            'is_public'                 => $galaxyData['is_public'] ?? false,
+        ]);
+
+        PointOfInterest::createForGalaxy($galaxy, $points);
+        return $galaxy;
     }
 
     public static function generateUniqueName(): string
@@ -66,7 +87,7 @@ class Galaxy extends Model
         if (Galaxy::where('name', $name)->exists()) {
             // Try suffixes first
             foreach (GalaxySuffixes::$suffixes as $suffix) {
-                $candidate = $base .' '. $suffix;
+                $candidate = $base . ' ' . $suffix;
                 if (!Galaxy::where('name', $candidate)->exists()) {
                     return $candidate;
                 }
@@ -84,4 +105,5 @@ class Galaxy extends Model
 
         return $name;
     }
+
 }

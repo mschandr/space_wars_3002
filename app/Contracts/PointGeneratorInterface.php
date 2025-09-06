@@ -1,6 +1,8 @@
 <?php
 namespace App\Contracts;
 
+use App\Models\Galaxy;
+
 interface PointGeneratorInterface
 {
     /**
@@ -8,5 +10,5 @@ interface PointGeneratorInterface
      *
      * @return array<int,array{0:int,1:int}>
      */
-    public function sample(): array;
+    public function sample(Galaxy $galaxy): array;
 }

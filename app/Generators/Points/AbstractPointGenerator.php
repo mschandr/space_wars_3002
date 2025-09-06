@@ -3,6 +3,8 @@
 namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
+use App\Enums\Galaxy\GalaxyStatus;
+use App\Models\Galaxy;
 use Random\Engine\Mt19937;
 use Random\Engine\PcgOneseq128XslRr64;
 use Random\Engine\Xoshiro256StarStar;
@@ -11,15 +13,15 @@ use Random\Randomizer;
 
 abstract class AbstractPointGenerator implements PointGeneratorInterface
 {
-    protected int $width = 300;
-    protected int $height = 300;
-    protected int $count = 3000;
-    protected float $spacingFactor = 0.75;
+    protected int $width            = 300;
+    protected int $height           = 300;
+    protected int $count            = 3000;
+    protected float $spacingFactor  = 0.75;
     protected int $seed;
-    protected array $options = [
-        'attempts' => 30,
-        'margin' => 0,
-        'returnFloats' => false,
+    protected array $options        = [
+        'attempts'      => 30,
+        'margin'        => 0,
+        'returnFloats'  => false,
     ];
 
     protected string $engineKey;
@@ -109,10 +111,28 @@ abstract class AbstractPointGenerator implements PointGeneratorInterface
         return true;
     }
 
+    public function createGalaxy(array $options, $points): Galaxy
+    {
+        return Galaxy::createWithPoints([
+            'uuid'                  => '4',
+            'name'                  => Galaxy::generateUniqueName(),
+            'width'                 => 2,
+            'height'                => 3,
+            'seed'                  => $options['seed'],
+            'distribution_method'   => $options['distribution_method'],
+            'engine'                => $options['engine'],
+            'status'                => $options['status'] ?? GalaxyStatus::DRAFT,
+            'turn_limit'            => $options['turn_limit'] ?? 0,
+            'version'               => $options['version'] ?? '1.0',
+            'description'           => $options['description'] ?? null,
+            'is_public'             => $options['is_public'] ?? false,
+        ], $points);
+    }
+
     /**
      * Must be implemented by each generator.
      *
      * @return array<int,array{0:int,1:int}>
      */
-    abstract public function sample(): array;
+    abstract public function sample(Galaxy $galaxy): array;
 }

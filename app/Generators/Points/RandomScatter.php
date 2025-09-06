@@ -3,6 +3,7 @@
 namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
+use App\Models\Galaxy;
 
 /**
  * Random scatter, uses true pseudo randomness to generate ~N points of interest but ensures
@@ -13,7 +14,7 @@ final class RandomScatter extends AbstractPointGenerator implements PointGenerat
     /**
      * @return array<int,array{0:int,1:int}>
      */
-    public function sample(): array
+    public function sample(Galaxy $galaxy): array
     {
         $points = [];
         while (count($points) < $this->count) {

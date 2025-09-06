@@ -3,6 +3,7 @@
 namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
+use App\Models\Galaxy;
 
 /**
  * Poisson-disk sample (Bridson-style)
@@ -18,7 +19,7 @@ final class PoissonDisk extends AbstractPointGenerator implements PointGenerator
     /**
      * @return array<int,array{0:float,1:float}> | array{points:array<int,array{0:int,1:int}>,r:float}
      */
-    public function sample(): array
+    public function sample(Galaxy $galaxy): array
     {
         // --- derive radius & grid (trimmed; but not hyper-optimized) ---
         $r      = $this->radius($this->width, $this->height, $this->count, $this->spacingFactor);
