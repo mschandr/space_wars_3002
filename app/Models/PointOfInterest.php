@@ -24,14 +24,15 @@ class PointOfInterest extends Model
         'name',
         'attributes',
         'is_hidden',
+        'version',
     ];
-
     protected $casts = [
-        'attributes'    => 'array',
-        'is_hidden'     => 'boolean',
-        'status'        => PointOfInterestStatus::class,
-        'type'          => PointOfInterestType::class,
+        'attributes' => 'array',
+        'is_hidden'  => 'boolean',
+        'status'     => PointOfInterestStatus::class,
+        'type'       => PointOfInterestType::class,
     ];
+    private string $version  = "";
 
     /**
      * Bulk create POIs for a galaxy from a list of points.
@@ -40,55 +41,55 @@ class PointOfInterest extends Model
      * @param array $points
      * @throws AssertionFailedException
      */
-    public static function createForGalaxy(Galaxy $galaxy, array $points): void
+    public static function createPointsForGalaxy(Galaxy $galaxy, array $points): void
     {
         $typeChooser = new WeightedRandomGenerator();
         $typeChooser->registerValues([
-            PointOfInterestType::STAR->value            => 60,
-            PointOfInterestType::NEBULA->value          => 10,
-            PointOfInterestType::ROGUE_PLANET->value    => 10,
-            PointOfInterestType::BLACK_HOLE->value      => 5,
-            PointOfInterestType::ASTEROID_BELT->value   => 10,
-            PointOfInterestType::ANOMALY->value         => 5,
+            PointOfInterestType::STAR->value          => 60,
+            PointOfInterestType::NEBULA->value        => 10,
+            PointOfInterestType::ROGUE_PLANET->value  => 10,
+            PointOfInterestType::BLACK_HOLE->value    => 5,
+            PointOfInterestType::ASTEROID_BELT->value => 10,
+            PointOfInterestType::ANOMALY->value       => 5,
         ]);
 
         $hiddenChooser = new WeightedRandomGenerator();
         $hiddenChooser->registerValues([
-            true    => 10,
-            false   => 90,
+            true  => 10,
+            false => 90,
         ]);
 
         foreach ($points as $point) {
-            $type       = $typeChooser->generate();
-            $isHidden   = $hiddenChooser->generate();
+            $type = $typeChooser->generate();
+            $isHidden = $hiddenChooser->generate();
 
             // Generate name based on type
             $name = match ($type) {
-                PointOfInterestType::STAR->value            => StarNameProvider::starName(),
-                PointOfInterestType::NEBULA->value          => NebulaNameProvider::nebulaName(),
-                PointOfInterestType::ROGUE_PLANET->value    => PlanetNameProvider::planetName(),
-                default                                     => null,
+                PointOfInterestType::STAR->value         => StarNameProvider::starName(),
+                PointOfInterestType::NEBULA->value       => NebulaNameProvider::nebulaName(),
+                PointOfInterestType::ROGUE_PLANET->value => PlanetNameProvider::planetName(),
+                default                                  => null,
             };
 
             self::create([
-                'galaxy_id'         => $galaxy->id,
-                'uuid'              => (string)Str::uuid(),
-                'type'              => $type,
-                'status'            => PointOfInterestStatus::DRAFT,
-                'x'                 => $point['x'],
-                'y'                 => $point['y'],
-                'name'              => $name,
-                'attributes'        => [],
-                'is_hidden'         => $isHidden,
+                'galaxy_id'  => $galaxy->id,
+                'uuid'       => (string)Str::uuid(),
+                'type'       => $type,
+                'status'     => PointOfInterestStatus::DRAFT,
+                'x'          => $point['x'],
+                'y'          => $point['y'],
+                'name'       => $name,
+                'attributes' => [],
+                'is_hidden'  => $isHidden,
             ]);
         }
     }
 
-   /**
-    *--------------------------------------------------------------------------
-    * Relationships
-    *--------------------------------------------------------------------------
-    */
+    /**
+     *--------------------------------------------------------------------------
+     * Relationships
+     *--------------------------------------------------------------------------
+     */
 
     protected static function boot()
     {
@@ -98,14 +99,17 @@ class PointOfInterest extends Model
             if (empty($model->uuid)) {
                 $model->uuid = (string)Str::uuid();
             }
+            if (empty($model->version)) {
+                $model->version = (string)trim(file_get_contents(base_path('VERSION')));
+            }
         });
     }
 
-   /**
-    *--------------------------------------------------------------------------
-    * Helpers
-    *--------------------------------------------------------------------------
-    */
+    /**
+     *--------------------------------------------------------------------------
+     * Helpers
+     *--------------------------------------------------------------------------
+     */
 
     public function galaxy()
     {
