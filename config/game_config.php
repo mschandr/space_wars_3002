@@ -6,7 +6,8 @@ return [
      * Feature flags
      */
     'feature' => [
-        'persist_data' => true,
+        'persist_data'  => true,
+        'stamp_version' => true,
     ],
 
     /**

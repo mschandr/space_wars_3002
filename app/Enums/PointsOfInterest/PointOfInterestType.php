@@ -89,7 +89,7 @@ enum PointOfInterestType: int
         };
     }
 
-    public function isPlanet(): bool
+    public function isSystemType(): bool
     {
         return match ($this) {
             self::CHTHONIC,

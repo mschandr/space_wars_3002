@@ -18,7 +18,7 @@ class NebulaNameProvider extends Base
         'Nebula', 'Cloud', 'Veil', 'Mist', 'Wraith', 'Shroud',
     ];
 
-    public static function nebulaName(): string
+    public static function generateNebulaName(): string
     {
         return static::randomElement(static::$nebulae) . ' ' . static::randomElement(static::$suffixes);
     }

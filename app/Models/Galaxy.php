@@ -8,6 +8,7 @@ use App\Enums\Galaxy\GalaxyStatus;
 use App\Faker\Common\GalaxySuffixes;
 use App\Faker\Common\RomanNumerals;
 use App\Faker\Providers\GalaxyNameProvider;
+use App\Traits\HasUuidAndVersion;
 use Assert\AssertionFailedException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,6 +17,8 @@ use Illuminate\Support\Str;
 
 class Galaxy extends Model
 {
+    use HasUuidAndVersion;
+
     protected $fillable = [
         'galaxy_uuid', 'name', 'description', 'width', 'height', 'seed', 'distribution_method',
         'spacing_factor', 'engine', 'turn_limit', 'status', 'version', 'is_public', 'config',
@@ -27,22 +30,6 @@ class Galaxy extends Model
         'engine'              => GalaxyRandomEngine::class,
         'config'              => 'array',
     ];
-
-    /**
-     * @static
-     * @param array $galaxyData
-     * @param array $points
-     * @return Galaxy
-     * @throws AssertionFailedException
-     */
-    public static function createWithPoints(array $galaxyData, array $points): self
-    {
-        $galaxy = self::createGalaxy($galaxyData);
-        if (!empty($points)) {
-            PointOfInterest::createPointsForGalaxy($galaxy, $points);
-        }
-        return $galaxy;
-    }
 
     /**
      * @param array $galaxyData
@@ -64,31 +51,21 @@ class Galaxy extends Model
 
         if (config('game_config.feature.persist_data')) {
             return self::create($attributes);
-        } else {
-            $attributes['galaxy_uuid'] = (string)Str::uuid();
-            $attributes['name'] = self::generateUniqueName();
-            $attributes['version'] = trim(file_get_contents(base_path('VERSION')));
         }
-
-        // Return an unsaved Galaxy instance (in-memory only)
-        return new self($attributes);
+        $galaxy = new self();
+        $galaxy->fill($attributes);
+        return $galaxy;
     }
 
     /**
      * @static
      * @return void
      */
-    protected static function boot()
+    protected static function boot(): void
     {
         parent::boot();
 
         static::creating(function ($galaxy) {
-            if (empty($galaxy->galaxy_uuid)) {
-                $galaxy->galaxy_uuid = (string)Str::uuid();
-            }
-            if (empty($galaxy->version)) {
-                $galaxy->version = trim(file_get_contents(base_path('VERSION')));
-            }
             if (empty($galaxy->name)) {
                 $galaxy->name = self::generateUniqueName();
             }

@@ -24,14 +24,15 @@ class StarNameProvider extends Base
             'fictional'    => 5,  // 50% chance
             'mythological' => 2,  // 20% chance
         ]);
+        return self::$stylePicker->generate();
+
     }
 
-    public static function starName(): string
+    public static function generateStarName(): string
     {
-        self::init();
-        $style = self::$stylePicker->generate();
+        $type = self::init();
 
-        switch ($style) {
+        switch ($type) {
             case 'catalog':
                 return static::randomElement(StarCatalog::$stars) . " " .
                     static::randomElement(GreekLetters::$letters) . " " .
