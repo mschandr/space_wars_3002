@@ -16,4 +16,19 @@ enum GalaxyRandomEngine: int
             self::XOSHIRO => 'Xoshiro256**',
         };
     }
+    /**
+     * Reverse lookup of string to the class property.
+     *
+     * @static
+     * @param   string              $engine_string
+     * @return  GalaxyRandomEngine
+     */
+    public static function fromName(string $engine_string): GalaxyRandomEngine
+    {
+        return match (strtolower($engine_string)) {
+            'mt19937' => self::MT19937,
+            'pcg'     => self::PCG,
+            'xoshiro' => self::XOSHIRO,
+        };
+    }
 }

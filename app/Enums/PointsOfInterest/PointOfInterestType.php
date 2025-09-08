@@ -29,7 +29,7 @@ enum PointOfInterestType: string
         self::COMET,
         self::BLACK_HOLE,
         self::NEBULA,
-        self::ROGUE,
+        self::ROGUE_PLANET,
         self::STAR,
         self::SUPER_MASSIVE_BLACK_HOLE,
     ];

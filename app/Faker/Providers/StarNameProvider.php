@@ -13,14 +13,15 @@ use mschandr\WeightedRandom\WeightedRandomGenerator;
 class StarNameProvider extends Base
 {
     protected WeightedRandomGenerator $stylePicker;
+
     public function __construct()
     {
         $this->stylePicker = new WeightedRandomGenerator();
 
         // Register weighted probabilities
         $this->stylePicker->registerValues([
-            'catalog' => 3,       // 30% chance
-            'fictional' => 5,     // 50% chance
+            'catalog'      => 3,  // 30% chance
+            'fictional'    => 5,  // 50% chance
             'mythological' => 2,  // 20% chance
         ]);
     }
@@ -37,12 +38,12 @@ class StarNameProvider extends Base
 
             case 'fictional':
                 $syllables = [
-                    'zor','ath','vel','dra','mor','lek','quor',
-                    'pho','xin','tal','gar','nov', 'ser','ith',
-                    'ran','ul','var','nyx','thar'
+                    'zor', 'ath', 'vel', 'dra', 'mor', 'lek', 'quor',
+                    'pho', 'xin', 'tal', 'gar', 'nov', 'ser', 'ith',
+                    'ran', 'ul', 'var', 'nyx', 'thar'
                 ];
-                $parts = mt_rand(2, 3);
-                $name = '';
+                $parts     = mt_rand(2, 3);
+                $name      = '';
                 for ($i = 0; $i < $parts; $i++) {
                     $name .= static::randomElement($syllables);
                 }

@@ -9,6 +9,7 @@ use App\Generators\Points\HaltonSequence;
 use App\Enums\Galaxy\GalaxyDistributionMethod;
 use App\Enums\Galaxy\GalaxyRandomEngine;
 use App\Models\Galaxy;
+use Random\RandomException;
 
 class GalaxyGeneratePoints extends Command
 {
@@ -23,39 +24,43 @@ class GalaxyGeneratePoints extends Command
 
     protected $description = 'Generate a galaxy with points of interest using a chosen distribution method';
 
+    /**
+     * @throws RandomException
+     */
     public function handle(): int
     {
         $method = strtolower($this->option('method'));
-        $width = (int) $this->option('width');
-        $height = (int) $this->option('height');
-        $count = (int) $this->option('count');
-        $seed = (int) $this->option('seed');
-        $engine = GalaxyRandomEngine::fromName($this->option('engine'));
+        $width  = (int)$this->option('width');
+        $height = (int)$this->option('height');
+        $count  = (int)$this->option('count');
+        $seed   = (int)$this->option('seed');
+        $engine = $this->option('engine');
+
+        // Generate and persist galaxy
+        $galaxy = Galaxy::createGalaxy([
+            'width'               => $width,
+            'height'              => $height,
+            'seed'                => $seed,
+            'distribution_method' => GalaxyDistributionMethod::fromName($method),
+            'engine'              => GalaxyRandomEngine::fromName($engine),
+        ]);
 
         // Pick generator
-        $generator = match ($method) {
-            'scatter' => new RandomScatter($width, $height, $count, 0.75, $seed, $engine),
-            'poisson' => new PoissonDisk($width, $height, $count, 0.75, $seed, $engine),
-            'halton'  => new HaltonSequence($width, $height, $count, 0.75, $seed, $engine),
+        match ($method) {
+            'scatter' => new RandomScatter($width, $height, $count, 0.75, $seed, [], $engine),
+            'poisson' => new PoissonDisk($width, $height, $count, 0.75, $seed, [], $engine),
+            'halton'  => new HaltonSequence($width, $height, $count, 0.75, $seed, [], $engine),
             default   => throw new \InvalidArgumentException("Unknown method: {$method}"),
         };
 
-        // Generate and persist galaxy
-        $galaxy = $generator->createGalaxy([
-            'width' => $width,
-            'height' => $height,
-            'seed' => $seed,
-            'distribution_method' => GalaxyDistributionMethod::fromName($method),
-            'engine' => $engine,
-        ]);
 
         if ($this->option('json')) {
             // Dump JSON for Vue debug
             $data = [
                 'galaxy' => [
-                    'id' => $galaxy->id,
-                    'name' => $galaxy->name,
-                    'width' => $galaxy->width,
+                    'id'     => $galaxy->id,
+                    'name'   => $galaxy->name,
+                    'width'  => $galaxy->width,
                     'height' => $galaxy->height,
                 ],
                 'points' => $galaxy->pointsOfInterest()

@@ -7,6 +7,7 @@ use App\Faker\Providers\PlanetNameProvider;
 use App\Faker\Providers\StarNameProvider;
 use Assert\AssertionFailedException;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 use App\Enums\PointsOfInterest\PointOfInterestStatus;
 use App\Enums\PointsOfInterest\PointOfInterestType;
@@ -14,7 +15,12 @@ use mschandr\WeightedRandom\WeightedRandomGenerator;
 
 class PointOfInterest extends Model
 {
-    protected $fillable = [
+    /**
+     * @var string
+     */
+    protected $table = "points_of_interest";
+
+    protected      $fillable = [
         'uuid',
         'galaxy_id',
         'type',
@@ -26,7 +32,7 @@ class PointOfInterest extends Model
         'is_hidden',
         'version',
     ];
-    protected $casts = [
+    protected      $casts    = [
         'attributes' => 'array',
         'is_hidden'  => 'boolean',
         'status'     => PointOfInterestStatus::class,
@@ -43,25 +49,9 @@ class PointOfInterest extends Model
      */
     public static function createPointsForGalaxy(Galaxy $galaxy, array $points): void
     {
-        $typeChooser = new WeightedRandomGenerator();
-        $typeChooser->registerValues([
-            PointOfInterestType::STAR->value          => 60,
-            PointOfInterestType::NEBULA->value        => 10,
-            PointOfInterestType::ROGUE_PLANET->value  => 10,
-            PointOfInterestType::BLACK_HOLE->value    => 5,
-            PointOfInterestType::ASTEROID_BELT->value => 10,
-            PointOfInterestType::ANOMALY->value       => 5,
-        ]);
-
-        $hiddenChooser = new WeightedRandomGenerator();
-        $hiddenChooser->registerValues([
-            true  => 10,
-            false => 90,
-        ]);
-
         foreach ($points as $point) {
-            $type = $typeChooser->generate();
-            $isHidden = $hiddenChooser->generate();
+            $type     = self::setPOIType();
+            $isHidden = self::setHiddenPOI();
 
             // Generate name based on type
             $name = match ($type) {
@@ -83,6 +73,38 @@ class PointOfInterest extends Model
                 'is_hidden'  => $isHidden,
             ]);
         }
+    }
+
+    /**
+     * @return mixed
+     * @throws AssertionFailedException
+     */
+    private static function setPOIType(): string
+    {
+        $typeChooser = new WeightedRandomGenerator();
+        $typeChooser->registerValues([
+            PointOfInterestType::STAR->value          => 60,
+            PointOfInterestType::NEBULA->value        => 10,
+            PointOfInterestType::ROGUE_PLANET->value  => 10,
+            PointOfInterestType::BLACK_HOLE->value    => 5,
+            PointOfInterestType::ASTEROID_BELT->value => 10,
+            PointOfInterestType::ANOMALY->value       => 5,
+        ]);
+        return $typeChooser->generate();
+    }
+
+    /**
+     * @return bool
+     * @throws AssertionFailedException
+     */
+    private static function setHiddenPOI(): bool
+    {
+        $hiddenChooser = new WeightedRandomGenerator();
+        $hiddenChooser->registerValues([
+            true  => 10,
+            false => 90,
+        ]);
+        return $hiddenChooser->generate();
     }
 
     /**
@@ -111,7 +133,10 @@ class PointOfInterest extends Model
      *--------------------------------------------------------------------------
      */
 
-    public function galaxy()
+    /**
+     * @return BelongsTo
+     */
+    public function galaxy(): BelongsTo
     {
         return $this->belongsTo(Galaxy::class);
     }
