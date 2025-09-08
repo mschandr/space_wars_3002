@@ -46,13 +46,14 @@ class GalaxyGeneratePoints extends Command
         ]);
 
         // Pick generator
-        match ($method) {
+        $generator = match ($method) {
             'scatter' => new RandomScatter($width, $height, $count, 0.75, $seed, [], $engine),
             'poisson' => new PoissonDisk($width, $height, $count, 0.75, $seed, [], $engine),
             'halton'  => new HaltonSequence($width, $height, $count, 0.75, $seed, [], $engine),
             default   => throw new \InvalidArgumentException("Unknown method: {$method}"),
         };
 
+        $points = $generator->sample($galaxy);
 
         if ($this->option('json')) {
             // Dump JSON for Vue debug

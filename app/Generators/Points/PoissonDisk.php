@@ -5,6 +5,7 @@ namespace App\Generators\Points;
 use App\Contracts\PointGeneratorInterface;
 use App\Models\Galaxy;
 use App\Models\PointOfInterest;
+use Assert\AssertionFailedException;
 
 /**
  * Poisson-disk sample (Bridson-style)
@@ -19,6 +20,7 @@ final class PoissonDisk extends AbstractPointGenerator implements PointGenerator
     /**
      * @param Galaxy $galaxy
      * @return array<int,array{0:float,1:float}> | array{points:array<int,array{0:int,1:int}>,r:float}
+     * @throws AssertionFailedException
      */
     public function sample(Galaxy $galaxy): array
     {
@@ -29,9 +31,9 @@ final class PoissonDisk extends AbstractPointGenerator implements PointGenerator
         $gh   = max(1, (int)ceil($this->height / $cell));
         $grid = array_fill(0, $gw * $gh, -1);
 
-        $attempts = (int)$this->options['attempts'];
-        $margin   = (int)$this->options['margin'];
-        $floats   = (bool)$this->options['returnFloats'];
+        $attempts = (int) config('game_config.generator_options.attempts') ?? $this->options['attempts'];
+        $margin   = (int) config('game_config.generator_options.margin') ?? $this->options['margin'];
+        $floats   = (bool) config ('game_config.generator_options.floats') ?? $this->options['returnFloats'];
 
         $pts    = [];
         $active = [];

@@ -12,23 +12,24 @@ use mschandr\WeightedRandom\WeightedRandomGenerator;
 
 class StarNameProvider extends Base
 {
-    protected WeightedRandomGenerator $stylePicker;
+    protected static WeightedRandomGenerator $stylePicker;
 
-    public function __construct()
+    public static function init()
     {
-        $this->stylePicker = new WeightedRandomGenerator();
+        self::$stylePicker = new WeightedRandomGenerator();
 
         // Register weighted probabilities
-        $this->stylePicker->registerValues([
+        self::$stylePicker->registerValues([
             'catalog'      => 3,  // 30% chance
             'fictional'    => 5,  // 50% chance
             'mythological' => 2,  // 20% chance
         ]);
     }
 
-    public function starName(): string
+    public static function starName(): string
     {
-        $style = $this->stylePicker->generate();
+        self::init();
+        $style = self::$stylePicker->generate();
 
         switch ($style) {
             case 'catalog':

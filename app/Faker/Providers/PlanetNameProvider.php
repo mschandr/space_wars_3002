@@ -2,6 +2,7 @@
 
 namespace App\Faker\Providers;
 
+use Assert\AssertionFailedException;
 use Faker\Provider\Base;
 use App\Faker\Common\MythologicalNames;
 use App\Faker\Common\RomanNumerals;
@@ -20,30 +21,37 @@ class PlanetNameProvider extends Base
         ' Station', ' Outpost', ' Sanctuary', ' Belt',
     ];
 
-    protected WeightedRandomGenerator $styleChooser;
+    protected static WeightedRandomGenerator $styleChooser;
 
-    public function __construct()
+    /**
+     * @throws \Assert\AssertionFailedException
+     */
+    public static function init()
     {
-        $this->styleChooser = new WeightedRandomGenerator();
-        $this->styleChooser->registerValues([
+        self::$styleChooser = new WeightedRandomGenerator();
+        self::$styleChooser->registerValues([
             'procedural' => 70,
             'catalog'    => 15,
             'myth'       => 15,
         ]);
     }
 
-    public function planetName(): string
+    /**
+     * @throws AssertionFailedException
+     */
+    public static function planetName(): string
     {
-        $style = $this->styleChooser->generate();
+        self::init();
+        $style = self::$styleChooser->generate();
 
         return match ($style) {
-            'procedural' => $this->proceduralName(),
-            'catalog'    => $this->catalogName(),
-            'myth'       => $this->mythName(),
+            'procedural' => self::proceduralName(),
+            'catalog'    => self::catalogName(),
+            'myth'       => self::mythName(),
         };
     }
 
-    protected function proceduralName(): string
+    protected static function proceduralName(): string
     {
         $parts = random_int(2, 4);
         $name = '';
@@ -53,12 +61,12 @@ class PlanetNameProvider extends Base
         return ucfirst($name) . static::randomElement(static::$suffixes);
     }
 
-    protected function catalogName(): string
+    protected static function catalogName(): string
     {
         return 'HD-' . random_int(100, 9999) . ' ' . RomanNumerals::romanize(random_int(1, 20));
     }
 
-    protected function mythName(): string
+    protected static function mythName(): string
     {
         return static::randomElement(MythologicalNames::$names);
     }
