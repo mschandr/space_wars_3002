@@ -8,7 +8,7 @@ class NebulaNameProvider extends Base
 {
     protected static array $nebulae = [
         'Pleiades', 'Lagoon', 'Trifid', 'Cone', 'Butterfly',
-        "Cat's Eye", "Little Ghost", "Reflective", 'Ghost of Jupiter',
+        "Cat's Eye", 'Little Ghost', 'Reflective', 'Ghost of Jupiter',
         'Blue Snowman', 'Flaming Star', 'Southern Crab', 'Monkey Head',
         'Waterfall', 'Orion', 'Crab', 'Ring', 'Eagle', 'Horsehead',
         'Tarantula', 'Helix',
@@ -20,6 +20,6 @@ class NebulaNameProvider extends Base
 
     public static function generateNebulaName(): string
     {
-        return static::randomElement(static::$nebulae) . ' ' . static::randomElement(static::$suffixes);
+        return static::randomElement(static::$nebulae).' '.static::randomElement(static::$suffixes);
     }
 }

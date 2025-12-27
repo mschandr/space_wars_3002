@@ -30,6 +30,7 @@ class GalaxyController extends Controller
     public function store(Request $request)
     {
         $galaxy = Galaxy::create($request->all());
+
         return new GalaxyResource($galaxy);
     }
 
@@ -40,5 +41,4 @@ class GalaxyController extends Controller
     {
         return new GalaxyResource($galaxy);
     }
-
 }

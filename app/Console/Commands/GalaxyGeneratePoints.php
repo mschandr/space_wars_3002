@@ -2,13 +2,13 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Generators\Points\RandomScatter;
-use App\Generators\Points\PoissonDisk;
-use App\Generators\Points\HaltonSequence;
 use App\Enums\Galaxy\GalaxyDistributionMethod;
 use App\Enums\Galaxy\GalaxyRandomEngine;
+use App\Generators\Points\HaltonSequence;
+use App\Generators\Points\PoissonDisk;
+use App\Generators\Points\RandomScatter;
 use App\Models\Galaxy;
+use Illuminate\Console\Command;
 use Random\RandomException;
 
 class GalaxyGeneratePoints extends Command
@@ -30,10 +30,10 @@ class GalaxyGeneratePoints extends Command
     public function handle(): int
     {
         $method = strtolower($this->option('method'));
-        $width  = (int)$this->option('width');
-        $height = (int)$this->option('height');
-        $count  = (int)$this->option('count');
-        $seed   = (int)$this->option('seed');
+        $width  = (int) $this->option('width');
+        $height = (int) $this->option('height');
+        $count  = (int) $this->option('count');
+        $seed   = (int) $this->option('seed');
         $engine = $this->option('engine');
 
         // Generate and persist galaxy

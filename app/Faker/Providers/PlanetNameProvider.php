@@ -2,10 +2,10 @@
 
 namespace App\Faker\Providers;
 
-use Assert\AssertionFailedException;
-use Faker\Provider\Base;
 use App\Faker\Common\MythologicalNames;
 use App\Faker\Common\RomanNumerals;
+use Assert\AssertionFailedException;
+use Faker\Provider\Base;
 use mschandr\WeightedRandom\WeightedRandomGenerator;
 use Random\RandomException;
 
@@ -25,17 +25,17 @@ class PlanetNameProvider extends Base
     protected static WeightedRandomGenerator $styleChooser;
 
     /**
-     * @return string
      * @throws AssertionFailedException
      * @throws RandomException
      */
     public static function generatePlanetName(): string
     {
         $name_method = self::init();
+
         return match ($name_method) {
             'procedural' => self::proceduralName(),
-            'catalog'    => self::catalogName(),
-            'myth'       => self::mythName(),
+            'catalog' => self::catalogName(),
+            'myth' => self::mythName(),
         };
     }
 
@@ -44,33 +44,34 @@ class PlanetNameProvider extends Base
      */
     public static function init(): string
     {
-        self::$styleChooser = new WeightedRandomGenerator();
+        self::$styleChooser = new WeightedRandomGenerator;
         self::$styleChooser->registerValues([
             'procedural' => 70,
-            'catalog'    => 15,
-            'myth'       => 15,
+            'catalog' => 15,
+            'myth' => 15,
         ]);
+
         return self::$styleChooser->generate();
 
     }
 
     /**
-     * @return string
      * @throws RandomException
      */
     protected static function proceduralName(): string
     {
         $parts = random_int(2, 4);
-        $name  = '';
+        $name = '';
         for ($i = 0; $i < $parts; $i++) {
             $name .= static::randomElement(static::$syllables);
         }
-        return ucfirst($name) . static::randomElement(static::$suffixes);
+
+        return ucfirst($name).static::randomElement(static::$suffixes);
     }
 
     protected static function catalogName(): string
     {
-        return 'HD-' . random_int(100, 9999) . ' ' . RomanNumerals::romanize(random_int(1, 20));
+        return 'HD-'.random_int(100, 9999).' '.RomanNumerals::romanize(random_int(1, 20));
     }
 
     protected static function mythName(): string

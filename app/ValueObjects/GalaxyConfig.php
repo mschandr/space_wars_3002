@@ -6,23 +6,21 @@ use App\Enums\Galaxy\GalaxyDistributionMethod;
 use App\Enums\Galaxy\GalaxyRandomEngine;
 use App\Enums\Galaxy\GalaxyStatus;
 use Assert\Assertion;
-use Assert\AssertionFailedException;
 
 class GalaxyConfig
 {
     public function __construct(
-        public int                      $width,
-        public int                      $height,
-        public int                      $seed,
+        public int $width,
+        public int $height,
+        public int $seed,
         public GalaxyDistributionMethod $distributionMethod,
-        public GalaxyRandomEngine       $engine,
-        public GalaxyStatus             $status = GalaxyStatus::DRAFT,
-        public int                      $turnLimit = 0,
-        public ?string                  $description = null,
-        public bool                     $isPublic = false,
-        public array                    $config = [],
-    )
-    {
+        public GalaxyRandomEngine $engine,
+        public GalaxyStatus $status = GalaxyStatus::DRAFT,
+        public int $turnLimit = 0,
+        public ?string $description = null,
+        public bool $isPublic = false,
+        public array $config = [],
+    ) {
         // Basic sanity checks
         Assertion::greaterThan($this->width, 0, 'Width must be positive.');
         Assertion::greaterThan($this->height, 0, 'Height must be positive.');
@@ -38,16 +36,15 @@ class GalaxyConfig
 
     /**
      * Build a config from an array, validating required keys.
-     *
      */
     public static function fromArray(array $data): self
     {
-        $required   = ['width', 'height', 'seed', 'distribution_method', 'engine'];
-        $missing    = array_diff($required, array_keys($data));
+        $required = ['width', 'height', 'seed', 'distribution_method', 'engine'];
+        $missing = array_diff($required, array_keys($data));
 
-        if (!empty($missing)) {
+        if (! empty($missing)) {
             throw new \InvalidArgumentException(
-                'Missing required keys: ' . implode(', ', $missing)
+                'Missing required keys: '.implode(', ', $missing)
             );
         }
 
@@ -56,20 +53,20 @@ class GalaxyConfig
             : ($data['config'] ?? json_encode([]));
 
         return new self(
-            width:              (int)$data['width'],
-            height:             (int)$data['height'],
-            seed:               (int)$data['seed'],
+            width: (int) $data['width'],
+            height: (int) $data['height'],
+            seed: (int) $data['seed'],
             distributionMethod: $data['distribution_method'] instanceof GalaxyDistributionMethod
                                 ? $data['distribution_method']
                                 : GalaxyDistributionMethod::from($data['distribution_method']),
-            engine:             $data['engine'] instanceof GalaxyRandomEngine
+            engine: $data['engine'] instanceof GalaxyRandomEngine
                                 ? $data['engine']
                                 : GalaxyRandomEngine::from($data['engine']),
-            status:             $data['status'] ?? GalaxyStatus::DRAFT,
-            turnLimit:          $data['turn_limit'] ?? 0,
-            description:        $data['description'] ?? null,
-            isPublic:           $data['is_public'] ?? false,
-            config:             $config,
+            status: $data['status'] ?? GalaxyStatus::DRAFT,
+            turnLimit: $data['turn_limit'] ?? 0,
+            description: $data['description'] ?? null,
+            isPublic: $data['is_public'] ?? false,
+            config: $config,
         );
     }
 
@@ -79,16 +76,16 @@ class GalaxyConfig
     public function toArray(): array
     {
         return [
-            'width'               => $this->width,
-            'height'              => $this->height,
-            'seed'                => $this->seed,
+            'width' => $this->width,
+            'height' => $this->height,
+            'seed' => $this->seed,
             'distribution_method' => $this->distributionMethod,
-            'engine'              => $this->engine,
-            'status'              => $this->status,
-            'turn_limit'          => $this->turnLimit,
-            'description'         => $this->description,
-            'is_public'           => $this->isPublic,
-            'config'              => $this->config,
+            'engine' => $this->engine,
+            'status' => $this->status,
+            'turn_limit' => $this->turnLimit,
+            'description' => $this->description,
+            'is_public' => $this->isPublic,
+            'config' => $this->config,
         ];
     }
 }

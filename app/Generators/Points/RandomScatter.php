@@ -15,6 +15,7 @@ final class RandomScatter extends AbstractPointGenerator implements PointGenerat
 {
     /**
      * @return array<int,array{0:int,1:int}>
+     *
      * @throws AssertionFailedException
      */
     public function sample(Galaxy $galaxy): array
@@ -29,7 +30,7 @@ final class RandomScatter extends AbstractPointGenerator implements PointGenerat
                 $y = $this->randomizer
                     ? $this->randomizer->getInt(0, $this->height - 1)
                     : mt_rand(0, $this->height - 1);
-                $key = $x . ':' . $y;
+                $key = $x.':'.$y;
                 $attempts++;
             } while (isset($points[$key]) && $attempts < 3);
 
@@ -39,6 +40,7 @@ final class RandomScatter extends AbstractPointGenerator implements PointGenerat
         if (config('game_config.feature.persist_data')) {
             PointOfInterest::createPointsForGalaxy($galaxy, array_values($points));
         }
+
         return array_values($points);
     }
 }

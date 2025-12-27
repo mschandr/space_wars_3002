@@ -2,23 +2,17 @@
 
 namespace App\Factories;
 
-use Random\RandomException;
 use App\Contracts\PointGeneratorInterface;
-use App\Generators\Points\RandomScatter;
-use App\Generators\Points\PoissonDisk;
 use App\Generators\Points\HaltonSequence;
-use App\ValueObjects\GalaxyConfig;
+use App\Generators\Points\PoissonDisk;
+use App\Generators\Points\RandomScatter;
 use App\Models\Galaxy;
+use App\ValueObjects\GalaxyConfig;
+use Random\RandomException;
 
 class PointGeneratorFactory
 {
     /**
-     * @param int|null      $width
-     * @param int|null      $height
-     * @param int|null      $count
-     * @param float|null    $spacing
-     * @param int|null      $seed
-     * @return PointGeneratorInterface
      * @throws RandomException
      */
     public static function make(
@@ -27,10 +21,9 @@ class PointGeneratorFactory
         ?int   $count   = null,
         ?float $spacing = null,
         ?int   $seed    = null
-    ): PointGeneratorInterface
-    {
-        $config     = config('game_config.galaxy');
-        $options    = $options ?? config('game_config.generator_options');
+    ): PointGeneratorInterface {
+        $config  = config('game_config.galaxy');
+        $options = $options ?? config('game_config.generator_options');
 
         $width      = $width ?? $config['width'];
         $height     = $height ?? $config['height'];
@@ -43,27 +36,29 @@ class PointGeneratorFactory
         $is_public  = $config['is_public'] ?? false;
 
         $config = GalaxyConfig::fromArray([
-            'width'               => $width,
-            'height'              => $height,
-            'count'               => $count,
-            'seed'                => $seed,
-            'distribution_method' => $type,
-            'spacing'             => $spacing,
-            'engine'              => $engine,
-            'turn_limit'          => $turn_limit,
-            'is_public'           => $is_public,
-            'config'              => $config,
+            'width'                 => $width,
+            'height'                => $height,
+            'count'                 => $count,
+            'seed'                  => $seed,
+            'distribution_method'   => $type,
+            'spacing'               => $spacing,
+            'engine'                => $engine,
+            'turn_limit'            => $turn_limit,
+            'is_public'             => $is_public,
+            'config'                => $config,
         ]);
 
         Galaxy::createGalaxy([
             $config->toArray(),
         ]);
+
         return match ($type) {
             'poisson', 'poissondisk'
-                    => new PoissonDisk($width, $height, $count, $spacing, $seed, $options, $engine),
+                => new PoissonDisk($width, $height, $count, $spacing, $seed, $options, $engine),
             'halton', 'haltonsequence'
-                    => new HaltonSequence($width, $height, $count, $spacing, $seed, $options, $engine),
-            default => new RandomScatter($width, $height, $count, $spacing, $seed, $options, $engine),
+                => new HaltonSequence($width, $height, $count, $spacing, $seed, $options, $engine),
+            default
+                => new RandomScatter($width, $height, $count, $spacing, $seed, $options, $engine),
         };
     }
 }

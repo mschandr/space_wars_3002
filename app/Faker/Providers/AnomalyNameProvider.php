@@ -27,7 +27,6 @@ class AnomalyNameProvider extends Base
     ];
 
     /**
-     * @return string
      * @throws AssertionFailedException
      * @throws RandomException
      */
@@ -36,9 +35,9 @@ class AnomalyNameProvider extends Base
         $style = self::init();
 
         return match ($style) {
-            'nickname'   => self::nicknameStyle(),
+            'nickname' => self::nicknameStyle(),
             'scientific' => self::scientificStyle(),
-            'sector'     => self::sectorStyle(),
+            'sector' => self::sectorStyle(),
         };
     }
 
@@ -49,40 +48,33 @@ class AnomalyNameProvider extends Base
      */
     protected static function init(): string
     {
-        if (!isset(self::$styleChooser)) {
-            self::$styleChooser = new WeightedRandomGenerator();
+        if (! isset(self::$styleChooser)) {
+            self::$styleChooser = new WeightedRandomGenerator;
             self::$styleChooser->registerValues([
-                'nickname'   => 70,
+                'nickname' => 70,
                 'scientific' => 20,
-                'sector'     => 10,
+                'sector' => 10,
             ]);
         }
+
         return self::$styleChooser->generate();
     }
 
-    /**
-     * @return string
-     */
     protected static function nicknameStyle(): string
     {
         return static::randomElement(static::$nicknames);
     }
 
-    /**
-     * @return string
-     */
     protected static function scientificStyle(): string
     {
         return static::randomElement(static::$scientific);
     }
 
-    /**
-     * @return string
-     */
     protected static function sectorStyle(): string
     {
         $letter = chr(random_int(65, 90)); // A–Z
         $number = random_int(10, 999);
+
         return "Sector {$letter}-{$number} Disturbance";
     }
 }

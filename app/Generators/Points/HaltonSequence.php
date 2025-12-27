@@ -14,11 +14,11 @@ final class HaltonSequence extends AbstractPointGenerator implements PointGenera
     public function sample(Galaxy $galaxy): array
     {
         $pts = [];
-        $i   = 1;
+        $i = 1;
 
         while (count($pts) < $this->count) {
-            $x = (int)floor($this->halton($i, 2) * $this->width);
-            $y = (int)floor($this->halton($i, 3) * $this->height);
+            $x = (int) floor($this->halton($i, 2) * $this->width);
+            $y = (int) floor($this->halton($i, 3) * $this->height);
 
             // clamp to bounds
             $x = max(0, min($this->width - 1, $x));
@@ -33,6 +33,7 @@ final class HaltonSequence extends AbstractPointGenerator implements PointGenera
         if (config('game_config.feature.persist_data')) {
             PointOfInterest::createPointsForGalaxy($galaxy, array_values($pts));
         }
+
         return $pts;
     }
 

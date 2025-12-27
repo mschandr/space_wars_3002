@@ -33,8 +33,8 @@ class BlackHoleNameProvider extends Base
     ];
 
     protected static array $nouns = [
-        'Maw','Abyss','Rift','Singularity','Void','Collapse','Spiral',
-        'Event Horizon','Chasm','Pit','Obscura','Hunger','Vortex','Gate','Descent'
+        'Maw', 'Abyss', 'Rift', 'Singularity', 'Void', 'Collapse', 'Spiral',
+        'Event Horizon', 'Chasm', 'Pit', 'Obscura', 'Hunger', 'Vortex', 'Gate', 'Descent',
     ];
 
     public static function generateBlackHoleName(): string
@@ -42,9 +42,10 @@ class BlackHoleNameProvider extends Base
         if (mt_rand(0, 1)) {
             $god = static::randomElement(static::$mythicNames);
             $noun = static::randomElement(static::$nouns);
+
             return "{$god} {$noun}";
         }
 
-        return 'BH-' . mt_rand(100, 9999);
+        return 'BH-'.mt_rand(100, 9999);
     }
 }
