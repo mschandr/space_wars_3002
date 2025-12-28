@@ -18,19 +18,19 @@ class GalaxyViewCommand extends Command
 
     protected $description = 'Display ASCII visualization of a galaxy with interactive zoom';
 
-    private Galaxy $galaxy;
-    private Collection $pois;
-    private int $termWidth;
-    private int $termHeight;
-    private bool $showHidden;
-    private array $poiMap = [];
-    private int $currentView = 0; // 0 = galaxy view, >0 = star system ID
+    private Galaxy      $galaxy;
+    private Collection  $pois;
+    private int         $termWidth;
+    private int         $termHeight;
+    private bool        $showHidden;
+    private array       $poiMap = [];
+    private int         $currentView = 0; // 0 = galaxy view, >0 = star system ID
 
     // ANSI color codes
     private const COLORS = [
         'reset' => "\033[0m",
-        'bold' => "\033[1m",
-        'dim' => "\033[2m",
+        'bold'  => "\033[1m",
+        'dim'   => "\033[2m",
 
         // Stellar classifications
         'O' => "\033[38;5;45m",  // Bright blue (Blue Supergiant)
@@ -42,34 +42,34 @@ class GalaxyViewCommand extends Command
         'M' => "\033[38;5;196m", // Red
 
         // Stars with/without planets
-        'star_with_planets' => "\033[38;5;11m",    // Bright yellow
-        'star_no_planets' => "\033[38;5;248m",     // Gray
+        'star_with_planets' => "\033[38;5;11m",     // Bright yellow
+        'star_no_planets'   => "\033[38;5;248m",    // Gray
 
         // Other POI types
-        'black_hole' => "\033[38;5;57m",           // Dark purple
-        'nebula' => "\033[38;5;165m",              // Purple/pink
-        'anomaly' => "\033[38;5;46m",              // Bright green
-        'planet' => "\033[38;5;34m",               // Green
-        'gas_giant' => "\033[38;5;172m",           // Orange
-        'moon' => "\033[38;5;250m",                // Light gray
+        'black_hole'    => "\033[38;5;57m",         // Dark purple
+        'nebula'        => "\033[38;5;165m",        // Purple/pink
+        'anomaly'       => "\033[38;5;46m",         // Bright green
+        'planet'        => "\033[38;5;34m",         // Green
+        'gas_giant'     => "\033[38;5;172m",        // Orange
+        'moon'          => "\033[38;5;250m",        // Light gray
 
         // UI elements
-        'label' => "\033[38;5;33m",                // Bright blue
-        'header' => "\033[38;5;226m",              // Yellow
-        'border' => "\033[38;5;240m",              // Dark gray
-        'highlight' => "\033[38;5;46m",            // Bright green
+        'label'         => "\033[38;5;33m",         // Bright blue
+        'header'        => "\033[38;5;226m",        // Yellow
+        'border'        => "\033[38;5;240m",        // Dark gray
+        'highlight'     => "\033[38;5;46m",         // Bright green
     ];
 
     public function handle(): int
     {
-        $this->termWidth = (int) $this->option('width');
-        $this->termHeight = (int) $this->option('height');
-        $this->showHidden = $this->option('show-hidden');
+        $this->termWidth    = (int) $this->option('width');
+        $this->termHeight   = (int) $this->option('height');
+        $this->showHidden   = $this->option('show-hidden');
 
         // Load galaxy
         $galaxyId = $this->argument('galaxy');
         $this->galaxy = $galaxyId
-            ? Galaxy::where('id', $galaxyId)->orWhere('galaxy_uuid', $galaxyId)->firstOrFail()
+            ? Galaxy::where('id', $galaxyId)->orWhere('uuid', $galaxyId)->firstOrFail()
             : Galaxy::latest()->firstOrFail();
 
         // Load points of interest
@@ -127,8 +127,8 @@ class GalaxyViewCommand extends Command
 
     private function readChar()
     {
-        $read = [STDIN];
-        $write = null;
+        $read   = [STDIN];
+        $write  = null;
         $except = null;
         $result = stream_select($read, $write, $except, 0, 100000);
 
@@ -243,11 +243,11 @@ class GalaxyViewCommand extends Command
             $x = max(0, min($this->termWidth - 1, $x));
             $y = max(0, min($this->termHeight - 7, $y));
 
-            $char = $this->indexToChar($index);
-            $color = $this->getStarColor($poi);
+            $char   = $this->indexToChar($index);
+            $color  = $this->getStarColor($poi);
 
-            $canvas[$y][$x] = $this->colorize($char, $color);
-            $this->poiMap[$index] = $poi;
+            $canvas[$y][$x]         = $this->colorize($char, $color);
+            $this->poiMap[$index]   = $poi;
         }
 
         // Render canvas
@@ -282,8 +282,8 @@ class GalaxyViewCommand extends Command
 
         // Star details
         $stellarClass = $star->attributes['stellar_class'] ?? 'Unknown';
-        $temperature = $star->attributes['temperature'] ?? 'Unknown';
-        $hasChildren = $star->children()->exists();
+        $temperature  = $star->attributes['temperature'] ?? 'Unknown';
+        $hasChildren  = $star->children()->exists();
 
         $this->line($this->colorize('  Star Classification: ', 'label') . $this->colorize($stellarClass, $stellarClass));
         $this->line($this->colorize('  Temperature: ', 'label') . number_format($temperature) . ' K');
@@ -310,11 +310,11 @@ class GalaxyViewCommand extends Command
 
     private function renderOrbitalBody(PointOfInterest $poi, int $indent = 0): void
     {
-        $prefix = str_repeat(' ', $indent);
-        $icon = $this->getPoiIcon($poi->type);
-        $color = $this->getPoiColor($poi->type);
-        $name = $poi->name;
-        $orbitalIndex = $poi->orbital_index ?? '?';
+        $prefix         = str_repeat(' ', $indent);
+        $icon           = $this->getPoiIcon($poi->type);
+        $color          = $this->getPoiColor($poi->type);
+        $name           = $poi->name;
+        $orbitalIndex   = $poi->orbital_index ?? '?';
 
         // Main line
         $line = $prefix . $this->colorize($icon, $color) . ' ' .
@@ -416,32 +416,32 @@ class GalaxyViewCommand extends Command
     private function getPoiColor(PointOfInterestType $type): string
     {
         return match ($type) {
-            PointOfInterestType::GAS_GIANT, PointOfInterestType::HOT_JUPITER, PointOfInterestType::ICE_GIANT => 'gas_giant',
-            PointOfInterestType::MOON => 'moon',
-            PointOfInterestType::BLACK_HOLE, PointOfInterestType::SUPER_MASSIVE_BLACK_HOLE => 'black_hole',
-            PointOfInterestType::NEBULA => 'nebula',
-            PointOfInterestType::ANOMALY => 'anomaly',
-            default => 'planet',
+            PointOfInterestType::GAS_GIANT, PointOfInterestType::HOT_JUPITER, PointOfInterestType::ICE_GIANT    => 'gas_giant',
+            PointOfInterestType::MOON                                                                           => 'moon',
+            PointOfInterestType::BLACK_HOLE, PointOfInterestType::SUPER_MASSIVE_BLACK_HOLE                      => 'black_hole',
+            PointOfInterestType::NEBULA                                                                         => 'nebula',
+            PointOfInterestType::ANOMALY                                                                        => 'anomaly',
+            default                                                                                             => 'planet',
         };
     }
 
     private function getPoiIcon(PointOfInterestType $type): string
     {
         return match ($type) {
-            PointOfInterestType::STAR => '★',
-            PointOfInterestType::GAS_GIANT, PointOfInterestType::HOT_JUPITER => '◉',
-            PointOfInterestType::ICE_GIANT => '◎',
-            PointOfInterestType::TERRESTRIAL, PointOfInterestType::SUPER_EARTH => '●',
-            PointOfInterestType::LAVA => '◆',
-            PointOfInterestType::OCEAN => '◐',
-            PointOfInterestType::MOON => '○',
-            PointOfInterestType::ASTEROID_BELT => '∴',
-            PointOfInterestType::ASTEROID => '·',
-            PointOfInterestType::BLACK_HOLE => '◯',
-            PointOfInterestType::SUPER_MASSIVE_BLACK_HOLE => '◉',
-            PointOfInterestType::NEBULA => '∞',
-            PointOfInterestType::ANOMALY => '?',
-            default => '•',
+            PointOfInterestType::STAR                                           => '★',
+            PointOfInterestType::GAS_GIANT, PointOfInterestType::HOT_JUPITER    => '◉',
+            PointOfInterestType::ICE_GIANT                                      => '◎',
+            PointOfInterestType::TERRESTRIAL, PointOfInterestType::SUPER_EARTH  => '●',
+            PointOfInterestType::LAVA                                           => '◆',
+            PointOfInterestType::OCEAN                                          => '◐',
+            PointOfInterestType::MOON                                           => '○',
+            PointOfInterestType::ASTEROID_BELT                                  => '∴',
+            PointOfInterestType::ASTEROID                                       => '·',
+            PointOfInterestType::BLACK_HOLE                                     => '◯',
+            PointOfInterestType::SUPER_MASSIVE_BLACK_HOLE                       => '◉',
+            PointOfInterestType::NEBULA                                         => '∞',
+            PointOfInterestType::ANOMALY                                        => '?',
+            default                                                             => '•',
         };
     }
 
