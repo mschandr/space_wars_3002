@@ -13,7 +13,8 @@ use App\Traits\HasUuidAndVersion;
 use Assert\AssertionFailedException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use mschandr\WeightedRandom\WeightedRandomGenerator;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use mschandr\WeightedRandom\Generator\WeightedRandomGenerator;
 
 class PointOfInterest extends Model
 {
@@ -27,6 +28,8 @@ class PointOfInterest extends Model
     protected $fillable = [
         'uuid',
         'galaxy_id',
+        'parent_poi_id',
+        'orbital_index',
         'type',
         'status',
         'x',
@@ -112,11 +115,62 @@ class PointOfInterest extends Model
 
     /**
      *--------------------------------------------------------------------------
-     * Helpers
+     * Relationships
      *--------------------------------------------------------------------------
      */
     public function galaxy(): BelongsTo
     {
         return $this->belongsTo(Galaxy::class);
+    }
+
+    /**
+     * Parent POI (star for planet, planet for moon)
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(PointOfInterest::class, 'parent_poi_id');
+    }
+
+    /**
+     * Child POIs (planets for star, moons for planet)
+     */
+    public function children(): HasMany
+    {
+        return $this->hasMany(PointOfInterest::class, 'parent_poi_id')
+            ->orderBy('orbital_index');
+    }
+
+    /**
+     *--------------------------------------------------------------------------
+     * Helpers
+     *--------------------------------------------------------------------------
+     */
+
+    /**
+     * Get the root star of this POI's system
+     */
+    public function getRootStar(): ?PointOfInterest
+    {
+        if ($this->type === PointOfInterestType::STAR) {
+            return $this;
+        }
+
+        if ($this->parent && $this->parent->type === PointOfInterestType::STAR) {
+            return $this->parent;
+        }
+
+        if ($this->parent && $this->parent->parent) {
+            return $this->parent->parent;
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if this POI has child objects
+     */
+    public function hasChildren(): bool
+    {
+        return $this->children()->exists();
     }
 }

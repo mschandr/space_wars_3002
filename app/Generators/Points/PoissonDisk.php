@@ -112,6 +112,9 @@ final class PoissonDisk extends AbstractPointGenerator implements PointGenerator
         }
         if (config('game_config.feature.persist_data')) {
             PointOfInterest::createPointsForGalaxy($galaxy, array_values($uniq));
+
+            // Generate star systems (planets, moons, asteroids)
+            $this->generateStarSystems($galaxy);
         }
 
         return array_values($uniq);

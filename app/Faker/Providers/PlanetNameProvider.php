@@ -6,7 +6,7 @@ use App\Faker\Common\MythologicalNames;
 use App\Faker\Common\RomanNumerals;
 use Assert\AssertionFailedException;
 use Faker\Provider\Base;
-use mschandr\WeightedRandom\WeightedRandomGenerator;
+use mschandr\WeightedRandom\Generator\WeightedRandomGenerator;
 use Random\RandomException;
 
 class PlanetNameProvider extends Base

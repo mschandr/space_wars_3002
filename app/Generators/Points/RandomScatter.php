@@ -39,6 +39,9 @@ final class RandomScatter extends AbstractPointGenerator implements PointGenerat
         }
         if (config('game_config.feature.persist_data')) {
             PointOfInterest::createPointsForGalaxy($galaxy, array_values($points));
+
+            // Generate star systems (planets, moons, asteroids)
+            $this->generateStarSystems($galaxy);
         }
 
         return array_values($points);

@@ -7,7 +7,7 @@ use App\Faker\Common\MythologicalNames;
 use App\Faker\Common\RomanNumerals;
 use App\Faker\Common\StarCatalog;
 use Faker\Provider\Base;
-use mschandr\WeightedRandom\WeightedRandomGenerator;
+use mschandr\WeightedRandom\Generator\WeightedRandomGenerator;
 
 class StarNameProvider extends Base
 {

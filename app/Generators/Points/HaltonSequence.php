@@ -32,6 +32,9 @@ final class HaltonSequence extends AbstractPointGenerator implements PointGenera
         }
         if (config('game_config.feature.persist_data')) {
             PointOfInterest::createPointsForGalaxy($galaxy, array_values($pts));
+
+            // Generate star systems (planets, moons, asteroids)
+            $this->generateStarSystems($galaxy);
         }
 
         return $pts;

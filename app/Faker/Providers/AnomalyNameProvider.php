@@ -4,7 +4,7 @@ namespace App\Faker\Providers;
 
 use Assert\AssertionFailedException;
 use Faker\Provider\Base;
-use mschandr\WeightedRandom\WeightedRandomGenerator;
+use mschandr\WeightedRandom\Generator\WeightedRandomGenerator;
 use Random\RandomException;
 
 class AnomalyNameProvider extends Base

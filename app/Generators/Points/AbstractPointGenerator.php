@@ -3,7 +3,10 @@
 namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
+use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
+use App\Models\PointOfInterest;
+use App\Services\StellarSystem\StarSystemGenerator;
 use Random\Engine\Mt19937;
 use Random\Engine\PcgOneseq128XslRr64;
 use Random\Engine\Xoshiro256StarStar;
@@ -123,4 +126,23 @@ abstract class AbstractPointGenerator implements PointGeneratorInterface
      * @return array<int,array{0:int,1:int}>
      */
     abstract public function sample(Galaxy $galaxy): array;
+
+    /**
+     * Generate star systems (planets, moons, asteroids) for all stars in the galaxy
+     *
+     * @param  Galaxy  $galaxy  The galaxy to generate systems for
+     */
+    protected function generateStarSystems(Galaxy $galaxy): void
+    {
+        $generator = new StarSystemGenerator($this->randomizer);
+
+        // Find all stars in this galaxy
+        $stars = PointOfInterest::where('galaxy_id', $galaxy->id)
+            ->where('type', PointOfInterestType::STAR)
+            ->get();
+
+        foreach ($stars as $star) {
+            $generator->generateStarSystem($star);
+        }
+    }
 }

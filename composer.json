@@ -9,7 +9,7 @@
         "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^12.25",
         "laravel/tinker": "^2.10.1",
-        "mschandr/weighted-random": "^1.2",
+        "mschandr/weighted-random": "^3.0.0",
         "symfony/yaml": "^7.3.2"
     },
      "repositories": [
