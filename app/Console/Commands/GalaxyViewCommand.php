@@ -2,69 +2,53 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Renderers\GalaxyRenderer;
+use App\Console\Renderers\StarSystemRenderer;
+use App\Console\Renderers\TradingHubRenderer;
+use App\Console\Traits\ConsoleColorizer;
 use App\Enums\PointsOfInterest\PointOfInterestType;
-use App\Enums\PointsOfInterest\StellarClassification;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 
 class GalaxyViewCommand extends Command
 {
+    use ConsoleColorizer;
+
     protected $signature = 'galaxy:view {galaxy? : Galaxy ID or UUID}
                             {--width=120 : Terminal width for rendering}
                             {--height=40 : Terminal height for rendering}
-                            {--show-hidden : Show hidden points of interest}';
+                            {--show-hidden : Show hidden points of interest}
+                            {--show-gates : Show warp gate connections}';
 
     protected $description = 'Display ASCII visualization of a galaxy with interactive zoom';
 
     private Galaxy      $galaxy;
     private Collection  $pois;
+    private Collection  $gates;
     private int         $termWidth;
     private int         $termHeight;
     private bool        $showHidden;
+    private bool        $showGates;
     private array       $poiMap = [];
     private int         $currentView = 0; // 0 = galaxy view, >0 = star system ID
 
-    // ANSI color codes
-    private const COLORS = [
-        'reset' => "\033[0m",
-        'bold'  => "\033[1m",
-        'dim'   => "\033[2m",
-
-        // Stellar classifications
-        'O' => "\033[38;5;45m",  // Bright blue (Blue Supergiant)
-        'B' => "\033[38;5;75m",  // Blue-white
-        'A' => "\033[38;5;231m", // White
-        'F' => "\033[38;5;229m", // Yellow-white
-        'G' => "\033[38;5;226m", // Yellow (Sun-like)
-        'K' => "\033[38;5;214m", // Orange
-        'M' => "\033[38;5;196m", // Red
-
-        // Stars with/without planets
-        'star_with_planets' => "\033[38;5;11m",     // Bright yellow
-        'star_no_planets'   => "\033[38;5;248m",    // Gray
-
-        // Other POI types
-        'black_hole'    => "\033[38;5;57m",         // Dark purple
-        'nebula'        => "\033[38;5;165m",        // Purple/pink
-        'anomaly'       => "\033[38;5;46m",         // Bright green
-        'planet'        => "\033[38;5;34m",         // Green
-        'gas_giant'     => "\033[38;5;172m",        // Orange
-        'moon'          => "\033[38;5;250m",        // Light gray
-
-        // UI elements
-        'label'         => "\033[38;5;33m",         // Bright blue
-        'header'        => "\033[38;5;226m",        // Yellow
-        'border'        => "\033[38;5;240m",        // Dark gray
-        'highlight'     => "\033[38;5;46m",         // Bright green
-    ];
+    // Renderers
+    private GalaxyRenderer $galaxyRenderer;
+    private StarSystemRenderer $starSystemRenderer;
+    private TradingHubRenderer $tradingHubRenderer;
 
     public function handle(): int
     {
         $this->termWidth    = (int) $this->option('width');
         $this->termHeight   = (int) $this->option('height');
         $this->showHidden   = $this->option('show-hidden');
+        $this->showGates    = $this->option('show-gates');
+
+        // Initialize renderers
+        $this->galaxyRenderer = new GalaxyRenderer($this, $this->termWidth, $this->termHeight);
+        $this->starSystemRenderer = new StarSystemRenderer($this, $this->termWidth);
+        $this->tradingHubRenderer = new TradingHubRenderer($this, $this->termWidth);
 
         // Load galaxy
         $galaxyId = $this->argument('galaxy');
@@ -72,12 +56,8 @@ class GalaxyViewCommand extends Command
             ? Galaxy::where('id', $galaxyId)->orWhere('uuid', $galaxyId)->firstOrFail()
             : Galaxy::latest()->firstOrFail();
 
-        // Load points of interest
-        $query = $this->galaxy->pointsOfInterest()->with(['parent', 'children']);
-        if (!$this->showHidden) {
-            $query->where('is_hidden', false);
-        }
-        $this->pois = $query->get();
+        // Load data
+        $this->loadGalaxyData();
 
         if ($this->pois->isEmpty()) {
             $this->error('No points of interest found in this galaxy.');
@@ -85,19 +65,47 @@ class GalaxyViewCommand extends Command
         }
 
         // Start interactive view
-        $this->renderGalaxyView();
+        $this->renderCurrentView();
         $this->interactiveLoop();
 
         return self::SUCCESS;
     }
 
+    private function loadGalaxyData(): void
+    {
+        // Load points of interest
+        $query = $this->galaxy->pointsOfInterest()->with(['parent', 'children', 'tradingHub']);
+        if (!$this->showHidden) {
+            $query->where('is_hidden', false);
+        }
+        $this->pois = $query->get();
+
+        // Load warp gates
+        $gateQuery = $this->galaxy->warpGates()->with(['sourcePoi', 'destinationPoi']);
+        if (!$this->showHidden) {
+            $gateQuery->where('is_hidden', false);
+        }
+        $this->gates = $gateQuery->get();
+    }
+
     private function interactiveLoop(): void
     {
         $this->info("\n" . $this->colorize('Controls:', 'header'));
-        $this->line($this->colorize('  [1-9,a-z]', 'label') . ' - Zoom into numbered/lettered star system');
-        $this->line($this->colorize('  [ESC/q]', 'label') . '   - Return to galaxy view or quit');
-        $this->line($this->colorize('  [h]', 'label') . '       - Toggle hidden POIs');
-        $this->line($this->colorize('  [r]', 'label') . '       - Refresh view');
+
+        // Display controls in 3 columns
+        $col1Width = 40;
+        $col2Width = 40;
+
+        $this->line(
+            str_pad($this->colorize('  [0-9,a-z]', 'label') . ' - Zoom to star', $col1Width) .
+            str_pad($this->colorize('  [h]', 'label') . ' - Toggle hidden POIs', $col2Width) .
+            $this->colorize('  [r]', 'label') . ' - Refresh view'
+        );
+        $this->line(
+            str_pad($this->colorize('  [t]', 'label') . '       - View trading hub', $col1Width) .
+            str_pad($this->colorize('  [g]', 'label') . ' - Toggle warp gates', $col2Width) .
+            $this->colorize('  [ESC/q]', 'label') . ' - Back/Quit'
+        );
         $this->newLine();
 
         // Enable non-blocking input
@@ -115,7 +123,9 @@ class GalaxyViewCommand extends Command
             match (true) {
                 $char === 'q' || $char === "\033" => $running = $this->handleQuit(),
                 $char === 'h' => $this->toggleHidden(),
+                $char === 'g' => $this->toggleGates(),
                 $char === 'r' => $this->refreshView(),
+                $char === 't' => $this->handleTradingHub(),
                 ctype_alnum($char) => $this->handleZoom($char),
                 default => null,
             };
@@ -154,33 +164,46 @@ class GalaxyViewCommand extends Command
     private function toggleHidden(): void
     {
         $this->showHidden = !$this->showHidden;
+        $this->loadGalaxyData();
+        $this->refreshView();
+    }
 
-        // Reload POIs
-        $query = $this->galaxy->pointsOfInterest()->with(['parent', 'children']);
-        if (!$this->showHidden) {
-            $query->where('is_hidden', false);
-        }
-        $this->pois = $query->get();
-
+    private function toggleGates(): void
+    {
+        $this->showGates = !$this->showGates;
         $this->refreshView();
     }
 
     private function refreshView(): void
     {
-        $this->clearScreen();
+        $this->renderCurrentView();
+    }
 
+    private function renderCurrentView(): void
+    {
         if ($this->currentView === 0) {
-            $this->renderGalaxyView();
+            $this->galaxyRenderer->render(
+                $this->galaxy,
+                $this->pois,
+                $this->gates,
+                $this->showGates,
+                $this->poiMap
+            );
         } else {
-            $this->renderStarSystemView($this->currentView);
+            $star = $this->pois->firstWhere('id', $this->currentView);
+            if ($star) {
+                $this->starSystemRenderer->render($star, $this->gates);
+            } else {
+                $this->currentView = 0;
+                $this->refreshView();
+            }
         }
     }
 
     private function handleZoom(string $char): void
     {
         if ($this->currentView > 0) {
-            // Already zoomed, ignore
-            return;
+            return; // Already zoomed
         }
 
         $index = $this->charToIndex($char);
@@ -188,7 +211,6 @@ class GalaxyViewCommand extends Command
         if (isset($this->poiMap[$index])) {
             $poi = $this->poiMap[$index];
 
-            // Only zoom into stars
             if ($poi->type === PointOfInterestType::STAR) {
                 $this->currentView = $poi->id;
                 $this->refreshView();
@@ -196,263 +218,57 @@ class GalaxyViewCommand extends Command
         }
     }
 
-    private function charToIndex(string $char): int
+    private function handleTradingHub(): void
     {
-        if (is_numeric($char)) {
-            return (int) $char;
+        if ($this->currentView === 0) {
+            return; // Not viewing a star system
         }
 
-        // a=10, b=11, ..., z=35
-        return ord(strtolower($char)) - ord('a') + 10;
-    }
-
-    private function indexToChar(int $index): string
-    {
-        if ($index < 10) {
-            return (string) $index;
-        }
-
-        return chr(ord('a') + $index - 10);
-    }
-
-    private function renderGalaxyView(): void
-    {
-        $this->clearScreen();
-
-        // Header
-        $this->renderHeader();
-
-        // Create empty canvas
-        $canvas = array_fill(0, $this->termHeight - 6, array_fill(0, $this->termWidth, ' '));
-
-        // Scale factors
-        $scaleX = $this->termWidth / $this->galaxy->width;
-        $scaleY = ($this->termHeight - 6) / $this->galaxy->height;
-
-        // Plot points and assign identifiers
-        $this->poiMap = [];
-        $stars = $this->pois->where('type', PointOfInterestType::STAR)->values();
-
-        foreach ($stars as $index => $poi) {
-            if ($index >= 36) break; // Max 36 stars (0-9, a-z)
-
-            $x = (int) round($poi->x * $scaleX);
-            $y = (int) round($poi->y * $scaleY);
-
-            // Ensure within bounds
-            $x = max(0, min($this->termWidth - 1, $x));
-            $y = max(0, min($this->termHeight - 7, $y));
-
-            $char   = $this->indexToChar($index);
-            $color  = $this->getStarColor($poi);
-
-            $canvas[$y][$x]         = $this->colorize($char, $color);
-            $this->poiMap[$index]   = $poi;
-        }
-
-        // Render canvas
-        foreach ($canvas as $row) {
-            $this->line(implode('', $row));
-        }
-
-        // Footer with legend
-        $this->renderLegend();
-    }
-
-    private function renderStarSystemView(int $starId): void
-    {
-        $star = $this->pois->firstWhere('id', $starId);
-
+        $star = $this->pois->firstWhere('id', $this->currentView);
         if (!$star) {
-            $this->currentView = 0;
-            $this->refreshView();
             return;
         }
 
-        $this->clearScreen();
+        $hub = $star->tradingHub;
+        if (!$hub) {
+            return;
+        }
 
-        // Header
-        $this->line($this->colorize('═' . str_repeat('═', $this->termWidth - 2) . '═', 'border'));
-        $this->line(
-            $this->colorize('  STAR SYSTEM: ', 'header') .
-            $this->colorize(strtoupper($star->name), 'highlight')
-        );
-        $this->line($this->colorize('═' . str_repeat('═', $this->termWidth - 2) . '═', 'border'));
-        $this->newLine();
+        $this->tradingHubRenderer->render($hub);
 
-        // Star details
-        $stellarClass = $star->attributes['stellar_class'] ?? 'Unknown';
-        $temperature  = $star->attributes['temperature'] ?? 'Unknown';
-        $hasChildren  = $star->children()->exists();
+        // Wait for input
+        system('stty -icanon -echo');
+        while (true) {
+            $char = $this->readChar();
+            if ($char === 'q' || $char === "\033") {
+                break;
+            }
+            if ($char === 'a') {
+                $this->tradingHubRenderer->toggleShowAll();
+                $this->tradingHubRenderer->render($hub);
+            }
+            usleep(50000);
+        }
+        system('stty sane');
 
-        $this->line($this->colorize('  Star Classification: ', 'label') . $this->colorize($stellarClass, $stellarClass));
-        $this->line($this->colorize('  Temperature: ', 'label') . number_format($temperature) . ' K');
-        $this->line($this->colorize('  Coordinates: ', 'label') . "({$star->x}, {$star->y})");
-        $this->newLine();
+        $this->refreshView();
+    }
 
-        // Orbital bodies
-        $children = $star->children()->orderBy('orbital_index')->get();
+    private function charToIndex(string $char): int
+    {
+        // Available characters: 0-9, then a-z excluding reserved letters (g, h, r, t)
+        $availableChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        $reservedLetters = ['g', 'h', 'r', 't'];
 
-        if ($children->isEmpty()) {
-            $this->line($this->colorize('  No orbital bodies detected.', 'dim'));
-        } else {
-            $this->line($this->colorize('  ORBITAL BODIES:', 'header'));
-            $this->newLine();
-
-            foreach ($children as $child) {
-                $this->renderOrbitalBody($child, 2);
+        // Add letters a-z excluding reserved ones
+        for ($i = 0; $i < 26; $i++) {
+            $letter = chr(ord('a') + $i);
+            if (!in_array($letter, $reservedLetters)) {
+                $availableChars[] = $letter;
             }
         }
 
-        $this->newLine();
-        $this->line($this->colorize('  Press [ESC] or [q] to return to galaxy view', 'dim'));
-    }
-
-    private function renderOrbitalBody(PointOfInterest $poi, int $indent = 0): void
-    {
-        $prefix         = str_repeat(' ', $indent);
-        $icon           = $this->getPoiIcon($poi->type);
-        $color          = $this->getPoiColor($poi->type);
-        $name           = $poi->name;
-        $orbitalIndex   = $poi->orbital_index ?? '?';
-
-        // Main line
-        $line = $prefix . $this->colorize($icon, $color) . ' ' .
-                $this->colorize("[$orbitalIndex]", 'label') . ' ' .
-                $this->colorize($name, $color) . ' ' .
-                $this->colorize('(' . $poi->type->name . ')', 'dim');
-
-        // Add orbital distance if available
-        if (isset($poi->attributes['orbital_distance_au'])) {
-            $distance = number_format($poi->attributes['orbital_distance_au'], 2);
-            $line .= $this->colorize(" - {$distance} AU", 'dim');
-        }
-
-        // Add mass for gas giants
-        if (isset($poi->attributes['mass_jupiter'])) {
-            $mass = number_format($poi->attributes['mass_jupiter'], 2);
-            $line .= $this->colorize(" - {$mass} M☉", 'dim');
-        }
-
-        $this->line($line);
-
-        // Render moons if any
-        $moons = $poi->children()->orderBy('orbital_index')->get();
-        if ($moons->isNotEmpty()) {
-            foreach ($moons as $moon) {
-                $this->renderOrbitalBody($moon, $indent + 4);
-            }
-        }
-    }
-
-    private function renderHeader(): void
-    {
-        $this->line($this->colorize('╔' . str_repeat('═', $this->termWidth - 2) . '╗', 'border'));
-
-        $title = "  GALAXY: {$this->galaxy->name}  ";
-        $stats = "POIs: {$this->pois->count()} | Size: {$this->galaxy->width}x{$this->galaxy->height}  ";
-        $padding = $this->termWidth - strlen($title) - strlen($stats);
-
-        $this->line(
-            $this->colorize('║', 'border') .
-            $this->colorize($title, 'header') .
-            str_repeat(' ', max(0, $padding)) .
-            $this->colorize($stats, 'dim') .
-            $this->colorize('║', 'border')
-        );
-
-        $this->line($this->colorize('╚' . str_repeat('═', $this->termWidth - 2) . '╝', 'border'));
-    }
-
-    private function renderLegend(): void
-    {
-        $this->newLine();
-        $this->line($this->colorize('  LEGEND:', 'header'));
-
-        $legends = [
-            ['O', 'O', 'Blue Supergiant'],
-            ['B', 'B', 'Blue-White Giant'],
-            ['A', 'A', 'White Star'],
-            ['F', 'F', 'Yellow-White'],
-            ['G', 'G', 'Yellow Star (Sun-like)'],
-            ['K', 'K', 'Orange Dwarf'],
-            ['M', 'M', 'Red Dwarf'],
-        ];
-
-        $col1 = [];
-        $col2 = [];
-
-        foreach ($legends as $i => $legend) {
-            [$char, $color, $desc] = $legend;
-            $entry = '  ' . $this->colorize($char, $color) . ' = ' . $desc;
-
-            if ($i < 4) {
-                $col1[] = $entry;
-            } else {
-                $col2[] = $entry;
-            }
-        }
-
-        // Display in two columns
-        for ($i = 0; $i < max(count($col1), count($col2)); $i++) {
-            $left = $col1[$i] ?? str_repeat(' ', 30);
-            $right = $col2[$i] ?? '';
-            $this->line($left . '    ' . $right);
-        }
-    }
-
-    private function getStarColor(PointOfInterest $star): string
-    {
-        $stellarClass = $star->attributes['stellar_class'] ?? null;
-
-        if ($stellarClass && isset(self::COLORS[$stellarClass])) {
-            return $stellarClass;
-        }
-
-        // Fallback: check if star has children (planets)
-        return $star->children()->exists() ? 'star_with_planets' : 'star_no_planets';
-    }
-
-    private function getPoiColor(PointOfInterestType $type): string
-    {
-        return match ($type) {
-            PointOfInterestType::GAS_GIANT, PointOfInterestType::HOT_JUPITER, PointOfInterestType::ICE_GIANT    => 'gas_giant',
-            PointOfInterestType::MOON                                                                           => 'moon',
-            PointOfInterestType::BLACK_HOLE, PointOfInterestType::SUPER_MASSIVE_BLACK_HOLE                      => 'black_hole',
-            PointOfInterestType::NEBULA                                                                         => 'nebula',
-            PointOfInterestType::ANOMALY                                                                        => 'anomaly',
-            default                                                                                             => 'planet',
-        };
-    }
-
-    private function getPoiIcon(PointOfInterestType $type): string
-    {
-        return match ($type) {
-            PointOfInterestType::STAR                                           => '★',
-            PointOfInterestType::GAS_GIANT, PointOfInterestType::HOT_JUPITER    => '◉',
-            PointOfInterestType::ICE_GIANT                                      => '◎',
-            PointOfInterestType::TERRESTRIAL, PointOfInterestType::SUPER_EARTH  => '●',
-            PointOfInterestType::LAVA                                           => '◆',
-            PointOfInterestType::OCEAN                                          => '◐',
-            PointOfInterestType::MOON                                           => '○',
-            PointOfInterestType::ASTEROID_BELT                                  => '∴',
-            PointOfInterestType::ASTEROID                                       => '·',
-            PointOfInterestType::BLACK_HOLE                                     => '◯',
-            PointOfInterestType::SUPER_MASSIVE_BLACK_HOLE                       => '◉',
-            PointOfInterestType::NEBULA                                         => '∞',
-            PointOfInterestType::ANOMALY                                        => '?',
-            default                                                             => '•',
-        };
-    }
-
-    private function colorize(string $text, string $colorKey): string
-    {
-        $color = self::COLORS[$colorKey] ?? self::COLORS['reset'];
-        return $color . $text . self::COLORS['reset'];
-    }
-
-    private function clearScreen(): void
-    {
-        $this->output->write("\033[2J\033[H");
+        $index = array_search(strtolower($char), $availableChars, true);
+        return $index !== false ? $index : -1;
     }
 }

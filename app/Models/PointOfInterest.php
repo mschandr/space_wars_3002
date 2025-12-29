@@ -141,6 +141,30 @@ class PointOfInterest extends Model
     }
 
     /**
+     * Outgoing warp gates from this POI
+     */
+    public function outgoingGates(): HasMany
+    {
+        return $this->hasMany(WarpGate::class, 'source_poi_id');
+    }
+
+    /**
+     * Incoming warp gates to this POI
+     */
+    public function incomingGates(): HasMany
+    {
+        return $this->hasMany(WarpGate::class, 'destination_poi_id');
+    }
+
+    /**
+     * Trading hub at this POI (if any)
+     */
+    public function tradingHub()
+    {
+        return $this->hasOne(TradingHub::class, 'poi_id');
+    }
+
+    /**
      *--------------------------------------------------------------------------
      * Helpers
      *--------------------------------------------------------------------------
@@ -172,5 +196,68 @@ class PointOfInterest extends Model
     public function hasChildren(): bool
     {
         return $this->children()->exists();
+    }
+
+    /**
+     * Get display icon for this POI type
+     */
+    public function getDisplayIcon(): string
+    {
+        return match ($this->type) {
+            PointOfInterestType::STAR => '★',
+            PointOfInterestType::GAS_GIANT, PointOfInterestType::HOT_JUPITER => '◉',
+            PointOfInterestType::ICE_GIANT => '◎',
+            PointOfInterestType::TERRESTRIAL, PointOfInterestType::SUPER_EARTH => '●',
+            PointOfInterestType::LAVA => '◆',
+            PointOfInterestType::OCEAN => '◐',
+            PointOfInterestType::MOON => '○',
+            PointOfInterestType::ASTEROID_BELT => '∴',
+            PointOfInterestType::ASTEROID => '·',
+            PointOfInterestType::BLACK_HOLE => '◯',
+            PointOfInterestType::SUPER_MASSIVE_BLACK_HOLE => '◉',
+            PointOfInterestType::NEBULA => '∞',
+            PointOfInterestType::ANOMALY => '?',
+            PointOfInterestType::ROGUE_PLANET => '●',
+            PointOfInterestType::COMET => '☄',
+            default => '•',
+        };
+    }
+
+    /**
+     * Get display color for this POI type (for console rendering)
+     */
+    public function getDisplayColor(): string
+    {
+        return match ($this->type) {
+            PointOfInterestType::GAS_GIANT, PointOfInterestType::HOT_JUPITER, PointOfInterestType::ICE_GIANT => 'gas_giant',
+            PointOfInterestType::MOON => 'moon',
+            PointOfInterestType::BLACK_HOLE, PointOfInterestType::SUPER_MASSIVE_BLACK_HOLE => 'black_hole',
+            PointOfInterestType::NEBULA => 'nebula',
+            PointOfInterestType::ANOMALY => 'anomaly',
+            default => 'planet',
+        };
+    }
+
+    /**
+     * Get celestial color for universe-level objects
+     */
+    public function getCelestialColor(): string
+    {
+        if ($this->type === PointOfInterestType::STAR) {
+            $stellarClass = $this->attributes['stellar_class'] ?? null;
+            if ($stellarClass) {
+                return $stellarClass;
+            }
+            return $this->children()->exists() ? 'star_with_planets' : 'star_no_planets';
+        }
+
+        return match ($this->type) {
+            PointOfInterestType::BLACK_HOLE, PointOfInterestType::SUPER_MASSIVE_BLACK_HOLE => 'black_hole',
+            PointOfInterestType::NEBULA => 'nebula',
+            PointOfInterestType::ANOMALY => 'anomaly',
+            PointOfInterestType::ROGUE_PLANET => 'planet',
+            PointOfInterestType::COMET => 'highlight',
+            default => 'star_no_planets',
+        };
     }
 }

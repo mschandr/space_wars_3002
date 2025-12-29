@@ -97,4 +97,9 @@ class Galaxy extends Model
     {
         return $this->hasMany(PointOfInterest::class);
     }
+
+    public function warpGates(): HasMany
+    {
+        return $this->hasMany(WarpGate::class);
+    }
 }
