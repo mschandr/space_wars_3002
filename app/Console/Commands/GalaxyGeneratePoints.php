@@ -2,58 +2,81 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\Galaxy\GalaxyDistributionMethod;
+use App\Enums\Galaxy\GalaxyRandomEngine;
+use App\Generators\Points\HaltonSequence;
+use App\Generators\Points\PoissonDisk;
+use App\Generators\Points\RandomScatter;
+use App\Models\Galaxy;
 use Illuminate\Console\Command;
-use App\Factories\PointGeneratorFactory;
-use App\Contracts\PointGeneratorInterface;
+use Random\RandomException;
 
 class GalaxyGeneratePoints extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'app:galaxy:generate-points
-                            {--width=      : Override galaxy width}
-                            {--height=     : Override galaxy height}
-                            {--points=     : Override number of points of interest}
-                            {--spacing=    : Override spacing factor}
-                            {--seed=       : Override RNG seed}
-                            {--format=json : Output format (csv|json)}';
+    protected $signature = 'galaxy:generate-points
+                            {--method=scatter : Distribution method (scatter, poisson, halton)}
+                            {--width=1000 : Width of the galaxy map}
+                            {--height=1000 : Height of the galaxy map}
+                            {--count=50 : Number of points of interest}
+                            {--seed=42 : RNG seed}
+                            {--engine=mt19937 : RNG engine (mt19937, pcg, xoshiro)}
+                            {--json : Output POIs as JSON for debug/visualization}';
+
+    protected $description = 'Generate a galaxy with points of interest using a chosen distribution method';
 
     /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Generate galaxy POIs using the configured generator and dump them';
-
-    /**
-     * Execute the console command.
+     * @throws RandomException
      */
     public function handle(): int
     {
-        // Use the factory to instantiate the correct generator
-        $generator = PointGeneratorFactory::make(
-            width:   $this->option('width')   ? (int)$this->option('width')   : null,
-            height:  $this->option('height')  ? (int)$this->option('height')  : null,
-            count:   $this->option('points')  ? (int)$this->option('points')  : null,
-            spacing: $this->option('spacing') ? (float)$this->option('spacing') : null,
-            seed:    $this->option('seed')    ? (int)$this->option('seed')    : null,
-        );
+        $method = strtolower($this->option('method'));
+        $width  = (int) $this->option('width');
+        $height = (int) $this->option('height');
+        $count  = (int) $this->option('count');
+        $seed   = (int) $this->option('seed');
+        $engine = $this->option('engine');
 
-        $points = $generator->sample();
+        // Generate and persist galaxy
+        $galaxy = Galaxy::createGalaxy([
+            'width'               => $width,
+            'height'              => $height,
+            'seed'                => $seed,
+            'distribution_method' => GalaxyDistributionMethod::fromName($method),
+            'engine'              => GalaxyRandomEngine::fromName($engine),
+        ]);
 
-        if ($this->option('format') === 'csv') {
-            $this->line("x,y");
-            foreach ($points as [$x, $y]) {
-                $this->line("$x,$y");
-            }
+        // Pick generator
+        $generator = match ($method) {
+            'scatter' => new RandomScatter($width, $height, $count, 0.75, $seed, [], $engine),
+            'poisson' => new PoissonDisk($width, $height, $count, 0.75, $seed, [], $engine),
+            'halton'  => new HaltonSequence($width, $height, $count, 0.75, $seed, [], $engine),
+            default   => throw new \InvalidArgumentException("Unknown method: {$method}"),
+        };
+
+        $points = $generator->sample($galaxy);
+
+        if ($this->option('json')) {
+            // Dump JSON for Vue debug
+            $data = [
+                'galaxy' => [
+                    'id'     => $galaxy->id,
+                    'name'   => $galaxy->name,
+                    'width'  => $galaxy->width,
+                    'height' => $galaxy->height,
+                ],
+                'points' => $galaxy->pointsOfInterest()
+                    ->get(['x', 'y', 'type', 'name', 'is_hidden', 'attributes'])
+                    ->toArray(),
+            ];
+            $this->line(json_encode($data, JSON_PRETTY_PRINT));
         } else {
-            $this->line(json_encode(['points' => $points], JSON_PRETTY_PRINT));
+            // CLI summary
+            $this->info("✅ Created galaxy: {$galaxy->name}");
+            $this->info("   Width: {$galaxy->width}, Height: {$galaxy->height}, Seed: {$galaxy->seed}");
+            $this->info("   Distribution: {$galaxy->distribution_method->name}, Engine: {$galaxy->engine->name}");
+            $this->info("   Points of Interest: " . $galaxy->pointsOfInterest()->count());
         }
 
-        $this->info("Generated " . count($points) . " POIs using " . get_class($generator));
-        return 0;
+        return Command::SUCCESS;
     }
 }

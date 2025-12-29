@@ -8,80 +8,98 @@ use App\Enums\Galaxy\GalaxyStatus;
 use App\Faker\Common\GalaxySuffixes;
 use App\Faker\Common\RomanNumerals;
 use App\Faker\Providers\GalaxyNameProvider;
+use App\Traits\HasUuidAndVersion;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Galaxy extends Model
 {
+    use HasUuidAndVersion;
+
     protected $fillable = [
-        'galaxy_uuid',
-        'name',
-        'description',
-        'width',
-        'height',
-        'seed',
-        'distribution_method',
-        'spacing_factor',
-        'engine',
-        'turn_limit',
-        'status',
-        'version',
-        'is_public',
-        'config',
+        'galaxy_uuid', 'name', 'description', 'width', 'height', 'seed', 'distribution_method',
+        'spacing_factor', 'engine', 'turn_limit', 'status', 'version', 'is_public', 'config',
     ];
 
     protected $casts = [
-        'status'              => GalaxyStatus::class,
+        'status' => GalaxyStatus::class,
         'distribution_method' => GalaxyDistributionMethod::class,
-        'engine'              => GalaxyRandomEngine::class,
-        'config'              => 'array',
+        'engine' => GalaxyRandomEngine::class,
+        'config' => 'array',
     ];
 
-    public static function boot()
+    public static function createGalaxy(array $galaxyData): self
+    {
+        $attributes = [
+            'width' => $galaxyData['width'],
+            'height' => $galaxyData['height'],
+            'seed' => $galaxyData['seed'],
+            'distribution_method' => $galaxyData['distribution_method'],
+            'engine' => $galaxyData['engine'],
+            'status' => GalaxyStatus::DRAFT,
+            'turn_limit' => $galaxyData['turn_limit'] ?? 0,
+            'description' => $galaxyData['description'] ?? null,
+            'is_public' => $galaxyData['is_public'] ?? false,
+        ];
+
+        if (config('game_config.feature.persist_data')) {
+            return self::create($attributes);
+        }
+        $galaxy = new self;
+        $galaxy->fill($attributes);
+
+        return $galaxy;
+    }
+
+    /**
+     * @static
+     */
+    protected static function boot(): void
     {
         parent::boot();
 
         static::creating(function ($galaxy) {
-            if (empty($galaxy->galaxy_uuid)) {
-                $galaxy->galaxy_uuid = (string) Str::uuid();
+            if (empty($galaxy->name)) {
+                $galaxy->name = self::generateUniqueName();
             }
         });
     }
 
-    public function pointsOfInterest()
-    {
-        //return $this->hasMany(PointOfInterest::class);
-    }
-
-    public function getGalaxyName(): string
-    {
-        return $this->name;
-    }
-
+    /**
+     * @static
+     */
     public static function generateUniqueName(): string
     {
         $base = GalaxyNameProvider::generateGalaxyName();
         $name = $base;
 
-        if (Galaxy::where('name', $name)->exists()) {
-            // Try suffixes first
+        if (self::where('name', $name)->exists()) {
             foreach (GalaxySuffixes::$suffixes as $suffix) {
-                $candidate = $base .' '. $suffix;
-                if (!Galaxy::where('name', $candidate)->exists()) {
+                $candidate = $base.$suffix;
+                if (! self::where('name', $candidate)->exists()) {
                     return $candidate;
                 }
             }
 
-            // Fallback: add numerals
             $i = 2;
             do {
-                $candidate = $base . ' ' . RomanNumerals::romanize($i);
+                $candidate = $base.' '.RomanNumerals::romanize($i);
                 $i++;
-            } while (Galaxy::where('name', $candidate)->exists());
+            } while (self::where('name', $candidate)->exists());
 
             return $candidate;
         }
 
         return $name;
+    }
+
+    public function pointsOfInterest(): HasMany
+    {
+        return $this->hasMany(PointOfInterest::class);
+    }
+
+    public function warpGates(): HasMany
+    {
+        return $this->hasMany(WarpGate::class);
     }
 }

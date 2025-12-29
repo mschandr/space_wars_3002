@@ -16,4 +16,13 @@ enum GalaxyDistributionMethod: int
             self::HALTON_SEQ     => 'Halton Sequence',
         };
     }
+
+    public static function fromName(string $distribution_string): GalaxyDistributionMethod
+    {
+        return match (strtolower($distribution_string)) {
+            'scatter' => self::RANDOM_SCATTER,
+            'poisson' => self::POISSON_DISK,
+            'halton'  => self::HALTON_SEQ,
+        };
+    }
 }

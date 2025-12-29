@@ -3,6 +3,9 @@
 namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
+use App\Models\Galaxy;
+use App\Models\PointOfInterest;
+use Assert\AssertionFailedException;
 
 /**
  * Random scatter, uses true pseudo randomness to generate ~N points of interest but ensures
@@ -12,8 +15,10 @@ final class RandomScatter extends AbstractPointGenerator implements PointGenerat
 {
     /**
      * @return array<int,array{0:int,1:int}>
+     *
+     * @throws AssertionFailedException
      */
-    public function sample(): array
+    public function sample(Galaxy $galaxy): array
     {
         $points = [];
         while (count($points) < $this->count) {
@@ -25,12 +30,18 @@ final class RandomScatter extends AbstractPointGenerator implements PointGenerat
                 $y = $this->randomizer
                     ? $this->randomizer->getInt(0, $this->height - 1)
                     : mt_rand(0, $this->height - 1);
-                $key = $x . ':' . $y;
+                $key = $x.':'.$y;
                 $attempts++;
             } while (isset($points[$key]) && $attempts < 3);
 
             // At this point: either unique, or forced duplicate after 3 tries
             $points[$key] = [$x, $y];
+        }
+        if (config('game_config.feature.persist_data')) {
+            PointOfInterest::createPointsForGalaxy($galaxy, array_values($points));
+
+            // Generate star systems (planets, moons, asteroids)
+            $this->generateStarSystems($galaxy);
         }
 
         return array_values($points);

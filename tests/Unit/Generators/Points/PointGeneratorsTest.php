@@ -2,20 +2,25 @@
 
 namespace Tests\Unit\Generators\Points;
 
-use PHPUnit\Framework\TestCase;
-use PHPUnit\Framework\Attributes\DataProvider;
+use App\Contracts\PointGeneratorInterface;
+use App\Generators\Points\HaltonSequence;
 use App\Generators\Points\PoissonDisk;
 use App\Generators\Points\RandomScatter;
-use App\Generators\Points\HaltonSequence;
-use App\Contracts\PointGeneratorInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
 
 class PointGeneratorsTest extends TestCase
 {
     private const int WIDTH = 100;
+
     private const int HEIGHT = 100;
+
     private const int COUNT = 50;
+
     private const float SPACING = 5.0;
+
     private const int SEED = 12345;
+
     private const array OPTIONS = [
         'attempts' => 30,
         'margin' => 0,
@@ -40,7 +45,7 @@ class PointGeneratorsTest extends TestCase
      * @dataProvider generatorProvider
      */
     #[DataProvider('generatorProvider')]
-    public function testGeneratorsProduceValidPoints(string $generatorClass): void
+    public function test_generators_produce_valid_points(string $generatorClass): void
     {
         $generator = new $generatorClass(
             self::WIDTH,
@@ -69,7 +74,7 @@ class PointGeneratorsTest extends TestCase
         }
 
         // No duplicates
-        $unique = array_unique(array_map(fn($p) => $p[0] . ':' . $p[1], $points));
+        $unique = array_unique(array_map(fn ($p) => $p[0].':'.$p[1], $points));
         $this->assertCount(
             count($points),
             $unique,
@@ -78,7 +83,7 @@ class PointGeneratorsTest extends TestCase
     }
 
     #[DataProvider('generatorProvider')]
-    public function testDeterministicWithSeed(string $generatorClass): void
+    public function test_deterministic_with_seed(string $generatorClass): void
     {
         $gen1 = new $generatorClass(
             self::WIDTH,

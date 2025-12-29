@@ -3,20 +3,22 @@
 namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
+use App\Models\Galaxy;
+use App\Models\PointOfInterest;
 
 final class HaltonSequence extends AbstractPointGenerator implements PointGeneratorInterface
 {
     /**
      * @return array<int,array{0:int,1:int}>
      */
-    public function sample(): array
+    public function sample(Galaxy $galaxy): array
     {
         $pts = [];
-        $i   = 1;
+        $i = 1;
 
         while (count($pts) < $this->count) {
-            $x = (int)floor($this->halton($i, 2) * $this->width);
-            $y = (int)floor($this->halton($i, 3) * $this->height);
+            $x = (int) floor($this->halton($i, 2) * $this->width);
+            $y = (int) floor($this->halton($i, 3) * $this->height);
 
             // clamp to bounds
             $x = max(0, min($this->width - 1, $x));
@@ -27,6 +29,12 @@ final class HaltonSequence extends AbstractPointGenerator implements PointGenera
             }
 
             $i++;
+        }
+        if (config('game_config.feature.persist_data')) {
+            PointOfInterest::createPointsForGalaxy($galaxy, array_values($pts));
+
+            // Generate star systems (planets, moons, asteroids)
+            $this->generateStarSystems($galaxy);
         }
 
         return $pts;
