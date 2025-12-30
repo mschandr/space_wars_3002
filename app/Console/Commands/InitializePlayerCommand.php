@@ -100,6 +100,7 @@ class InitializePlayerCommand extends Command
             'current_cargo' => 0,
             'is_active' => true,
             'status' => 'operational',
+            'fuel_last_updated_at' => now(),
         ]);
 
         $this->info("Player '{$callSign}' initialized successfully!");

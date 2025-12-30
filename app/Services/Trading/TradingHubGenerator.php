@@ -5,6 +5,7 @@ namespace App\Services\Trading;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
 use App\Models\Mineral;
+use App\Models\Plan;
 use App\Models\PointOfInterest;
 use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
@@ -14,13 +15,16 @@ class TradingHubGenerator
 {
     private int $minGatesForHub;
     private float $salvageYardProbability;
+    private float $plansProbability;
 
     public function __construct(
         int $minGatesForHub = 2,
-        float $salvageYardProbability = 0.3
+        float $salvageYardProbability = 0.3,
+        float $plansProbability = 0.05
     ) {
         $this->minGatesForHub = $minGatesForHub;
         $this->salvageYardProbability = $salvageYardProbability;
+        $this->plansProbability = $plansProbability;
     }
 
     /**
@@ -90,7 +94,7 @@ class TradingHubGenerator
         // Determine services offered
         $services = $this->determineServices($type, $hasSalvageYard);
 
-        return TradingHub::create([
+        $hub = TradingHub::create([
             'poi_id' => $poi->id,
             'name' => $hubName,
             'type' => $type,
@@ -100,6 +104,15 @@ class TradingHubGenerator
             'services' => $services,
             'is_active' => true,
         ]);
+
+        // Randomly assign plans to hub (5% chance by default)
+        if ((random_int(1, 100) / 100) <= $this->plansProbability) {
+            $hub->has_plans = true;
+            $hub->save();
+            $this->assignPlansToHub($hub);
+        }
+
+        return $hub;
     }
 
     /**
@@ -205,6 +218,69 @@ class TradingHubGenerator
             // Update pricing based on supply/demand
             $inventory->updatePricing();
         }
+    }
+
+    /**
+     * Assign a random subset of plans to a trading hub
+     */
+    private function assignPlansToHub(TradingHub $hub): void
+    {
+        $allPlans = Plan::all();
+
+        if ($allPlans->isEmpty()) {
+            return;
+        }
+
+        $selectedPlans = collect();
+
+        // Determine plan count by hub tier
+        $planCount = match($hub->type) {
+            'premium' => random_int(10, 15),
+            'major' => random_int(6, 10),
+            'standard' => random_int(3, 6),
+        };
+
+        // Weight selection by rarity (favor common plans)
+        $weights = [
+            'rare' => 60,
+            'epic' => 30,
+            'legendary' => 10,
+        ];
+
+        for ($i = 0; $i < $planCount && $allPlans->isNotEmpty(); $i++) {
+            $rarity = $this->weightedRandom($weights);
+            $available = $allPlans->where('rarity', $rarity)
+                                  ->whereNotIn('id', $selectedPlans->pluck('id'));
+
+            if ($available->isEmpty()) {
+                $available = $allPlans->whereNotIn('id', $selectedPlans->pluck('id'));
+            }
+
+            if ($available->isNotEmpty()) {
+                $selectedPlans->push($available->random());
+            }
+        }
+
+        // Attach to hub
+        $hub->plans()->attach($selectedPlans->pluck('id'));
+    }
+
+    /**
+     * Perform weighted random selection
+     */
+    private function weightedRandom(array $weights): string
+    {
+        $rand = random_int(1, array_sum($weights));
+        $sum = 0;
+
+        foreach ($weights as $key => $weight) {
+            $sum += $weight;
+            if ($rand <= $sum) {
+                return $key;
+            }
+        }
+
+        return array_key_first($weights);
     }
 
     /**

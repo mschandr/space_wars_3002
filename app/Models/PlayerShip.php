@@ -82,7 +82,7 @@ class PlayerShip extends Model
 
         $now = Carbon::now();
         $lastUpdate = Carbon::parse($this->fuel_last_updated_at);
-        $secondsElapsed = $now->diffInSeconds($lastUpdate);
+        $secondsElapsed = (int) abs($now->diffInSeconds($lastUpdate));
 
         $fuelToRegenerate = (int) floor($secondsElapsed / self::FUEL_REGEN_RATE);
 

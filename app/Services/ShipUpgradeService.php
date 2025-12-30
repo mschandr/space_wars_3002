@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Player;
 use App\Models\PlayerShip;
 
 class ShipUpgradeService
@@ -74,12 +75,27 @@ class ShipUpgradeService
     }
 
     /**
+     * Calculate the maximum level for a component including plan bonuses
+     */
+    public function getMaxLevel(Player $player, string $component): int
+    {
+        // Base maximum level
+        $baseMax = self::MAX_LEVELS[$component] ?? 100;
+
+        // Additional levels from plans
+        $additionalLevels = $player->getAdditionalLevelsForComponent($component);
+
+        return $baseMax + $additionalLevels;
+    }
+
+    /**
      * Check if component can be upgraded
      */
     public function canUpgrade(PlayerShip $ship, string $component): bool
     {
         $currentLevel = $this->getComponentLevel($ship, $component);
-        return $currentLevel < self::MAX_LEVELS[$component];
+        $maxLevel = $this->getMaxLevel($ship->player, $component);
+        return $currentLevel < $maxLevel;
     }
 
     /**
@@ -140,15 +156,20 @@ class ShipUpgradeService
     public function getUpgradeInfo(PlayerShip $ship): array
     {
         $info = [];
+        $player = $ship->player;
 
         foreach (array_keys(self::BASE_COSTS) as $component) {
             $currentLevel = $this->getComponentLevel($ship, $component);
-            $canUpgrade = $this->canUpgrade($ship, $component);
+            $baseMaxLevel = self::MAX_LEVELS[$component];
+            $maxLevel = $this->getMaxLevel($player, $component);
+            $canUpgrade = $currentLevel < $maxLevel;
 
             $info[$component] = [
                 'current_value' => $ship->{$component},
                 'current_level' => $currentLevel,
-                'max_level' => self::MAX_LEVELS[$component],
+                'base_max_level' => $baseMaxLevel,
+                'max_level' => $maxLevel,
+                'additional_levels' => $maxLevel - $baseMaxLevel,
                 'can_upgrade' => $canUpgrade,
                 'upgrade_cost' => $canUpgrade ? $this->calculateUpgradeCost($component, $currentLevel) : null,
                 'next_value' => $canUpgrade ? $ship->{$component} + self::INCREMENTS[$component] : null,

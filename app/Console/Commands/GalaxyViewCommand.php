@@ -6,6 +6,7 @@ use App\Console\Renderers\GalaxyRenderer;
 use App\Console\Renderers\StarSystemRenderer;
 use App\Console\Renderers\TradingHubRenderer;
 use App\Console\Traits\ConsoleColorizer;
+use App\Console\Traits\TerminalInputHandler;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
 use Illuminate\Console\Command;
@@ -14,6 +15,7 @@ use Illuminate\Support\Collection;
 class GalaxyViewCommand extends Command
 {
     use ConsoleColorizer;
+    use TerminalInputHandler;
 
     protected $signature = 'galaxy:view {galaxy? : Galaxy ID or UUID}
                             {--width=120 : Terminal width for rendering}
@@ -133,20 +135,6 @@ class GalaxyViewCommand extends Command
 
         // Restore terminal settings
         system('stty sane');
-    }
-
-    private function readChar()
-    {
-        $read   = [STDIN];
-        $write  = null;
-        $except = null;
-        $result = stream_select($read, $write, $except, 0, 100000);
-
-        if ($result === false || $result === 0) {
-            return false;
-        }
-
-        return fgetc(STDIN);
     }
 
     private function handleQuit(): bool

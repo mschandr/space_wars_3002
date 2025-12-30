@@ -1,0 +1,1400 @@
+<?php
+
+namespace App\Console\Commands;
+
+use App\Console\Services\LocationValidator;
+use App\Enums\PointsOfInterest\PointOfInterestType;
+use App\Models\Player;
+use App\Services\ShipUpgradeService;
+use Illuminate\Console\Command;
+use PhpTui\Term\Colors;
+use PhpTui\Term\Terminal;
+use PhpTui\Tui\Extension\Core\Widget\Block\Padding;
+use PhpTui\Tui\Extension\Core\Widget\BlockWidget;
+use PhpTui\Tui\Extension\Core\Widget\GaugeWidget;
+use PhpTui\Tui\Extension\Core\Widget\ListWidget;
+use PhpTui\Tui\Extension\Core\Widget\ParagraphWidget;
+use PhpTui\Tui\Layout\Constraint;
+use PhpTui\Tui\Model\Backend\CrosstermBackend;
+use PhpTui\Tui\Model\Direction;
+use PhpTui\Tui\Model\Display\Backend;
+use PhpTui\Tui\Model\Layout;
+use PhpTui\Tui\Model\Widget\Borders;
+use PhpTui\Tui\Model\Widget\BorderType;
+use PhpTui\Tui\Style\Color;
+use PhpTui\Tui\Style\Style;
+use PhpTui\Tui\Text\Line;
+use PhpTui\Tui\Text\Span;
+use PhpTui\Tui\Text\Text;
+use PhpTui\Tui\Widget\Widget;
+
+class PlayerInterfaceTuiCommand extends Command
+{
+    protected $signature = 'player:tui {player_id}';
+    protected $description = 'TUI-based player interface using php-tui';
+
+    private Player $player;
+    private Backend $backend;
+    private bool $running = true;
+    private string $currentView = 'main'; // main, travel, trade, etc.
+    private int $selectedIndex = 0;
+    private ?string $statusMessage = null;
+    private ?string $errorMessage = null;
+
+    // Trade screen state
+    private string $tradeMode = 'buy'; // 'buy' or 'sell'
+    private bool $inputMode = false;
+    private string $inputBuffer = '';
+    private ?int $selectedMineralId = null;
+
+    public function handle(): int
+    {
+        $playerId = $this->argument('player_id');
+
+        // Load player with relationships
+        $this->player = Player::with([
+            'currentLocation.children',
+            'currentLocation.parent',
+            'currentLocation.tradingHub',
+            'activeShip.ship',
+            'activeShip.cargo.mineral'
+        ])->find($playerId);
+
+        if (!$this->player) {
+            $this->error("Player with ID {$playerId} not found.");
+            return 1;
+        }
+
+        if (!$this->player->activeShip) {
+            $this->error("Player has no active ship.");
+            return 1;
+        }
+
+        // Initialize backend
+        $this->backend = CrosstermBackend::new();
+
+        try {
+            // Run the TUI
+            $this->runTui();
+        } finally {
+            // Ensure terminal is restored
+            $this->backend->disableRawMode();
+            $this->backend->disableAlternateScreen();
+        }
+
+        return 0;
+    }
+
+    private function runTui(): void
+    {
+        $this->backend->enableRawMode();
+        $this->backend->enableAlternateScreen();
+        $this->backend->clear();
+
+        while ($this->running) {
+            // Regenerate fuel before each render
+            $this->player->activeShip->regenerateFuel();
+
+            // Render the current view
+            $this->render();
+
+            // Handle input (non-blocking with timeout)
+            if ($event = $this->backend->events()->next(100)) {
+                $this->handleEvent($event);
+            }
+        }
+    }
+
+    private function render(): void
+    {
+        $this->backend->draw(function ($display) {
+            match ($this->currentView) {
+                'main' => $this->renderMainDashboard($display),
+                'travel' => $this->renderTravelScreen($display),
+                'trade' => $this->renderTradeScreen($display),
+                'upgrades' => $this->renderUpgradesScreen($display),
+                'plans' => $this->renderPlansScreen($display),
+                default => $this->renderMainDashboard($display),
+            };
+        });
+    }
+
+    private function renderMainDashboard($display): void
+    {
+        $area = $display->area();
+
+        // Create main layout: Header | Content | Footer
+        $mainLayout = Layout::default()
+            ->direction(Direction::Vertical)
+            ->constraints([
+                Constraint::length(3),  // Header
+                Constraint::min(0),      // Content
+                Constraint::length(5),  // Footer/Controls
+            ])
+            ->split($area);
+
+        // Render header
+        $this->renderHeader($display, $mainLayout[0]);
+
+        // Split content into two columns
+        $contentLayout = Layout::default()
+            ->direction(Direction::Horizontal)
+            ->constraints([
+                Constraint::percentage(50), // Location
+                Constraint::percentage(50), // Ship Stats
+            ])
+            ->split($mainLayout[1]);
+
+        // Render location panel
+        $this->renderLocationPanel($display, $contentLayout[0]);
+
+        // Render ship stats panel
+        $this->renderShipStatsPanel($display, $contentLayout[1]);
+
+        // Render controls
+        $this->renderControls($display, $mainLayout[2]);
+    }
+
+    private function renderHeader($display, $area): void
+    {
+        $header = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderType(BorderType::Rounded)
+            ->borderStyle(Style::default()->fg(Color::Cyan))
+            ->widget(
+                ParagraphWidget::fromString("SPACE WARS 3002 - PLAYER INTERFACE")
+                    ->style(Style::default()->fg(Color::Yellow)->bold())
+                    ->alignment(\PhpTui\Tui\Model\Widget\HorizontalAlignment::Center)
+            );
+
+        $display->render($header, $area);
+    }
+
+    private function renderLocationPanel($display, $area): void
+    {
+        $location = $this->player->currentLocation;
+
+        if (!$location) {
+            $block = BlockWidget::default()
+                ->borders(Borders::ALL)
+                ->title("LOCATION: UNKNOWN")
+                ->titleStyle(Style::default()->fg(Color::Yellow))
+                ->widget(ParagraphWidget::fromString("No location data available"));
+
+            $display->render($block, $area);
+            return;
+        }
+
+        // Get root star
+        $star = $location->type === PointOfInterestType::STAR
+            ? $location
+            : $location->getRootStar();
+
+        $lines = [];
+
+        if ($star) {
+            $lines[] = Line::fromString("System: " . $star->name)->style(Style::default()->fg(Color::Green));
+            $lines[] = Line::fromString("Coordinates: ({$star->x}, {$star->y})");
+
+            if (isset($star->attributes['stellar_class'])) {
+                $lines[] = Line::fromString("Class: " . $star->attributes['stellar_class']);
+            }
+
+            $lines[] = Line::fromString("");
+
+            // Show planets
+            $planets = $star->children;
+            if ($planets->isNotEmpty()) {
+                $lines[] = Line::fromString("ORBITAL BODIES:")->style(Style::default()->fg(Color::Yellow));
+                foreach ($planets as $planet) {
+                    $current = ($planet->id === $location->id) ? " ◄" : "";
+                    $lines[] = Line::fromString("  [{$planet->orbital_index}] {$planet->name}{$current}");
+                }
+            }
+
+            // Trading hub indicator
+            if ($star->tradingHub && $star->tradingHub->is_active) {
+                $lines[] = Line::fromString("");
+                $lines[] = Line::fromString("⚡ Trading Hub Available")
+                    ->style(Style::default()->fg(Color::Magenta));
+            }
+        }
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderType(BorderType::Rounded)
+            ->title("CURRENT LOCATION")
+            ->titleStyle(Style::default()->fg(Color::Yellow))
+            ->widget(ParagraphWidget::fromLines($lines));
+
+        $display->render($block, $area);
+    }
+
+    private function renderShipStatsPanel($display, $area): void
+    {
+        $ship = $this->player->activeShip;
+
+        // Create layout for ship stats
+        $statsLayout = Layout::default()
+            ->direction(Direction::Vertical)
+            ->constraints([
+                Constraint::length(8),  // Ship info
+                Constraint::length(3),  // Fuel gauge
+                Constraint::length(3),  // Hull gauge
+                Constraint::min(0),     // Other stats
+            ])
+            ->split($area);
+
+        // Ship info
+        $shipInfo = [
+            Line::fromString("Ship: " . $ship->name)->style(Style::default()->fg(Color::Cyan)),
+            Line::fromString("Class: " . $ship->ship->class),
+            Line::fromString("Status: " . ucfirst($ship->status))
+                ->style(Style::default()->fg($ship->status === 'operational' ? Color::Green : Color::Red)),
+            Line::fromString(""),
+            Line::fromString("Credits: " . number_format($this->player->credits, 2))
+                ->style(Style::default()->fg(Color::Yellow)),
+        ];
+
+        $shipBlock = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderType(BorderType::Rounded)
+            ->title("SHIP STATUS")
+            ->titleStyle(Style::default()->fg(Color::Yellow))
+            ->widget(ParagraphWidget::fromLines($shipInfo));
+
+        $display->render($shipBlock, $statsLayout[0]);
+
+        // Fuel gauge
+        $fuelRatio = $ship->max_fuel > 0 ? $ship->current_fuel / $ship->max_fuel : 0;
+        $fuelGauge = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->title("FUEL")
+            ->widget(
+                GaugeWidget::default()
+                    ->ratio($fuelRatio)
+                    ->label("Fuel: {$ship->current_fuel}/{$ship->max_fuel}")
+                    ->gaugeStyle(Style::default()->fg(
+                        $fuelRatio > 0.7 ? Color::Green : ($fuelRatio > 0.3 ? Color::Yellow : Color::Red)
+                    ))
+            );
+
+        $display->render($fuelGauge, $statsLayout[1]);
+
+        // Hull gauge
+        $hullRatio = $ship->max_hull > 0 ? $ship->hull / $ship->max_hull : 0;
+        $hullGauge = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->title("HULL")
+            ->widget(
+                GaugeWidget::default()
+                    ->ratio($hullRatio)
+                    ->label("Hull: {$ship->hull}/{$ship->max_hull}")
+                    ->gaugeStyle(Style::default()->fg(
+                        $hullRatio > 0.7 ? Color::Green : ($hullRatio > 0.3 ? Color::Yellow : Color::Red)
+                    ))
+            );
+
+        $display->render($hullGauge, $statsLayout[2]);
+
+        // Other stats
+        $otherStats = [
+            Line::fromString("Cargo: {$ship->current_cargo}/{$ship->cargo_hold}"),
+            Line::fromString("Weapons: {$ship->weapons}"),
+            Line::fromString("Sensors: {$ship->sensors}"),
+            Line::fromString("Warp Drive: {$ship->warp_drive}"),
+        ];
+
+        $otherBlock = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->title("COMPONENTS")
+            ->widget(ParagraphWidget::fromLines($otherStats));
+
+        $display->render($otherBlock, $statsLayout[3]);
+    }
+
+    private function renderControls($display, $area): void
+    {
+        $atTradingHub = LocationValidator::isAtTradingHub($this->player);
+        $atPlansHub = LocationValidator::isAtPlansHub($this->player);
+
+        $line1 = "[w] Warp Travel  [t] Trade  [p] Upgrades";
+        if ($atPlansHub) {
+            $line1 .= "  [l] Plans";
+        }
+        $line1 .= "  [s] Ship Info  [q] Quit";
+
+        $controls = [
+            Line::fromString($line1)
+                ->style(Style::default()->fg(Color::Cyan)),
+        ];
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderType(BorderType::Rounded)
+            ->title("CONTROLS")
+            ->titleStyle(Style::default()->fg(Color::Yellow))
+            ->widget(
+                ParagraphWidget::fromLines($controls)
+                    ->alignment(\PhpTui\Tui\Model\Widget\HorizontalAlignment::Center)
+            );
+
+        $display->render($block, $area);
+    }
+
+    private function renderTravelScreen($display): void
+    {
+        $area = $display->area();
+        $location = $this->player->currentLocation;
+
+        if (!$location) {
+            $this->renderError($display, $area, "No current location", "You must be at a location to travel.");
+            return;
+        }
+
+        // Load available warp gates
+        $gates = $location->outgoingGates()
+            ->with('destinationPoi.tradingHub')
+            ->where('is_hidden', false)
+            ->where('status', 'active')
+            ->get();
+
+        if ($gates->isEmpty()) {
+            $this->renderError($display, $area, "No warp gates available", "There are no warp gates from this location.");
+            return;
+        }
+
+        // Create layout
+        $layout = Layout::default()
+            ->direction(Direction::Vertical)
+            ->constraints([
+                Constraint::length(5),   // Header with current location & fuel
+                Constraint::min(0),      // Gate list
+                Constraint::length(4),   // Controls
+            ])
+            ->split($area);
+
+        // Render header
+        $this->renderTravelHeader($display, $layout[0]);
+
+        // Render gate list
+        $this->renderGateList($display, $layout[1], $gates);
+
+        // Render controls
+        $this->renderTravelControls($display, $layout[2]);
+    }
+
+    private function renderTravelHeader($display, $area): void
+    {
+        $ship = $this->player->activeShip;
+        $location = $this->player->currentLocation;
+
+        $lines = [
+            Line::fromString("Current Location: " . $location->name)
+                ->style(Style::default()->fg(Color::Cyan)),
+            Line::fromString("Fuel: {$ship->current_fuel}/{$ship->max_fuel}")
+                ->style(Style::default()->fg(
+                    $ship->current_fuel > $ship->max_fuel * 0.7 ? Color::Green : Color::Yellow
+                )),
+        ];
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderType(BorderType::Rounded)
+            ->title("WARP GATE TRAVEL")
+            ->titleStyle(Style::default()->fg(Color::Yellow))
+            ->widget(ParagraphWidget::fromLines($lines));
+
+        $display->render($block, $area);
+    }
+
+    private function renderGateList($display, $area, $gates): void
+    {
+        $ship = $this->player->activeShip;
+        $items = [];
+
+        foreach ($gates as $index => $gate) {
+            $destination = $gate->destinationPoi;
+            $distance = $gate->distance ?? $gate->calculateDistance();
+            $fuelCost = $this->calculateFuelCost($distance, $ship);
+            $canAfford = $ship->current_fuel >= $fuelCost;
+
+            $line = sprintf(
+                "%-30s Distance: %6.1f  Fuel: %3d %s",
+                $destination->name,
+                $distance,
+                $fuelCost,
+                $canAfford ? '' : '[INSUFFICIENT FUEL]'
+            );
+
+            $style = Style::default()->fg($canAfford ? Color::White : Color::DarkGray);
+            if ($index === $this->selectedIndex) {
+                $style = $style->bg(Color::Blue);
+            }
+
+            // Add destination type info
+            $typeInfo = "    Type: " . $destination->type->name;
+            if ($destination->tradingHub && $destination->tradingHub->is_active) {
+                $typeInfo .= " [Trading Hub]";
+            }
+
+            $items[] = Line::fromString($line)->style($style);
+            $items[] = Line::fromString($typeInfo)->style(
+                Style::default()->fg(Color::DarkGray)
+            );
+        }
+
+        $list = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->title("AVAILABLE DESTINATIONS")
+            ->titleStyle(Style::default()->fg(Color::Yellow))
+            ->widget(ParagraphWidget::fromLines($items));
+
+        $display->render($list, $area);
+    }
+
+    private function renderTravelControls($display, $area): void
+    {
+        $controls = [
+            Line::fromString("[↑/↓] Navigate  [Enter] Travel  [Esc] Back")
+                ->style(Style::default()->fg(Color::Cyan)),
+        ];
+
+        if ($this->errorMessage) {
+            $controls[] = Line::fromString($this->errorMessage)
+                ->style(Style::default()->fg(Color::Red));
+        }
+
+        if ($this->statusMessage) {
+            $controls[] = Line::fromString($this->statusMessage)
+                ->style(Style::default()->fg(Color::Green));
+        }
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->title("CONTROLS")
+            ->widget(ParagraphWidget::fromLines($controls));
+
+        $display->render($block, $area);
+    }
+
+    private function renderError($display, $area, string $title, string $message): void
+    {
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderType(BorderType::Rounded)
+            ->title($title)
+            ->titleStyle(Style::default()->fg(Color::Red))
+            ->widget(
+                ParagraphWidget::fromString($message)
+                    ->alignment(\PhpTui\Tui\Model\Widget\HorizontalAlignment::Center)
+            );
+
+        $display->render($block, $area);
+    }
+
+    private function calculateFuelCost(float $distance, $ship): int
+    {
+        // Base fuel cost is distance divided by 10
+        $baseCost = (int) ceil($distance / 10);
+
+        // Warp drive reduces fuel consumption
+        $efficiency = $ship->warp_drive ?? 1;
+        $fuelCost = max(1, (int) floor($baseCost / $efficiency));
+
+        return $fuelCost;
+    }
+
+    private function executeTravel(): void
+    {
+        $location = $this->player->currentLocation;
+        $gates = $location->outgoingGates()
+            ->with('destinationPoi')
+            ->where('is_hidden', false)
+            ->where('status', 'active')
+            ->get();
+
+        if (!isset($gates[$this->selectedIndex])) {
+            return;
+        }
+
+        $gate = $gates[$this->selectedIndex];
+        $ship = $this->player->activeShip;
+        $destination = $gate->destinationPoi;
+        $distance = $gate->distance ?? $gate->calculateDistance();
+        $fuelCost = $this->calculateFuelCost($distance, $ship);
+
+        // Check fuel
+        if (!$ship->consumeFuel($fuelCost)) {
+            $this->errorMessage = "INSUFFICIENT FUEL! Need {$fuelCost}, have {$ship->current_fuel}";
+            return;
+        }
+
+        // Update player location
+        $this->player->current_poi_id = $destination->id;
+        $this->player->save();
+
+        // Reload relationships
+        $this->player->load('currentLocation.children', 'currentLocation.parent', 'currentLocation.tradingHub');
+
+        // Success message
+        $this->statusMessage = "Arrived at {$destination->name}! Fuel remaining: {$ship->current_fuel}";
+        $this->errorMessage = null;
+
+        // Return to main view
+        $this->currentView = 'main';
+        $this->selectedIndex = 0;
+    }
+
+    private function renderTradeScreen($display): void
+    {
+        $area = $display->area();
+
+        // Check if player is at a trading hub
+        if (!LocationValidator::isAtTradingHub($this->player)) {
+            $this->renderError($display, $area, "No Trading Hub", "You must be at a trading hub to trade minerals.");
+            return;
+        }
+
+        $tradingHub = LocationValidator::getTradingHub($this->player);
+        if (!$tradingHub) {
+            $this->renderError($display, $area, "No Trading Hub", "Trading hub not available.");
+            return;
+        }
+
+        // Load data
+        $ship = $this->player->activeShip;
+        $hubInventories = $tradingHub->inventories()->with('mineral')->where('quantity', '>', 0)->get();
+        $playerCargo = $ship->cargo()->with('mineral')->get();
+
+        // Create layout
+        $layout = Layout::default()
+            ->direction(Direction::Vertical)
+            ->constraints([
+                Constraint::length(7),   // Header
+                Constraint::percentage(40),  // Buy section
+                Constraint::percentage(40),  // Sell section
+                Constraint::length(5),   // Controls
+            ])
+            ->split($area);
+
+        $this->renderTradeHeader($display, $layout[0], $tradingHub, $ship);
+        $this->renderBuySection($display, $layout[1], $hubInventories);
+        $this->renderSellSection($display, $layout[2], $playerCargo, $hubInventories);
+        $this->renderTradeControls($display, $layout[3]);
+    }
+
+    private function renderTradeHeader($display, $area, $tradingHub, $ship): void
+    {
+        $lines = [
+            Line::fromString("Trading Hub: " . $tradingHub->name)
+                ->style(Style::default()->fg(Color::Magenta)),
+            Line::fromString("Credits: " . number_format($this->player->credits, 2))
+                ->style(Style::default()->fg(Color::Yellow)),
+            Line::fromString("Cargo: {$ship->current_cargo}/{$ship->cargo_hold} units")
+                ->style(Style::default()->fg(Color::Cyan)),
+        ];
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderType(BorderType::Rounded)
+            ->title("MINERAL TRADING")
+            ->titleStyle(Style::default()->fg(Color::Yellow))
+            ->widget(ParagraphWidget::fromLines($lines));
+
+        $display->render($block, $area);
+    }
+
+    private function renderBuySection($display, $area, $hubInventories): void
+    {
+        $items = [];
+
+        if ($hubInventories->isEmpty()) {
+            $items[] = Line::fromString("No minerals available for purchase")
+                ->style(Style::default()->fg(Color::DarkGray));
+        } else {
+            foreach ($hubInventories->take(9) as $index => $inventory) {
+                $mineral = $inventory->mineral;
+                $isSelected = $this->tradeMode === 'buy' && $index === $this->selectedIndex;
+
+                $line = sprintf(
+                    "[%d] %-20s Stock: %6s  Price: %8s cr/unit",
+                    $index + 1,
+                    $mineral->name,
+                    number_format($inventory->quantity),
+                    number_format($inventory->sell_price, 2)
+                );
+
+                $style = Style::default()->fg(Color::White);
+                if ($isSelected) {
+                    $style = $style->bg(Color::Blue);
+                }
+
+                $items[] = Line::fromString($line)->style($style);
+            }
+        }
+
+        $borderStyle = $this->tradeMode === 'buy'
+            ? Style::default()->fg(Color::Green)
+            : Style::default()->fg(Color::White);
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderStyle($borderStyle)
+            ->title("BUY FROM HUB (Hub sells to you)")
+            ->titleStyle(Style::default()->fg(Color::Green))
+            ->widget(ParagraphWidget::fromLines($items));
+
+        $display->render($block, $area);
+    }
+
+    private function renderSellSection($display, $area, $playerCargo, $hubInventories): void
+    {
+        $items = [];
+
+        if ($playerCargo->isEmpty()) {
+            $items[] = Line::fromString("No minerals in cargo")
+                ->style(Style::default()->fg(Color::DarkGray));
+        } else {
+            foreach ($playerCargo->take(9) as $index => $cargo) {
+                $mineral = $cargo->mineral;
+                $isSelected = $this->tradeMode === 'sell' && $index === $this->selectedIndex;
+
+                // Find hub's buy price
+                $hubInventory = $hubInventories->where('mineral_id', $mineral->id)->first();
+                $buyPrice = $hubInventory ? $hubInventory->buy_price : $mineral->getMarketValue() * 0.85;
+
+                $line = sprintf(
+                    "[%d] %-20s Qty: %6s  Price: %8s cr/unit",
+                    $index + 1,
+                    $mineral->name,
+                    number_format($cargo->quantity),
+                    number_format($buyPrice, 2)
+                );
+
+                $style = Style::default()->fg(Color::White);
+                if ($isSelected) {
+                    $style = $style->bg(Color::Blue);
+                }
+
+                $items[] = Line::fromString($line)->style($style);
+            }
+        }
+
+        $borderStyle = $this->tradeMode === 'sell'
+            ? Style::default()->fg(Color::Green)
+            : Style::default()->fg(Color::White);
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderStyle($borderStyle)
+            ->title("SELL TO HUB (Hub buys from you)")
+            ->titleStyle(Style::default()->fg(Color::Green))
+            ->widget(ParagraphWidget::fromLines($items));
+
+        $display->render($block, $area);
+    }
+
+    private function renderTradeControls($display, $area): void
+    {
+        $controls = [];
+
+        if ($this->inputMode) {
+            $controls[] = Line::fromString("Enter quantity: " . $this->inputBuffer . "_")
+                ->style(Style::default()->fg(Color::Yellow));
+            $controls[] = Line::fromString("[0-9] Type number  [Enter] Confirm  [Esc] Cancel")
+                ->style(Style::default()->fg(Color::Cyan));
+        } else {
+            $controls[] = Line::fromString("[↑/↓] Navigate  [Tab] Switch Mode  [Enter] Select  [Esc] Back")
+                ->style(Style::default()->fg(Color::Cyan));
+        }
+
+        if ($this->errorMessage) {
+            $controls[] = Line::fromString($this->errorMessage)
+                ->style(Style::default()->fg(Color::Red));
+        }
+
+        if ($this->statusMessage) {
+            $controls[] = Line::fromString($this->statusMessage)
+                ->style(Style::default()->fg(Color::Green));
+        }
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->title("CONTROLS")
+            ->widget(ParagraphWidget::fromLines($controls));
+
+        $display->render($block, $area);
+    }
+
+    private function renderUpgradesScreen($display): void
+    {
+        $area = $display->area();
+
+        // Check if player is at a trading hub
+        if (!LocationValidator::isAtTradingHub($this->player)) {
+            $this->renderError($display, $area, "No Trading Hub", "You must be at a trading hub to purchase upgrades.");
+            return;
+        }
+
+        $ship = $this->player->activeShip;
+        $upgradeService = app(ShipUpgradeService::class);
+        $upgradeInfo = $upgradeService->getUpgradeInfo($ship);
+
+        // Create layout
+        $layout = Layout::default()
+            ->direction(Direction::Vertical)
+            ->constraints([
+                Constraint::length(5),   // Header
+                Constraint::min(0),      // Upgrades list
+                Constraint::length(5),   // Controls
+            ])
+            ->split($area);
+
+        $this->renderUpgradesHeader($display, $layout[0]);
+        $this->renderUpgradesList($display, $layout[1], $upgradeInfo);
+        $this->renderUpgradesControls($display, $layout[2]);
+    }
+
+    private function renderUpgradesHeader($display, $area): void
+    {
+        $lines = [
+            Line::fromString("Credits: " . number_format($this->player->credits, 2))
+                ->style(Style::default()->fg(Color::Yellow)),
+            Line::fromString("Select a component to upgrade")
+                ->style(Style::default()->fg(Color::Cyan)),
+        ];
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderType(BorderType::Rounded)
+            ->title("SHIP COMPONENT UPGRADES")
+            ->titleStyle(Style::default()->fg(Color::Yellow))
+            ->widget(ParagraphWidget::fromLines($lines));
+
+        $display->render($block, $area);
+    }
+
+    private function renderUpgradesList($display, $area, array $upgradeInfo): void
+    {
+        $items = [];
+        $components = array_keys($upgradeInfo);
+
+        foreach ($components as $index => $component) {
+            $info = $upgradeInfo[$component];
+            $isSelected = $index === $this->selectedIndex;
+
+            // Component name
+            $displayName = match($component) {
+                'max_fuel' => 'Max Fuel',
+                'max_hull' => 'Max Hull',
+                'cargo_hold' => 'Cargo Hold',
+                'warp_drive' => 'Warp Drive',
+                default => ucwords(str_replace('_', ' ', $component))
+            };
+
+            // Build the line
+            $statusText = $info['can_upgrade']
+                ? sprintf(
+                    "Lvl %d/%d → Lvl %d  Cost: %s cr",
+                    $info['current_level'],
+                    $info['max_level'],
+                    $info['current_level'] + 1,
+                    number_format($info['upgrade_cost'])
+                )
+                : sprintf(
+                    "Lvl %d/%d  [MAXED OUT]",
+                    $info['current_level'],
+                    $info['max_level']
+                );
+
+            $line = sprintf(
+                "[%d] %-15s Value: %4d  %s",
+                $index + 1,
+                $displayName,
+                $info['current_value'],
+                $statusText
+            );
+
+            $style = Style::default()->fg(
+                $info['can_upgrade'] ? Color::White : Color::DarkGray
+            );
+            if ($isSelected) {
+                $style = $style->bg(Color::Blue);
+            }
+
+            $items[] = Line::fromString($line)->style($style);
+
+            // Show additional levels from plans if any
+            if ($info['additional_levels'] > 0) {
+                $bonusText = "    (+{$info['additional_levels']} bonus levels from plans)";
+                $items[] = Line::fromString($bonusText)
+                    ->style(Style::default()->fg(Color::Magenta));
+            }
+        }
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->title("AVAILABLE UPGRADES")
+            ->titleStyle(Style::default()->fg(Color::Green))
+            ->widget(ParagraphWidget::fromLines($items));
+
+        $display->render($block, $area);
+    }
+
+    private function renderUpgradesControls($display, $area): void
+    {
+        $controls = [
+            Line::fromString("[↑/↓] Navigate  [Enter] Purchase Upgrade  [Esc] Back")
+                ->style(Style::default()->fg(Color::Cyan)),
+        ];
+
+        if ($this->errorMessage) {
+            $controls[] = Line::fromString($this->errorMessage)
+                ->style(Style::default()->fg(Color::Red));
+        }
+
+        if ($this->statusMessage) {
+            $controls[] = Line::fromString($this->statusMessage)
+                ->style(Style::default()->fg(Color::Green));
+        }
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->title("CONTROLS")
+            ->widget(ParagraphWidget::fromLines($controls));
+
+        $display->render($block, $area);
+    }
+
+    private function renderPlansScreen($display): void
+    {
+        $area = $display->area();
+
+        // Check if player is at a plans hub
+        if (!LocationValidator::isAtPlansHub($this->player)) {
+            $this->renderError($display, $area, "No Plans Available", "You must be at a trading hub with plans to purchase upgrade plans.");
+            return;
+        }
+
+        $tradingHub = LocationValidator::getTradingHub($this->player);
+        if (!$tradingHub) {
+            $this->renderError($display, $area, "No Trading Hub", "Trading hub not available.");
+            return;
+        }
+
+        // Load available plans
+        $plans = $tradingHub->plans;
+
+        if ($plans->isEmpty()) {
+            $this->renderError($display, $area, "No Plans Available", "This trading hub has no upgrade plans for sale.");
+            return;
+        }
+
+        // Create layout
+        $layout = Layout::default()
+            ->direction(Direction::Vertical)
+            ->constraints([
+                Constraint::length(5),   // Header
+                Constraint::min(0),      // Plans list
+                Constraint::length(5),   // Controls
+            ])
+            ->split($area);
+
+        $this->renderPlansHeader($display, $layout[0], $tradingHub);
+        $this->renderPlansList($display, $layout[1], $plans);
+        $this->renderPlansControls($display, $layout[2]);
+    }
+
+    private function renderPlansHeader($display, $area, $tradingHub): void
+    {
+        $lines = [
+            Line::fromString("Trading Hub: " . $tradingHub->name)
+                ->style(Style::default()->fg(Color::Magenta)),
+            Line::fromString("Credits: " . number_format($this->player->credits, 2))
+                ->style(Style::default()->fg(Color::Yellow)),
+        ];
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->borderType(BorderType::Rounded)
+            ->title("UPGRADE PLANS SHOP")
+            ->titleStyle(Style::default()->fg(Color::Yellow))
+            ->widget(ParagraphWidget::fromLines($lines));
+
+        $display->render($block, $area);
+    }
+
+    private function renderPlansList($display, $area, $plans): void
+    {
+        $items = [];
+        $displayPlans = $plans->take(9);
+
+        foreach ($displayPlans as $index => $plan) {
+            $isSelected = $index === $this->selectedIndex;
+            $ownedCount = $this->player->getPlanCount($plan->id);
+            $currentBonus = $ownedCount * $plan->additional_levels;
+            $projectedBonus = $currentBonus + $plan->additional_levels;
+
+            // Plan name and tier
+            $line1 = sprintf(
+                "[%d] %s",
+                $index + 1,
+                strtoupper($plan->getFullName())
+            );
+
+            $style1 = Style::default()->fg(Color::Cyan);
+            if ($isSelected) {
+                $style1 = $style1->bg(Color::Blue);
+            }
+            $items[] = Line::fromString($line1)->style($style1);
+
+            // Description
+            $items[] = Line::fromString("    " . $plan->description)
+                ->style(Style::default()->fg(Color::White));
+
+            // Grants line
+            $grantsText = sprintf(
+                "    Grants: +%d %s upgrade levels  |  Price: %s cr",
+                $plan->additional_levels,
+                $plan->getComponentDisplayName(),
+                number_format($plan->price, 2)
+            );
+            $items[] = Line::fromString($grantsText)
+                ->style(Style::default()->fg(Color::Yellow));
+
+            // Ownership status
+            if ($ownedCount > 0) {
+                $ownText = sprintf(
+                    "    You own: %dx (Current bonus: +%d, After purchase: +%d)",
+                    $ownedCount,
+                    $currentBonus,
+                    $projectedBonus
+                );
+                $items[] = Line::fromString($ownText)
+                    ->style(Style::default()->fg(Color::Green));
+            } else {
+                $ownText = sprintf(
+                    "    You own: 0 (Current bonus: +0, After purchase: +%d)",
+                    $projectedBonus
+                );
+                $items[] = Line::fromString($ownText)
+                    ->style(Style::default()->fg(Color::DarkGray));
+            }
+
+            // Add spacing
+            $items[] = Line::fromString("");
+        }
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->title("AVAILABLE PLANS")
+            ->titleStyle(Style::default()->fg(Color::Green))
+            ->widget(ParagraphWidget::fromLines($items));
+
+        $display->render($block, $area);
+    }
+
+    private function renderPlansControls($display, $area): void
+    {
+        $controls = [
+            Line::fromString("[↑/↓] Navigate  [Enter] Purchase Plan  [Esc] Back")
+                ->style(Style::default()->fg(Color::Cyan)),
+        ];
+
+        if ($this->errorMessage) {
+            $controls[] = Line::fromString($this->errorMessage)
+                ->style(Style::default()->fg(Color::Red));
+        }
+
+        if ($this->statusMessage) {
+            $controls[] = Line::fromString($this->statusMessage)
+                ->style(Style::default()->fg(Color::Green));
+        }
+
+        $block = BlockWidget::default()
+            ->borders(Borders::ALL)
+            ->title("CONTROLS")
+            ->widget(ParagraphWidget::fromLines($controls));
+
+        $display->render($block, $area);
+    }
+
+    private function handleEvent($event): void
+    {
+        // Handle keyboard events
+        if ($event instanceof \PhpTui\Term\Event\KeyEvent) {
+            $key = $event->code;
+
+            match (true) {
+                $key instanceof \PhpTui\Term\KeyCode\Char => $this->handleChar($key->char),
+                $key instanceof \PhpTui\Term\KeyCode\Esc => $this->handleEsc(),
+                $key instanceof \PhpTui\Term\KeyCode\Up => $this->handleUp(),
+                $key instanceof \PhpTui\Term\KeyCode\Down => $this->handleDown(),
+                $key instanceof \PhpTui\Term\KeyCode\Enter => $this->handleEnter(),
+                $key instanceof \PhpTui\Term\KeyCode\Tab => $this->handleTab(),
+                $key instanceof \PhpTui\Term\KeyCode\Backspace => $this->handleBackspace(),
+                default => null,
+            };
+        }
+    }
+
+    private function handleChar(string $char): void
+    {
+        if ($this->currentView === 'main') {
+            match ($char) {
+                'q' => $this->running = false,
+                'w' => $this->switchToView('travel'),
+                't' => $this->switchToView('trade'),
+                'p' => $this->switchToView('upgrades'),
+                'l' => $this->switchToView('plans'),
+                's' => $this->switchToView('ship_info'),
+                default => null,
+            };
+        } elseif ($this->currentView === 'trade' && $this->inputMode) {
+            // Handle numeric input for quantity
+            if (is_numeric($char)) {
+                $this->inputBuffer .= $char;
+            }
+        }
+    }
+
+    private function handleEsc(): void
+    {
+        if ($this->currentView === 'main') {
+            $this->running = false;
+        } elseif ($this->currentView === 'trade' && $this->inputMode) {
+            // Cancel input mode
+            $this->inputMode = false;
+            $this->inputBuffer = '';
+            $this->errorMessage = null;
+        } else {
+            // Go back to main view
+            $this->currentView = 'main';
+            $this->selectedIndex = 0;
+            $this->errorMessage = null;
+            $this->statusMessage = null;
+            $this->tradeMode = 'buy';
+        }
+    }
+
+    private function handleUp(): void
+    {
+        if ($this->currentView === 'travel') {
+            $location = $this->player->currentLocation;
+            if ($location) {
+                $gateCount = $location->outgoingGates()
+                    ->where('is_hidden', false)
+                    ->where('status', 'active')
+                    ->count();
+
+                if ($gateCount > 0) {
+                    $this->selectedIndex = max(0, $this->selectedIndex - 1);
+                }
+            }
+        } elseif ($this->currentView === 'trade' && !$this->inputMode) {
+            $this->selectedIndex = max(0, $this->selectedIndex - 1);
+        } elseif ($this->currentView === 'upgrades') {
+            $this->selectedIndex = max(0, $this->selectedIndex - 1);
+        } elseif ($this->currentView === 'plans') {
+            $this->selectedIndex = max(0, $this->selectedIndex - 1);
+        }
+    }
+
+    private function handleDown(): void
+    {
+        if ($this->currentView === 'travel') {
+            $location = $this->player->currentLocation;
+            if ($location) {
+                $gateCount = $location->outgoingGates()
+                    ->where('is_hidden', false)
+                    ->where('status', 'active')
+                    ->count();
+
+                if ($gateCount > 0) {
+                    $this->selectedIndex = min($gateCount - 1, $this->selectedIndex + 1);
+                }
+            }
+        } elseif ($this->currentView === 'trade' && !$this->inputMode) {
+            $tradingHub = LocationValidator::getTradingHub($this->player);
+            if ($tradingHub) {
+                $maxIndex = $this->tradeMode === 'buy'
+                    ? min(8, $tradingHub->inventories()->where('quantity', '>', 0)->count() - 1)
+                    : min(8, $this->player->activeShip->cargo()->count() - 1);
+                $this->selectedIndex = min($maxIndex, $this->selectedIndex + 1);
+            }
+        } elseif ($this->currentView === 'upgrades') {
+            // 6 components max (max_fuel, max_hull, weapons, cargo_hold, sensors, warp_drive)
+            $this->selectedIndex = min(5, $this->selectedIndex + 1);
+        } elseif ($this->currentView === 'plans') {
+            $tradingHub = LocationValidator::getTradingHub($this->player);
+            if ($tradingHub) {
+                $maxIndex = min(8, $tradingHub->plans->count() - 1);
+                $this->selectedIndex = min($maxIndex, $this->selectedIndex + 1);
+            }
+        }
+    }
+
+    private function handleEnter(): void
+    {
+        match ($this->currentView) {
+            'travel' => $this->executeTravel(),
+            'trade' => $this->handleTradeEnter(),
+            'upgrades' => $this->executeUpgrade(),
+            'plans' => $this->executePlanPurchase(),
+            default => null,
+        };
+    }
+
+    private function handleTab(): void
+    {
+        if ($this->currentView === 'trade' && !$this->inputMode) {
+            // Switch between buy and sell modes
+            $this->tradeMode = $this->tradeMode === 'buy' ? 'sell' : 'buy';
+            $this->selectedIndex = 0;
+            $this->errorMessage = null;
+            $this->statusMessage = null;
+        }
+    }
+
+    private function handleBackspace(): void
+    {
+        if ($this->currentView === 'trade' && $this->inputMode && strlen($this->inputBuffer) > 0) {
+            $this->inputBuffer = substr($this->inputBuffer, 0, -1);
+        }
+    }
+
+    private function handleTradeEnter(): void
+    {
+        if ($this->inputMode) {
+            // Confirm quantity and execute trade
+            $this->executeTradeTransaction();
+        } else {
+            // Enter input mode for selected item
+            $this->inputMode = true;
+            $this->inputBuffer = '';
+            $this->errorMessage = null;
+        }
+    }
+
+    private function executeTradeTransaction(): void
+    {
+        $quantity = (int)$this->inputBuffer;
+
+        if ($quantity <= 0) {
+            $this->inputMode = false;
+            $this->inputBuffer = '';
+            return;
+        }
+
+        $tradingHub = LocationValidator::getTradingHub($this->player);
+        if (!$tradingHub) {
+            $this->errorMessage = "Trading hub not available";
+            $this->inputMode = false;
+            $this->inputBuffer = '';
+            return;
+        }
+
+        if ($this->tradeMode === 'buy') {
+            $this->executeBuyTransaction($tradingHub, $quantity);
+        } else {
+            $this->executeSellTransaction($tradingHub, $quantity);
+        }
+
+        $this->inputMode = false;
+        $this->inputBuffer = '';
+    }
+
+    private function executeBuyTransaction($tradingHub, int $quantity): void
+    {
+        $ship = $this->player->activeShip;
+        $hubInventories = $tradingHub->inventories()->with('mineral')->where('quantity', '>', 0)->get();
+
+        if (!isset($hubInventories[$this->selectedIndex])) {
+            $this->errorMessage = "Invalid selection";
+            return;
+        }
+
+        $inventory = $hubInventories[$this->selectedIndex];
+        $mineral = $inventory->mineral;
+
+        // Validations
+        if (!$inventory->hasStock($quantity)) {
+            $this->errorMessage = "Insufficient stock available";
+            return;
+        }
+
+        $totalCost = $inventory->sell_price * $quantity;
+        if ($this->player->credits < $totalCost) {
+            $this->errorMessage = "Insufficient credits! Need " . number_format($totalCost, 2);
+            return;
+        }
+
+        $availableSpace = $ship->cargo_hold - $ship->current_cargo;
+        if ($availableSpace < $quantity) {
+            $this->errorMessage = "Insufficient cargo space! Need {$quantity}, have {$availableSpace}";
+            return;
+        }
+
+        // Execute transaction
+        $this->player->deductCredits($totalCost);
+        $inventory->removeStock($quantity);
+
+        // Add to player cargo
+        $playerCargo = \App\Models\PlayerCargo::firstOrNew([
+            'player_ship_id' => $ship->id,
+            'mineral_id' => $mineral->id,
+        ]);
+        $playerCargo->quantity = ($playerCargo->quantity ?? 0) + $quantity;
+        $playerCargo->save();
+
+        // Update ship cargo
+        $ship->current_cargo += $quantity;
+        $ship->save();
+
+        // Reload relationships
+        $this->player->refresh();
+        $this->player->load('activeShip.cargo.mineral');
+
+        $this->statusMessage = "Purchased {$quantity} units of {$mineral->name} for " . number_format($totalCost, 2) . " credits";
+        $this->errorMessage = null;
+    }
+
+    private function executeSellTransaction($tradingHub, int $quantity): void
+    {
+        $ship = $this->player->activeShip;
+        $playerCargo = $ship->cargo()->with('mineral')->get();
+
+        if (!isset($playerCargo[$this->selectedIndex])) {
+            $this->errorMessage = "Invalid selection";
+            return;
+        }
+
+        $cargo = $playerCargo[$this->selectedIndex];
+        $mineral = $cargo->mineral;
+
+        // Validation
+        if ($cargo->quantity < $quantity) {
+            $this->errorMessage = "You don't have that many units! Have: {$cargo->quantity}";
+            return;
+        }
+
+        // Get or create hub inventory
+        $hubInventory = \App\Models\TradingHubInventory::firstOrNew([
+            'trading_hub_id' => $tradingHub->id,
+            'mineral_id' => $mineral->id,
+        ]);
+
+        if (!$hubInventory->exists) {
+            $hubInventory->quantity = 0;
+            $hubInventory->demand_level = 50;
+            $hubInventory->supply_level = 50;
+            $hubInventory->save();
+            $hubInventory->updatePricing();
+            $hubInventory->refresh();
+        }
+
+        $totalRevenue = $hubInventory->buy_price * $quantity;
+
+        // Execute transaction
+        $this->player->addCredits($totalRevenue);
+        $hubInventory->addStock($quantity);
+
+        // Remove from player cargo
+        $cargo->quantity -= $quantity;
+        if ($cargo->quantity <= 0) {
+            $cargo->delete();
+        } else {
+            $cargo->save();
+        }
+
+        // Update ship cargo
+        $ship->current_cargo -= $quantity;
+        $ship->save();
+
+        // Reload relationships
+        $this->player->refresh();
+        $this->player->load('activeShip.cargo.mineral');
+
+        $this->statusMessage = "Sold {$quantity} units of {$mineral->name} for " . number_format($totalRevenue, 2) . " credits";
+        $this->errorMessage = null;
+    }
+
+    private function executeUpgrade(): void
+    {
+        $ship = $this->player->activeShip;
+        $upgradeService = app(ShipUpgradeService::class);
+        $upgradeInfo = $upgradeService->getUpgradeInfo($ship);
+
+        $components = array_keys($upgradeInfo);
+        if (!isset($components[$this->selectedIndex])) {
+            return;
+        }
+
+        $component = $components[$this->selectedIndex];
+        $info = $upgradeInfo[$component];
+
+        // Check if upgrade is possible
+        if (!$info['can_upgrade']) {
+            $this->errorMessage = "Component is already at maximum level";
+            return;
+        }
+
+        // Attempt upgrade
+        $result = $upgradeService->upgrade($ship, $component);
+
+        if ($result['success']) {
+            // Reload player data
+            $this->player->refresh();
+            $this->player->load('activeShip.ship');
+
+            $this->statusMessage = $result['message'] . " - Cost: " . number_format($result['cost'], 2) . " credits";
+            $this->errorMessage = null;
+        } else {
+            $this->errorMessage = $result['message'];
+            $this->statusMessage = null;
+        }
+    }
+
+    private function executePlanPurchase(): void
+    {
+        $tradingHub = LocationValidator::getTradingHub($this->player);
+        if (!$tradingHub) {
+            $this->errorMessage = "Trading hub not available";
+            return;
+        }
+
+        $plans = $tradingHub->plans;
+        $displayPlans = $plans->take(9);
+
+        if (!isset($displayPlans[$this->selectedIndex])) {
+            return;
+        }
+
+        $plan = $displayPlans[$this->selectedIndex];
+
+        // Attempt purchase
+        $result = $this->player->purchasePlan($plan);
+
+        if ($result['success']) {
+            // Reload player data
+            $this->player->refresh();
+            $this->player->load('plans');
+
+            $ownedCount = $this->player->getPlanCount($plan->id);
+            $this->statusMessage = "Purchased {$plan->getFullName()}! You now own {$ownedCount}x - Price: " . number_format($plan->price, 2) . " credits";
+            $this->errorMessage = null;
+        } else {
+            $this->errorMessage = $result['message'];
+            $this->statusMessage = null;
+        }
+    }
+
+    private function switchToView(string $view): void
+    {
+        $this->currentView = $view;
+        $this->selectedIndex = 0;
+        $this->errorMessage = null;
+        $this->statusMessage = null;
+    }
+}
