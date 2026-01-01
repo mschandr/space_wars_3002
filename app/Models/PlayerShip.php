@@ -72,6 +72,46 @@ class PlayerShip extends Model
     }
 
     /**
+     * Get docked fighters on this carrier ship
+     */
+    public function fighters(): HasMany
+    {
+        return $this->hasMany(PlayerShipFighter::class);
+    }
+
+    /**
+     * Check if this ship is a carrier
+     */
+    public function isCarrier(): bool
+    {
+        return $this->ship->attributes['is_carrier'] ?? false;
+    }
+
+    /**
+     * Get fighter capacity for this carrier
+     */
+    public function getFighterCapacity(): int
+    {
+        if (!$this->isCarrier()) {
+            return 0;
+        }
+
+        return $this->ship->attributes['fighter_capacity'] ?? 0;
+    }
+
+    /**
+     * Check if carrier has room for more fighters
+     */
+    public function canAddFighter(): bool
+    {
+        if (!$this->isCarrier()) {
+            return false;
+        }
+
+        return $this->fighters()->count() < $this->getFighterCapacity();
+    }
+
+    /**
      * Calculate and update fuel based on time elapsed
      */
     public function regenerateFuel(): void
@@ -82,7 +122,7 @@ class PlayerShip extends Model
 
         $now = Carbon::now();
         $lastUpdate = Carbon::parse($this->fuel_last_updated_at);
-        $secondsElapsed = $now->diffInSeconds($lastUpdate);
+        $secondsElapsed = (int) abs($now->diffInSeconds($lastUpdate));
 
         $fuelToRegenerate = (int) floor($secondsElapsed / self::FUEL_REGEN_RATE);
 

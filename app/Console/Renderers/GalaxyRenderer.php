@@ -25,7 +25,8 @@ class GalaxyRenderer
         Collection $pois,
         Collection $gates,
         bool       $showGates,
-        array      &$poiMap
+        array      &$poiMap,
+        Collection $pirates = new Collection()
     ): void
     {
         $this->clearScreen();
@@ -51,7 +52,7 @@ class GalaxyRenderer
 
         // Draw gates if enabled
         if ($showGates && $gates->isNotEmpty()) {
-            $this->drawGateConnections($canvas, $celestialObjects, $gates, $minX, $minY, $scaleX, $scaleY);
+            $this->drawGateConnections($canvas, $celestialObjects, $gates, $pirates, $minX, $minY, $scaleX, $scaleY);
         }
 
         // Render canvas
@@ -59,7 +60,7 @@ class GalaxyRenderer
             $this->command->line(implode('', $row));
         }
 
-        $this->renderLegend();
+        $this->renderLegend($pirates->count());
     }
 
     private function renderHeader(Galaxy $galaxy, Collection $pois): void
@@ -162,6 +163,7 @@ class GalaxyRenderer
         array      &$canvas,
         Collection $celestialObjects,
         Collection $gates,
+        Collection $pirates,
         float      $minX,
         float      $minY,
         float      $scaleX,
@@ -181,7 +183,10 @@ class GalaxyRenderer
             $x2 = max(0, min($this->termWidth - 1, (int)round(($destination->x - $minX) * $scaleX)));
             $y2 = max(0, min($this->termHeight - 16, (int)round(($destination->y - $minY) * $scaleY)));
 
-            $color = $gate->is_hidden ? 'gate_hidden' : 'gate';
+            // Check if this gate has pirates
+            $hasPirates = $gate->warpLanePirate && $gate->warpLanePirate->is_active;
+
+            $color = $gate->is_hidden ? 'gate_hidden' : ($hasPirates ? 'pirate' : 'gate');
             $this->drawLine($canvas, $x1, $y1, $x2, $y2, $color);
         }
     }
@@ -216,7 +221,7 @@ class GalaxyRenderer
         }
     }
 
-    private function renderLegend(): void
+    private function renderLegend(int $pirateCount = 0): void
     {
         $this->command->newLine();
         $this->command->line($this->colorize('  LEGEND:', 'header'));
@@ -228,6 +233,11 @@ class GalaxyRenderer
             ['?', 'anomaly', 'Anomaly'], ['●', 'planet', 'Rogue Planet'], ['☄', 'highlight', 'Comet'],
             ['·', 'gate', 'Warp Gate ([g] to toggle)'],
         ];
+
+        // Add pirate legend entry if there are pirates
+        if ($pirateCount > 0) {
+            $legends[] = ['·', 'pirate', "Pirate-controlled lane ({$pirateCount})"];
+        }
 
         $col1 = [];
         $col2 = [];
@@ -249,7 +259,7 @@ class GalaxyRenderer
             }
         }
 
-        for ($i = 0; $i < max(count($col1), count($col2), count($col3)); $i++) {
+        for ($i = 0; $i < max(count($col1), count($col2), count($col3), count($col4)); $i++) {
             $left_width         = $this->visualLength($col1[$i] ?? '');
             $center_left_width  = $this->visualLength($col2[$i] ?? '');
             $center_right_width = $this->visualLength($col3[$i] ?? '');

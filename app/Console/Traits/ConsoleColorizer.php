@@ -38,6 +38,7 @@ trait ConsoleColorizer
         'highlight'     => "\033[38;5;46m",         // Bright green
         'gate'          => "\033[38;5;51m",         // Cyan (warp gate connections)
         'gate_hidden'   => "\033[38;5;237m",        // Very dark gray (hidden gates)
+        'pirate'        => "\033[38;5;196m",        // Red (pirate-controlled lanes)
         'trade'         => "\033[38;5;220m",        // Gold (trading hubs)
         'price_low'     => "\033[38;5;82m",         // Bright green (good buy price)
         'price_high'    => "\033[38;5;196m",        // Red (expensive)

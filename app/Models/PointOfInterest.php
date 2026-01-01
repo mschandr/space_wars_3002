@@ -28,6 +28,7 @@ class PointOfInterest extends Model
     protected $fillable = [
         'uuid',
         'galaxy_id',
+        'sector_id',
         'parent_poi_id',
         'orbital_index',
         'type',
@@ -121,6 +122,14 @@ class PointOfInterest extends Model
     public function galaxy(): BelongsTo
     {
         return $this->belongsTo(Galaxy::class);
+    }
+
+    /**
+     * Sector this POI belongs to
+     */
+    public function sector(): BelongsTo
+    {
+        return $this->belongsTo(Sector::class);
     }
 
     /**

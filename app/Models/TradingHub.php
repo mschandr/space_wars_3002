@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
@@ -15,6 +16,7 @@ class TradingHub extends Model
         'name',
         'type',
         'has_salvage_yard',
+        'has_plans',
         'gate_count',
         'tax_rate',
         'services',
@@ -24,6 +26,7 @@ class TradingHub extends Model
 
     protected $casts = [
         'has_salvage_yard' => 'boolean',
+        'has_plans' => 'boolean',
         'gate_count' => 'integer',
         'tax_rate' => 'decimal:2',
         'services' => 'array',
@@ -56,6 +59,31 @@ class TradingHub extends Model
     public function inventories(): HasMany
     {
         return $this->hasMany(TradingHubInventory::class);
+    }
+
+    /**
+     * Get all plans available at this trading hub
+     */
+    public function plans(): BelongsToMany
+    {
+        return $this->belongsToMany(Plan::class, 'trading_hub_plans')
+                    ->withTimestamps();
+    }
+
+    /**
+     * Get all ships available at this trading hub
+     */
+    public function ships(): HasMany
+    {
+        return $this->hasMany(TradingHubShip::class);
+    }
+
+    /**
+     * Check if this hub sells ships
+     */
+    public function hasShipyard(): bool
+    {
+        return $this->ships()->where('quantity', '>', 0)->exists();
     }
 
     /**

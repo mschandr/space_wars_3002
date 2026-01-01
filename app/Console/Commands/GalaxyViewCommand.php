@@ -3,17 +3,21 @@
 namespace App\Console\Commands;
 
 use App\Console\Renderers\GalaxyRenderer;
+use App\Console\Renderers\SectorRenderer;
 use App\Console\Renderers\StarSystemRenderer;
 use App\Console\Renderers\TradingHubRenderer;
 use App\Console\Traits\ConsoleColorizer;
+use App\Console\Traits\TerminalInputHandler;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
+use App\Models\Sector;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 
 class GalaxyViewCommand extends Command
 {
     use ConsoleColorizer;
+    use TerminalInputHandler;
 
     protected $signature = 'galaxy:view {galaxy? : Galaxy ID or UUID}
                             {--width=120 : Terminal width for rendering}
@@ -25,15 +29,21 @@ class GalaxyViewCommand extends Command
 
     private Galaxy      $galaxy;
     private Collection  $pois;
+    private Collection  $sectors;
     private Collection  $gates;
+    private Collection  $pirates;
     private int         $termWidth;
     private int         $termHeight;
     private bool        $showHidden;
     private bool        $showGates;
     private array       $poiMap = [];
-    private int         $currentView = 0; // 0 = galaxy view, >0 = star system ID
+    private array       $sectorMap = [];
+    private int         $viewLevel = 0; // 0 = sector grid, 1 = sector detail, 2 = star system
+    private ?Sector     $currentSector = null;
+    private ?int        $currentStarId = null;
 
     // Renderers
+    private SectorRenderer $sectorRenderer;
     private GalaxyRenderer $galaxyRenderer;
     private StarSystemRenderer $starSystemRenderer;
     private TradingHubRenderer $tradingHubRenderer;
@@ -46,6 +56,7 @@ class GalaxyViewCommand extends Command
         $this->showGates    = $this->option('show-gates');
 
         // Initialize renderers
+        $this->sectorRenderer = new SectorRenderer($this, $this->termWidth, $this->termHeight);
         $this->galaxyRenderer = new GalaxyRenderer($this, $this->termWidth, $this->termHeight);
         $this->starSystemRenderer = new StarSystemRenderer($this, $this->termWidth);
         $this->tradingHubRenderer = new TradingHubRenderer($this, $this->termWidth);
@@ -73,90 +84,152 @@ class GalaxyViewCommand extends Command
 
     private function loadGalaxyData(): void
     {
+        // Load sectors
+        $this->sectors = $this->galaxy->sectors()
+            ->orderBy('grid_y')
+            ->orderBy('grid_x')
+            ->get();
+
         // Load points of interest
-        $query = $this->galaxy->pointsOfInterest()->with(['parent', 'children', 'tradingHub']);
+        $query = $this->galaxy->pointsOfInterest()->with(['parent', 'children.tradingHub', 'tradingHub', 'sector']);
         if (!$this->showHidden) {
             $query->where('is_hidden', false);
         }
         $this->pois = $query->get();
 
-        // Load warp gates
-        $gateQuery = $this->galaxy->warpGates()->with(['sourcePoi', 'destinationPoi']);
+        // Load warp gates with pirate data
+        $gateQuery = $this->galaxy->warpGates()->with([
+            'sourcePoi',
+            'destinationPoi',
+            'warpLanePirate.captain.faction'
+        ]);
         if (!$this->showHidden) {
             $gateQuery->where('is_hidden', false);
         }
         $this->gates = $gateQuery->get();
+
+        // Extract active pirates for quick access
+        $this->pirates = $this->gates
+            ->pluck('warpLanePirate')
+            ->filter()
+            ->where('is_active', true);
     }
 
     private function interactiveLoop(): void
     {
-        $this->info("\n" . $this->colorize('Controls:', 'header'));
-
-        // Display controls in 3 columns
-        $col1Width = 40;
-        $col2Width = 40;
-
-        $this->line(
-            str_pad($this->colorize('  [0-9,a-z]', 'label') . ' - Zoom to star', $col1Width) .
-            str_pad($this->colorize('  [h]', 'label') . ' - Toggle hidden POIs', $col2Width) .
-            $this->colorize('  [r]', 'label') . ' - Refresh view'
-        );
-        $this->line(
-            str_pad($this->colorize('  [t]', 'label') . '       - View trading hub', $col1Width) .
-            str_pad($this->colorize('  [g]', 'label') . ' - Toggle warp gates', $col2Width) .
-            $this->colorize('  [ESC/q]', 'label') . ' - Back/Quit'
-        );
-        $this->newLine();
-
-        // Enable non-blocking input
-        system('stty -icanon -echo');
+        $this->displayControls();
 
         $running = true;
         while ($running) {
-            $char = $this->readChar();
+            // In sector grid view, use line input for multi-char codes
+            if ($this->viewLevel === 0) {
+                $this->info("\nEnter command: ");
+                system('stty sane'); // Restore normal input
+                $input = trim(fgets(STDIN));
 
-            if ($char === false) {
-                usleep(50000); // 50ms
-                continue;
+                match (true) {
+                    $input === 'q' => $running = false,
+                    $input === 'h' => $this->toggleHidden(),
+                    $input === 'g' => $this->toggleGates(),
+                    $input === 'r' => $this->refreshView(),
+                    $input !== '' => $this->handleZoom($input),
+                    default => null,
+                };
+            } else {
+                // In other views, use single-char non-blocking input
+                system('stty -icanon -echo');
+
+                $char = $this->readChar();
+
+                if ($char === false) {
+                    usleep(50000); // 50ms
+                    continue;
+                }
+
+                match (true) {
+                    $char === 'q' || $char === "\033" => $running = $this->handleQuit(),
+                    $char === 'h' => $this->toggleHidden(),
+                    $char === 'g' => $this->toggleGates(),
+                    $char === 'r' => $this->refreshView(),
+                    $char === 't' => $this->handleTradingHub(),
+                    ctype_alnum($char) => $this->handleZoom($char),
+                    default => null,
+                };
+
+                system('stty sane');
             }
-
-            match (true) {
-                $char === 'q' || $char === "\033" => $running = $this->handleQuit(),
-                $char === 'h' => $this->toggleHidden(),
-                $char === 'g' => $this->toggleGates(),
-                $char === 'r' => $this->refreshView(),
-                $char === 't' => $this->handleTradingHub(),
-                ctype_alnum($char) => $this->handleZoom($char),
-                default => null,
-            };
         }
 
         // Restore terminal settings
         system('stty sane');
     }
 
-    private function readChar()
+    private function displayControls(): void
     {
-        $read   = [STDIN];
-        $write  = null;
-        $except = null;
-        $result = stream_select($read, $write, $except, 0, 100000);
+        $this->info("\n" . $this->colorize('Controls:', 'header'));
 
-        if ($result === false || $result === 0) {
-            return false;
+        $col1Width = 40;
+        $col2Width = 40;
+
+        if ($this->viewLevel === 0) {
+            // Sector grid controls
+            $this->line(
+                str_pad($this->colorize('  [0-9,a-z]', 'label') . ' - View sector', $col1Width) .
+                str_pad($this->colorize('  [h]', 'label') . ' - Toggle hidden POIs', $col2Width) .
+                $this->colorize('  [r]', 'label') . ' - Refresh view'
+            );
+            $this->line(
+                str_pad($this->colorize('  [g]', 'label') . '       - Toggle warp gates', $col1Width) .
+                str_pad('', $col2Width) .
+                $this->colorize('  [q]', 'label') . ' - Quit'
+            );
+        } elseif ($this->viewLevel === 1) {
+            // Sector detail controls
+            $this->line(
+                str_pad($this->colorize('  [0-9,a-z]', 'label') . ' - Zoom to star', $col1Width) .
+                str_pad($this->colorize('  [h]', 'label') . ' - Toggle hidden POIs', $col2Width) .
+                $this->colorize('  [r]', 'label') . ' - Refresh view'
+            );
+            $this->line(
+                str_pad($this->colorize('  [g]', 'label') . '       - Toggle warp gates', $col1Width) .
+                str_pad('', $col2Width) .
+                $this->colorize('  [ESC]', 'label') . ' - Back to sectors'
+            );
+        } else {
+            // Star system controls
+            $this->line(
+                str_pad($this->colorize('  [t]', 'label') . '       - View trading hub', $col1Width) .
+                str_pad($this->colorize('  [h]', 'label') . ' - Toggle hidden POIs', $col2Width) .
+                $this->colorize('  [r]', 'label') . ' - Refresh view'
+            );
+            $this->line(
+                str_pad('', $col1Width) .
+                str_pad('', $col2Width) .
+                $this->colorize('  [ESC]', 'label') . ' - Back to sector'
+            );
         }
 
-        return fgetc(STDIN);
+        $this->newLine();
     }
 
     private function handleQuit(): bool
     {
-        if ($this->currentView > 0) {
-            $this->currentView = 0;
+        // Navigate back through view levels
+        if ($this->viewLevel === 2) {
+            // Star system -> Sector detail
+            $this->viewLevel = 1;
+            $this->currentStarId = null;
+            $this->refreshView();
+            return true;
+        } elseif ($this->viewLevel === 1) {
+            // Sector detail -> Sector grid
+            $this->viewLevel = 0;
+            $this->currentSector = null;
             $this->refreshView();
             return true;
         }
 
+        // At sector grid level, quit
         $this->info("\n" . $this->colorize('Exiting galaxy viewer...', 'header'));
         return false;
     }
@@ -181,20 +254,64 @@ class GalaxyViewCommand extends Command
 
     private function renderCurrentView(): void
     {
-        if ($this->currentView === 0) {
+        if ($this->viewLevel === 0) {
+            // Sector grid view
+            if ($this->sectors->isEmpty()) {
+                $this->warn("\nNo sectors found. Run: php artisan galaxy:generate-sectors {$this->galaxy->id}\n");
+                $this->info("Falling back to full galaxy view...\n");
+                // Fallback to old galaxy view
+                $this->galaxyRenderer->render(
+                    $this->galaxy,
+                    $this->pois,
+                    $this->gates,
+                    $this->showGates,
+                    $this->poiMap,
+                    $this->pirates
+                );
+            } else {
+                $this->sectorRenderer->render(
+                    $this->galaxy,
+                    $this->sectors,
+                    $this->sectorMap
+                );
+            }
+        } elseif ($this->viewLevel === 1) {
+            // Sector detail view (stars in sector)
+            if (!$this->currentSector) {
+                $this->viewLevel = 0;
+                $this->refreshView();
+                return;
+            }
+
+            // Filter POIs by sector
+            $sectorPois = $this->pois->filter(fn($poi) => $poi->sector_id === $this->currentSector->id);
+
+            // Debug: Show count
+            $starCount = $sectorPois->filter(fn($poi) => $poi->type === \App\Enums\PointsOfInterest\PointOfInterestType::STAR)->count();
+            $this->info("Sector {$this->currentSector->name}: {$sectorPois->count()} POIs ({$starCount} stars)");
+
+            if ($sectorPois->isEmpty()) {
+                $this->warn("No POIs found in this sector. Press ESC to go back.");
+                $this->info("\nSector bounds: [{$this->currentSector->x_min}-{$this->currentSector->x_max}, {$this->currentSector->y_min}-{$this->currentSector->y_max}]");
+                return;
+            }
+
             $this->galaxyRenderer->render(
                 $this->galaxy,
-                $this->pois,
+                $sectorPois,
                 $this->gates,
                 $this->showGates,
-                $this->poiMap
+                $this->poiMap,
+                $this->pirates
             );
         } else {
-            $star = $this->pois->firstWhere('id', $this->currentView);
+            // Star system view
+            $star = $this->pois->firstWhere('id', $this->currentStarId);
             if ($star) {
                 $this->starSystemRenderer->render($star, $this->gates);
             } else {
-                $this->currentView = 0;
+                $this->viewLevel = 1;
+                $this->currentStarId = null;
                 $this->refreshView();
             }
         }
@@ -202,36 +319,58 @@ class GalaxyViewCommand extends Command
 
     private function handleZoom(string $char): void
     {
-        if ($this->currentView > 0) {
-            return; // Already zoomed
-        }
-
         $index = $this->charToIndex($char);
 
-        if (isset($this->poiMap[$index])) {
-            $poi = $this->poiMap[$index];
-
-            if ($poi->type === PointOfInterestType::STAR) {
-                $this->currentView = $poi->id;
+        if ($this->viewLevel === 0) {
+            // Zooming from sector grid to sector detail
+            if (isset($this->sectorMap[$index])) {
+                $this->currentSector = $this->sectorMap[$index];
+                $this->viewLevel = 1;
                 $this->refreshView();
+            }
+        } elseif ($this->viewLevel === 1) {
+            // Zooming from sector detail to star system
+            if (isset($this->poiMap[$index])) {
+                $poi = $this->poiMap[$index];
+
+                if ($poi->type === PointOfInterestType::STAR) {
+                    $this->currentStarId = $poi->id;
+                    $this->viewLevel = 2;
+                    $this->refreshView();
+                }
             }
         }
     }
 
     private function handleTradingHub(): void
     {
-        if ($this->currentView === 0) {
+        if ($this->viewLevel !== 2) {
             return; // Not viewing a star system
         }
 
-        $star = $this->pois->firstWhere('id', $this->currentView);
+        $star = $this->pois->firstWhere('id', $this->currentStarId);
         if (!$star) {
             return;
         }
 
+        // Check if star has direct trading hub
         $hub = $star->tradingHub;
+
+        // If not, look for trading hubs on planets in this system
         if (!$hub) {
-            return;
+            $planetsWithHubs = $star->children->filter(fn($planet) => $planet->tradingHub && $planet->tradingHub->is_active);
+
+            if ($planetsWithHubs->isEmpty()) {
+                return; // No trading hubs in this system
+            }
+
+            // If there's only one hub, use it
+            if ($planetsWithHubs->count() === 1) {
+                $hub = $planetsWithHubs->first()->tradingHub;
+            } else {
+                // Multiple hubs - let user choose (for now, just use the first one)
+                $hub = $planetsWithHubs->first()->tradingHub;
+            }
         }
 
         $this->tradingHubRenderer->render($hub);
@@ -254,21 +393,50 @@ class GalaxyViewCommand extends Command
         $this->refreshView();
     }
 
-    private function charToIndex(string $char): int
+    private function charToIndex(string $input): int
     {
-        // Available characters: 0-9, then a-z excluding reserved letters (g, h, r, t)
-        $availableChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        $input = strtolower(trim($input));
+
+        // Single character codes: 0-9, a-z (excluding g,h,r,t)
+        $singleChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
         $reservedLetters = ['g', 'h', 'r', 't'];
 
-        // Add letters a-z excluding reserved ones
         for ($i = 0; $i < 26; $i++) {
             $letter = chr(ord('a') + $i);
             if (!in_array($letter, $reservedLetters)) {
-                $availableChars[] = $letter;
+                $singleChars[] = $letter;
             }
         }
 
-        $index = array_search(strtolower($char), $availableChars, true);
-        return $index !== false ? $index : -1;
+        // Check single char
+        if (strlen($input) === 1) {
+            $index = array_search($input, $singleChars, true);
+            return $index !== false ? $index : -1;
+        }
+
+        // Check double char (aa, ab, ac, ...)
+        if (strlen($input) === 2) {
+            $letters = [];
+            for ($i = 0; $i < 26; $i++) {
+                $letter = chr(ord('a') + $i);
+                if (!in_array($letter, $reservedLetters)) {
+                    $letters[] = $letter;
+                }
+            }
+
+            $first = $input[0];
+            $second = $input[1];
+
+            $firstIndex = array_search($first, $letters);
+            $secondIndex = array_search($second, $letters);
+
+            if ($firstIndex !== false && $secondIndex !== false) {
+                $letterCount = count($letters);
+                $doubleIndex = ($firstIndex * $letterCount) + $secondIndex;
+                return count($singleChars) + $doubleIndex;
+            }
+        }
+
+        return -1;
     }
 }
