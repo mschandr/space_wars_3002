@@ -71,6 +71,22 @@ class TradingHub extends Model
     }
 
     /**
+     * Get all ships available at this trading hub
+     */
+    public function ships(): HasMany
+    {
+        return $this->hasMany(TradingHubShip::class);
+    }
+
+    /**
+     * Check if this hub sells ships
+     */
+    public function hasShipyard(): bool
+    {
+        return $this->ships()->where('quantity', '>', 0)->exists();
+    }
+
+    /**
      * Get the hub's tier based on gate count
      */
     public function getTier(): string

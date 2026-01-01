@@ -11,6 +11,12 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // do nothing for now
+        // Core game data
+        $this->call([
+            ShipTypesSeeder::class,
+            PirateFactionSeeder::class,
+            PirateCaptainSeeder::class,
+            WarpLanePirateSeeder::class,
+        ]);
     }
 }

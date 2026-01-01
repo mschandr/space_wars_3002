@@ -47,8 +47,11 @@ class StarSystemRenderer
 
         $this->command->line($this->colorize('  Star Classification: ', 'label') .
                            $this->colorize($stellarClass, $stellarClass));
-        $this->command->line($this->colorize('  Temperature: ', 'label') .
-                           number_format($temperature) . ' K');
+
+        // Format temperature only if it's numeric
+        $tempDisplay = is_numeric($temperature) ? number_format($temperature) . ' K' : $temperature;
+        $this->command->line($this->colorize('  Temperature: ', 'label') . $tempDisplay);
+
         $this->command->line($this->colorize('  Coordinates: ', 'label') .
                            "({$star->x}, {$star->y})");
         $this->command->newLine();
@@ -93,6 +96,17 @@ class StarSystemRenderer
         }
 
         $this->command->line($line);
+
+        // Render trading hub if present
+        if ($poi->tradingHub && $poi->tradingHub->is_active) {
+            $hub = $poi->tradingHub;
+            $hubLine = str_repeat(' ', $indent + 2) .
+                       $this->colorize('⚓', 'trade') . ' ' .
+                       $this->colorize('Trading Hub: ', 'label') .
+                       $this->colorize($hub->name, 'trade') . ' ' .
+                       $this->colorize("(Tier {$hub->tier})", 'dim');
+            $this->command->line($hubLine);
+        }
 
         // Render moons
         $moons = $poi->children()->orderBy('orbital_index')->get();

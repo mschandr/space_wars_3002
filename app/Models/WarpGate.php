@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class WarpGate extends Model
@@ -47,6 +48,11 @@ class WarpGate extends Model
     public function destinationPoi(): BelongsTo
     {
         return $this->belongsTo(PointOfInterest::class, 'destination_poi_id');
+    }
+
+    public function warpLanePirate(): HasOne
+    {
+        return $this->hasOne(WarpLanePirate::class, 'warp_gate_id');
     }
 
     public function calculateDistance(): float

@@ -5,12 +5,16 @@ namespace App\Console\Commands;
 use App\Console\Services\LocationValidator;
 use App\Console\Shops\ComponentShopHandler;
 use App\Console\Shops\MineralTradingHandler;
+use App\Console\Shops\PirateEncounterHandler;
 use App\Console\Shops\PlansShopHandler;
+use App\Console\Shops\ShipShopHandler;
+use App\Console\Shops\RepairShopHandler;
 use App\Console\Traits\ConsoleBoxRenderer;
 use App\Console\Traits\ConsoleColorizer;
 use App\Console\Traits\TerminalInputHandler;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Player;
+use App\Services\PirateEncounterService;
 use Illuminate\Console\Command;
 
 class PlayerInterfaceCommand extends Command
@@ -90,8 +94,10 @@ class PlayerInterfaceCommand extends Command
                 $char === 'c' => $this->showCargo(),
                 $char === 'p' => $this->showComponentShop(),
                 $char === 'l' => $this->showPlansShop(),
+                $char === 'm' => $this->showRepairShop(),
                 $char === 't' => $this->showTradingInterface(),
                 $char === 'w' => $this->showTravelInterface(),
+                $char === 'b' => $this->showShipShop(),
                 default => null,
             };
         }
@@ -298,6 +304,71 @@ class PlayerInterfaceCommand extends Command
         }
 
         $handler = new ComponentShopHandler($this, $this->termWidth);
+        $handler->show($this->player, $tradingHub);
+
+        system('stty sane');
+        $this->refreshInterface();
+    }
+
+    private function showRepairShop(): void
+    {
+        $tradingHub = LocationValidator::getTradingHub($this->player);
+
+        if (!$tradingHub || !$tradingHub->is_active) {
+            system('stty sane');
+            $this->clearScreen();
+            $this->error('No active trading hub at this location.');
+            $this->newLine();
+            $this->line($this->colorize('  Repair services are only available at trading hubs.', 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to continue...', 'dim'));
+            system('stty -icanon -echo');
+            fgetc(STDIN);
+            $this->refreshInterface();
+            return;
+        }
+
+        $handler = new RepairShopHandler($this, $this->termWidth);
+        $handler->show($this->player, $tradingHub);
+
+        system('stty sane');
+        $this->refreshInterface();
+    }
+
+    private function showShipShop(): void
+    {
+        $tradingHub = LocationValidator::getTradingHub($this->player);
+
+        if (!$tradingHub || !$tradingHub->is_active) {
+            system('stty sane');
+            $this->clearScreen();
+            $this->error('No active trading hub at this location.');
+            $this->newLine();
+            $this->line($this->colorize('  Shipyard services are only available at trading hubs.', 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to continue...', 'dim'));
+            system('stty -icanon -echo');
+            fgetc(STDIN);
+            $this->refreshInterface();
+            return;
+        }
+
+        // Check if this trading hub has a shipyard
+        if (!$tradingHub->hasShipyard()) {
+            system('stty sane');
+            $this->clearScreen();
+            $this->error('This trading hub does not have a shipyard.');
+            $this->newLine();
+            $this->line($this->colorize('  Not all trading hubs sell ships. Try a premium or major trading hub.', 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to continue...', 'dim'));
+            system('stty -icanon -echo');
+            fgetc(STDIN);
+            $this->refreshInterface();
+            return;
+        }
+
+        $handler = new ShipShopHandler($this, $this->termWidth);
         $handler->show($this->player, $tradingHub);
 
         system('stty sane');
@@ -563,6 +634,23 @@ class PlayerInterfaceCommand extends Command
 
         $this->line($line3_col1 . $line3_col1_padding . $line3_col2 . $line3_col2_padding . $line3_col3);
 
+        // Fourth row - Repair & Shipyard
+        if ($atTradingHub) {
+            $line4_col1 = $this->colorize('  [m]', 'label') . ' - Repair & Refit';
+        } else {
+            $line4_col1 = $this->colorize('  [m]', 'dim') . ' - ' . $this->colorize('Repair (Trading Hub only)', 'dim');
+        }
+        $line4_col1_plain = preg_replace('/\033\[[0-9;]*m/', '', $line4_col1);
+        $line4_col1_padding = str_repeat(' ', max(0, $col1Width - mb_strlen($line4_col1_plain)));
+
+        if ($atTradingHub) {
+            $line4_col2 = $this->colorize('  [b]', 'label') . ' - Browse ships (Shipyard)';
+        } else {
+            $line4_col2 = $this->colorize('  [b]', 'dim') . ' - ' . $this->colorize('Shipyard (Trading Hub only)', 'dim');
+        }
+
+        $this->line($line4_col1 . $line4_col1_padding . $line4_col2);
+
         $this->newLine();
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
     }
@@ -773,6 +861,59 @@ class PlayerInterfaceCommand extends Command
             $this->line($this->colorize('  Press any key to continue...', 'dim'));
             fgetc(STDIN);
             return;
+        }
+
+        // Check for pirate encounters
+        $pirateService = app(PirateEncounterService::class);
+        if ($pirateService->hasPiratePresence($gate)) {
+            $encounter = $pirateService->getEncounter($gate);
+
+            if ($encounter) {
+                $pirateHandler = new PirateEncounterHandler($this, $this->termWidth);
+                $outcome = $pirateHandler->handleEncounter($this->player, $encounter);
+
+                // Handle outcomes
+                if ($outcome === 'dead') {
+                    // Player died - ship destroyed, respawned at trading hub
+                    // Reload player data
+                    $this->player->refresh();
+                    $this->player->load('currentLocation.children', 'currentLocation.parent');
+
+                    // Don't update location - PlayerDeathService already did that
+                    // Show message and return to main interface
+                    $this->clearScreen();
+                    $this->line($this->colorize('  You have respawned at ' . $this->player->currentLocation->name, 'highlight'));
+                    $this->newLine();
+                    $this->line($this->colorize('  Press any key to continue...', 'dim'));
+                    fgetc(STDIN);
+                    return;
+                } elseif ($outcome === 'escaped') {
+                    // Successfully escaped - refund some fuel? Or just continue
+                    $this->clearScreen();
+                    $this->line($this->colorize('  ✓ You escaped the pirates!', 'highlight'));
+                    $this->newLine();
+                    $this->line($this->colorize('  Press any key to continue...', 'dim'));
+                    fgetc(STDIN);
+                    // Don't proceed with travel - stay at current location
+                    return;
+                } elseif ($outcome === 'surrendered') {
+                    // Surrendered - cargo/upgrades lost but can continue
+                    // Reload player and ship data
+                    $this->player->refresh();
+                    $this->player->load('activeShip');
+                    // Continue with travel
+                } elseif ($outcome === 'victory') {
+                    // Won the fight - reload data and continue
+                    $this->player->refresh();
+                    $this->player->load('activeShip');
+                    // Continue with travel
+                }
+            }
+        }
+
+        // Track last trading hub for respawn
+        if ($destination->tradingHub && $destination->tradingHub->is_active) {
+            $this->player->last_trading_hub_poi_id = $destination->id;
         }
 
         // Update player location

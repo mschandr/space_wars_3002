@@ -102,4 +102,9 @@ class Galaxy extends Model
     {
         return $this->hasMany(WarpGate::class);
     }
+
+    public function sectors(): HasMany
+    {
+        return $this->hasMany(Sector::class);
+    }
 }

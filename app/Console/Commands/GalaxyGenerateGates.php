@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
 use App\Services\WarpGate\WarpGateGenerator;
+use App\Services\WarpGate\IncrementalWarpGateGenerator;
 use Illuminate\Console\Command;
 
 class GalaxyGenerateGates extends Command
@@ -14,7 +15,8 @@ class GalaxyGenerateGates extends Command
                             {--adjacency=1.5 : Distance threshold for adjacent systems}
                             {--hidden-percentage=0.02 : Percentage of gates to mark as hidden (0.0-1.0)}
                             {--max-gates=6 : Maximum gates per star system}
-                            {--regenerate : Delete existing gates and regenerate}';
+                            {--regenerate : Delete existing gates and regenerate}
+                            {--incremental : Use incremental mode (recommended for 500+ stars)}';
 
     protected $description = 'Generate warp gates connecting star systems in a galaxy';
 
@@ -69,38 +71,77 @@ class GalaxyGenerateGates extends Command
             }
         }
 
-        // Create generator with options
-        $generator = new WarpGateGenerator(
-            adjacencyThreshold: (float) $this->option('adjacency'),
-            hiddenGatePercentage: (float) $this->option('hidden-percentage'),
-            maxGatesPerSystem: (int) $this->option('max-gates')
-        );
+        // Determine which generator to use
+        $useIncremental = $this->option('incremental') || $starCount >= 500;
 
-        // Generate gates
-        $this->info("Generating warp gates for galaxy: {$galaxy->name}");
-        $this->info("Star systems: {$starCount}");
+        if ($useIncremental) {
+            $this->info("Using incremental mode for {$starCount} star systems...");
+            $this->newLine();
 
-        $gates = $generator->generateGates($galaxy);
+            // Use incremental generator
+            $generator = new IncrementalWarpGateGenerator(
+                adjacencyThreshold: (float) $this->option('adjacency'),
+                hiddenGatePercentage: (float) $this->option('hidden-percentage'),
+                maxGatesPerSystem: (int) $this->option('max-gates'),
+                command: $this
+            );
 
-        // Display summary
-        $totalGates = $gates->count();
-        $hiddenGates = $gates->where('is_hidden', true)->count();
-        $activeGates = $totalGates - $hiddenGates;
-        $avgDistance = round($gates->avg('distance'), 2);
+            $result = $generator->generateGatesIncremental($galaxy);
 
-        $this->newLine();
-        $this->info("✅ Successfully generated warp gate network!");
-        $this->table(
-            ['Metric', 'Value'],
-            [
-                ['Total Gates', $totalGates],
-                ['Active Gates', $activeGates],
-                ['Hidden Gates', "{$hiddenGates} (" . round(($hiddenGates / $totalGates) * 100, 1) . "%)"],
-                ['Average Distance', $avgDistance],
-                ['Star Systems', $starCount],
-                ['Avg Gates/System', round($totalGates / $starCount, 1)],
-            ]
-        );
+            // Display summary
+            $this->newLine();
+            $this->info("✅ Successfully generated warp gate network!");
+            $this->newLine();
+
+            $totalGates = $galaxy->warpGates()->count();
+            $hiddenGates = $galaxy->warpGates()->where('is_hidden', true)->count();
+            $activeGates = $totalGates - $hiddenGates;
+
+            $this->table(
+                ['Metric', 'Value'],
+                [
+                    ['Stars Processed', $result['stars_processed']],
+                    ['Gates Created', $result['gates_created']],
+                    ['Gates Skipped', $result['gates_skipped']],
+                    ['Total Gates', $totalGates],
+                    ['Active Gates', $activeGates],
+                    ['Hidden Gates', "{$hiddenGates} (" . ($totalGates > 0 ? round(($hiddenGates / $totalGates) * 100, 1) : 0) . "%)"],
+                    ['Avg Gates/System', $totalGates > 0 ? round($totalGates / $starCount, 1) : 0],
+                ]
+            );
+        } else {
+            // Use original generator for small galaxies
+            $this->info("Generating warp gates for galaxy: {$galaxy->name}");
+            $this->info("Star systems: {$starCount}");
+
+            $generator = new WarpGateGenerator(
+                adjacencyThreshold: (float) $this->option('adjacency'),
+                hiddenGatePercentage: (float) $this->option('hidden-percentage'),
+                maxGatesPerSystem: (int) $this->option('max-gates')
+            );
+
+            $gates = $generator->generateGates($galaxy);
+
+            // Display summary
+            $totalGates = $gates->count();
+            $hiddenGates = $gates->where('is_hidden', true)->count();
+            $activeGates = $totalGates - $hiddenGates;
+            $avgDistance = round($gates->avg('distance'), 2);
+
+            $this->newLine();
+            $this->info("✅ Successfully generated warp gate network!");
+            $this->table(
+                ['Metric', 'Value'],
+                [
+                    ['Total Gates', $totalGates],
+                    ['Active Gates', $activeGates],
+                    ['Hidden Gates', "{$hiddenGates} (" . round(($hiddenGates / $totalGates) * 100, 1) . "%)"],
+                    ['Average Distance', $avgDistance],
+                    ['Star Systems', $starCount],
+                    ['Avg Gates/System', round($totalGates / $starCount, 1)],
+                ]
+            );
+        }
 
         return Command::SUCCESS;
     }
