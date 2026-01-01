@@ -213,7 +213,14 @@ class ShipTypesSeeder extends Seeder
         ];
 
         foreach ($ships as $shipData) {
-            Ship::create($shipData);
+            // Use updateOrCreate to prevent duplicates
+            Ship::updateOrCreate(
+                [
+                    'name' => $shipData['name'],
+                    'class' => $shipData['class'],
+                ],
+                $shipData
+            );
         }
     }
 }

@@ -57,10 +57,17 @@ class ShipShopHandler
 
             // Location and player info
             $this->line($this->colorize('  Trading Hub: ', 'label') . $this->colorize($tradingHub->name, 'trade'));
-            $this->line($this->colorize('  Current Ship: ', 'label') . $currentShip->name .
-                       ' (' . $this->colorize($currentShip->ship->name, 'dim') . ')');
-            $this->line($this->colorize('  Trade-In Value: ', 'label') .
-                       $this->colorize(number_format($this->getTradeInValue($currentShip), 2), 'trade') . ' credits');
+
+            if ($currentShip) {
+                $this->line($this->colorize('  Current Ship: ', 'label') . $currentShip->name .
+                           ' (' . $this->colorize($currentShip->ship->name, 'dim') . ')');
+                $this->line($this->colorize('  Trade-In Value: ', 'label') .
+                           $this->colorize(number_format($this->getTradeInValue($currentShip), 2), 'trade') . ' credits');
+            } else {
+                $this->line($this->colorize('  Current Ship: ', 'label') . $this->colorize('NONE', 'pirate'));
+                $this->line($this->colorize('  ⚠ You must purchase a ship to continue!', 'pirate'));
+            }
+
             $this->line($this->colorize('  Credits Available: ', 'label') .
                        $this->colorize(number_format($player->credits, 2), 'trade'));
             $this->newLine();
@@ -80,7 +87,8 @@ class ShipShopHandler
             foreach ($availableShips as $index => $inventory) {
                 $ship = $inventory->ship;
                 $number = $index + 1;
-                $netCost = $inventory->current_price - $this->getTradeInValue($currentShip);
+                $tradeInValue = $currentShip ? $this->getTradeInValue($currentShip) : 0;
+                $netCost = $inventory->current_price - $tradeInValue;
                 $canAfford = $player->credits >= $netCost;
 
                 $line = '  ' . $this->colorize("[$number]", 'label') . ' ' .
@@ -101,9 +109,15 @@ class ShipShopHandler
                 // Second line with pricing
                 $priceLine = '      ' .
                             $this->colorize('Price: ', 'dim') .
-                            $this->colorize(number_format($inventory->current_price, 2), 'trade') . ' credits  ' .
-                            $this->colorize('With Trade-In: ', 'dim') .
-                            $this->colorize(number_format($netCost, 2), $canAfford ? 'trade' : 'pirate') . ' credits  ';
+                            $this->colorize(number_format($inventory->current_price, 2), 'trade') . ' credits';
+
+                if ($currentShip) {
+                    $priceLine .= '  ' .
+                                $this->colorize('With Trade-In: ', 'dim') .
+                                $this->colorize(number_format($netCost, 2), $canAfford ? 'trade' : 'pirate') . ' credits';
+                }
+
+                $priceLine .= '  ';
 
                 if (!$canAfford) {
                     $priceLine .= $this->colorize('[INSUFFICIENT FUNDS]', 'pirate');
@@ -184,12 +198,12 @@ class ShipShopHandler
      */
     private function purchaseShip(
         Player $player,
-        PlayerShip $currentShip,
+        ?PlayerShip $currentShip,
         TradingHubShip $inventory,
         TradingHub $tradingHub
     ): void {
         $ship = $inventory->ship;
-        $tradeInValue = $this->getTradeInValue($currentShip);
+        $tradeInValue = $currentShip ? $this->getTradeInValue($currentShip) : 0;
         $netCost = $inventory->current_price - $tradeInValue;
 
         // Check requirements
@@ -218,16 +232,27 @@ class ShipShopHandler
                    str_repeat(' ', $this->termWidth - 28) .
                    $this->colorize('║', 'border'));
         $this->line($this->colorize('  ╠' . str_repeat('═', $this->termWidth - 4) . '╣', 'border'));
-        $this->line($this->colorize('  ║ ', 'border') . 'Trading In: ' . $currentShip->name .
-                   str_repeat(' ', $this->termWidth - 20 - strlen($currentShip->name)) .
-                   $this->colorize('║', 'border'));
-        $this->line($this->colorize('  ║ ', 'border') . 'Trade-In Value: ' .
-                   $this->colorize(number_format($tradeInValue, 2), 'trade') . ' credits' .
-                   str_repeat(' ', $this->termWidth - 35 - strlen(number_format($tradeInValue, 2))) .
-                   $this->colorize('║', 'border'));
-        $this->line($this->colorize('  ║ ', 'border') .
-                   str_repeat(' ', $this->termWidth - 4) .
-                   $this->colorize('║', 'border'));
+
+        if ($currentShip) {
+            $this->line($this->colorize('  ║ ', 'border') . 'Trading In: ' . $currentShip->name .
+                       str_repeat(' ', $this->termWidth - 20 - strlen($currentShip->name)) .
+                       $this->colorize('║', 'border'));
+            $this->line($this->colorize('  ║ ', 'border') . 'Trade-In Value: ' .
+                       $this->colorize(number_format($tradeInValue, 2), 'trade') . ' credits' .
+                       str_repeat(' ', $this->termWidth - 35 - strlen(number_format($tradeInValue, 2))) .
+                       $this->colorize('║', 'border'));
+            $this->line($this->colorize('  ║ ', 'border') .
+                       str_repeat(' ', $this->termWidth - 4) .
+                       $this->colorize('║', 'border'));
+        } else {
+            $this->line($this->colorize('  ║ ', 'border') . 'New Purchase (No Trade-In)' .
+                       str_repeat(' ', $this->termWidth - 32) .
+                       $this->colorize('║', 'border'));
+            $this->line($this->colorize('  ║ ', 'border') .
+                       str_repeat(' ', $this->termWidth - 4) .
+                       $this->colorize('║', 'border'));
+        }
+
         $this->line($this->colorize('  ║ ', 'border') . 'Purchasing: ' . $ship->name .
                    str_repeat(' ', $this->termWidth - 17 - strlen($ship->name)) .
                    $this->colorize('║', 'border'));
@@ -258,12 +283,17 @@ class ShipShopHandler
 
         // Process purchase
         \DB::transaction(function () use ($player, $currentShip, $ship, $inventory, $netCost, $tradingHub) {
-            // Delete old ship and all its cargo
-            $oldShipName = $currentShip->name;
-            $currentShip->cargo()->delete();
-            $currentShip->delete();
+            // Delete the ship being traded in (if player has one)
+            if ($currentShip) {
+                $currentShip->cargo()->delete();
+                $currentShip->delete();
+            }
 
-            // Create new ship
+            // Deactivate all other ships (for future armada support)
+            PlayerShip::where('player_id', $player->id)
+                ->update(['is_active' => false]);
+
+            // Create new ship (will be the active ship)
             $newShip = PlayerShip::create([
                 'uuid' => Str::uuid(),
                 'player_id' => $player->id,

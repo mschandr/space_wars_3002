@@ -60,6 +60,24 @@ class MineralTradingHandler
             $this->line('  Cargo Space: ' . $this->colorize("{$cargoUsed}/{$cargoTotal} units", 'highlight'));
             $this->newLine();
 
+            // Market Events (Drug Wars style!)
+            $eventService = app(\App\Services\MarketEventService::class);
+            $activeEvents = $eventService->getActiveEventsForHub($tradingHub);
+            if ($activeEvents->isNotEmpty()) {
+                $this->line($this->colorize('  📢 ACTIVE MARKET EVENTS:', 'highlight'));
+                foreach ($activeEvents->take(3) as $event) { // Show max 3 events
+                    $mineralName = $event->mineral ? $event->mineral->name : 'All Minerals';
+                    $multiplierPercent = (int)(($event->price_multiplier - 1) * 100);
+                    $indicator = $event->event_type->isPriceIncrease() ? '📈' : '📉';
+                    $color = $event->event_type->isPriceIncrease() ? 'pirate' : 'trade';
+
+                    $this->line('     ' . $indicator . ' ' .
+                               $this->colorize($event->description, $color) .
+                               ' ' . $this->colorize('[' . $event->getTimeRemainingString() . ']', 'dim'));
+                }
+                $this->newLine();
+            }
+
             // BUY section
             $this->line($this->colorize('  BUY FROM HUB (Hub sells to you):', 'header'));
             $this->newLine();
@@ -247,6 +265,12 @@ class MineralTradingHandler
         $ship->current_cargo += $quantity;
         $ship->save();
 
+        // Award XP for trading (small amount for purchases)
+        $xpEarned = (int)max(5, $quantity / 10); // 1 XP per 10 units, min 5
+        $oldLevel = $player->level;
+        $player->addExperience($xpEarned);
+        $newLevel = $player->level;
+
         // Success message
         $this->clearScreen();
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
@@ -255,6 +279,12 @@ class MineralTradingHandler
         $this->newLine();
         $this->line('  Purchased: ' . number_format($quantity) . ' units of ' . $mineral->name);
         $this->line('  Cost: ' . number_format($totalCost, 2) . ' credits');
+        $this->line('  XP Earned: ' . $this->colorize('+' . $xpEarned . ' XP', 'highlight'));
+
+        if ($newLevel > $oldLevel) {
+            $this->line('  ' . $this->colorize('🎉 LEVEL UP! You are now level ' . $newLevel . '!', 'trade'));
+        }
+
         $this->newLine();
         $this->line($this->colorize('  Press any key to continue...', 'dim'));
         fgetc(STDIN);
@@ -357,6 +387,12 @@ class MineralTradingHandler
         $ship->current_cargo -= $quantity;
         $ship->save();
 
+        // Award XP for trading (based on revenue/profit)
+        $xpEarned = (int)max(10, $totalRevenue / 100); // 1 XP per 100 credits revenue, min 10
+        $oldLevel = $player->level;
+        $player->addExperience($xpEarned);
+        $newLevel = $player->level;
+
         // Success message
         $this->clearScreen();
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
@@ -365,6 +401,12 @@ class MineralTradingHandler
         $this->newLine();
         $this->line('  Sold: ' . number_format($quantity) . ' units of ' . $mineral->name);
         $this->line('  Revenue: ' . number_format($totalRevenue, 2) . ' credits');
+        $this->line('  XP Earned: ' . $this->colorize('+' . $xpEarned . ' XP', 'highlight'));
+
+        if ($newLevel > $oldLevel) {
+            $this->line('  ' . $this->colorize('🎉 LEVEL UP! You are now level ' . $newLevel . '!', 'trade'));
+        }
+
         $this->newLine();
         $this->line($this->colorize('  Press any key to continue...', 'dim'));
         fgetc(STDIN);

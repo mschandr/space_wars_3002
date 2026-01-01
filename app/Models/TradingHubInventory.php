@@ -59,6 +59,11 @@ class TradingHubInventory extends Model
 
         $this->current_price = $baseValue * $demandMultiplier * $supplyMultiplier;
 
+        // Apply market event multipliers (Drug Wars style!)
+        $eventService = app(\App\Services\MarketEventService::class);
+        $eventMultiplier = $eventService->getCombinedMultiplier($this->mineral_id, $this->trading_hub_id);
+        $this->current_price = $this->current_price * $eventMultiplier;
+
         // Hub buys at lower price, sells at higher price (spread)
         $spread = 0.15; // 15% spread
         $this->buy_price = $this->current_price * (1 - $spread);
