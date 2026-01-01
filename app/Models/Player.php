@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -10,6 +11,7 @@ use Illuminate\Support\Str;
 
 class Player extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'uuid',
         'user_id',

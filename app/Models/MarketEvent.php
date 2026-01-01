@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use App\Enums\MarketEventType;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class MarketEvent extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'uuid',
         'mineral_id',

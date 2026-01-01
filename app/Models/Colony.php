@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,6 +10,7 @@ use Illuminate\Support\Str;
 
 class Colony extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'uuid',
         'player_id',
@@ -21,6 +23,7 @@ class Colony extends Model
         'food_storage',
         'mineral_production',
         'mineral_storage',
+        'quantium_storage',
         'credits_per_cycle',
         'development_level',
         'habitability_rating',
@@ -37,6 +40,7 @@ class Colony extends Model
         'food_storage' => 'integer',
         'mineral_production' => 'integer',
         'mineral_storage' => 'integer',
+        'quantium_storage' => 'integer',
         'credits_per_cycle' => 'integer',
         'development_level' => 'integer',
         'habitability_rating' => 'decimal:2',
