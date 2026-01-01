@@ -110,7 +110,7 @@ class PirateEncounterService
     public function initiateCombat(Player $player, PlayerShip $playerShip, Collection $pirateFleet): array
     {
         // Resolve combat
-        $combatResult = $this->combatService->resolveCombat($playerShip, $pirateFleet);
+        $combatResult = $this->combatService->resolveCombat($player, $playerShip, $pirateFleet);
 
         // If player won, collect salvage
         if ($combatResult['victory']) {

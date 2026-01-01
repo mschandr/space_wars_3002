@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Player;
 use App\Models\PlayerShip;
 use Illuminate\Support\Collection;
 
@@ -17,11 +18,12 @@ class CombatResolutionService
      *
      * Damage = weapons ± 20% randomization
      *
+     * @param Player $player
      * @param PlayerShip $playerShip
      * @param Collection $pirateFleet Collection of PirateFleet models
-     * @return array ['victory' => bool, 'log' => array, 'player_hull_remaining' => int]
+     * @return array ['victory' => bool, 'log' => array, 'player_hull_remaining' => int, 'xp_earned' => int]
      */
-    public function resolveCombat(PlayerShip $playerShip, Collection $pirateFleet): array
+    public function resolveCombat(Player $player, PlayerShip $playerShip, Collection $pirateFleet): array
     {
         $combatLog = [];
         $round = 1;
@@ -104,10 +106,19 @@ class CombatResolutionService
 
         // Determine outcome
         $victory = $playerShip->hull > 0;
+        $xpEarned = 0;
 
         $combatLog[] = ['type' => 'divider', 'message' => str_repeat('─', 50)];
 
         if ($victory) {
+            // Calculate XP reward based on difficulty
+            $xpEarned = $this->calculateCombatXP($pirateFleet);
+
+            // Award XP to player
+            $oldLevel = $player->level;
+            $player->addExperience($xpEarned);
+            $newLevel = $player->level;
+
             $combatLog[] = [
                 'type' => 'victory',
                 'message' => "🏆 VICTORY! All enemy ships destroyed!",
@@ -116,6 +127,18 @@ class CombatResolutionService
                 'type' => 'info',
                 'message' => "Your remaining hull: {$playerShip->hull}/{$playerShip->max_hull}",
             ];
+            $combatLog[] = [
+                'type' => 'xp',
+                'message' => "⭐ +{$xpEarned} XP earned!",
+            ];
+
+            // Check for level up
+            if ($newLevel > $oldLevel) {
+                $combatLog[] = [
+                    'type' => 'levelup',
+                    'message' => "🎉 LEVEL UP! You are now level {$newLevel}!",
+                ];
+            }
         } else {
             $combatLog[] = [
                 'type' => 'defeat',
@@ -131,6 +154,7 @@ class CombatResolutionService
             'log' => $combatLog,
             'player_hull_remaining' => $playerShip->hull,
             'rounds' => $round - 1,
+            'xp_earned' => $xpEarned,
         ];
     }
 
@@ -191,5 +215,34 @@ class CombatResolutionService
             'enemy_weapons' => $totalPiratePower,
             'enemy_count' => $pirateCount,
         ];
+    }
+
+    /**
+     * Calculate XP reward for combat victory
+     *
+     * Formula:
+     * - Base: 50 XP per pirate
+     * - Difficulty bonus: Based on enemy weapons power
+     * - Fleet size bonus: Extra XP for larger fleets
+     */
+    private function calculateCombatXP(Collection $pirateFleet): int
+    {
+        $baseXPPerPirate = 50;
+        $pirateCount = $pirateFleet->count();
+        $totalWeapons = $pirateFleet->sum('weapons');
+
+        // Base XP from number of pirates
+        $baseXP = $baseXPPerPirate * $pirateCount;
+
+        // Difficulty bonus based on average weapons power per pirate
+        $avgWeapons = $totalWeapons / max(1, $pirateCount);
+        $difficultyBonus = (int)($avgWeapons / 2); // 1 XP per 2 weapons points
+
+        // Fleet size bonus (more dangerous to fight multiple ships)
+        $fleetBonus = ($pirateCount - 1) * 25; // 25 XP per additional ship
+
+        $totalXP = $baseXP + $difficultyBonus + $fleetBonus;
+
+        return max(25, $totalXP); // Minimum 25 XP for any victory
     }
 }

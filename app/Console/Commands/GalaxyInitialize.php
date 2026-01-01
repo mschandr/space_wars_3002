@@ -6,6 +6,7 @@ use App\Enums\Galaxy\GalaxyDistributionMethod;
 use App\Enums\Galaxy\GalaxyRandomEngine;
 use App\Enums\Galaxy\GalaxyStatus;
 use App\Models\Galaxy;
+use App\Services\MarketEventGenerator;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
@@ -121,6 +122,10 @@ class GalaxyInitialize extends Command
             $this->warn('⊘ Skipping trading hub inventory population');
         }
 
+        // Step 7: Generate Initial Market Events
+        $this->step(7, 'Generating Initial Market Events');
+        $this->generateInitialMarketEvents();
+
         // Final Summary
         $this->newLine();
         $this->info('════════════════════════════════════════════════════════════════');
@@ -196,6 +201,10 @@ class GalaxyInitialize extends Command
             $query->where('galaxy_id', $this->galaxy->id);
         })->sum('quantity');
 
+        $marketEventCount = \App\Models\MarketEvent::where('is_active', true)
+            ->where('started_at', '<=', now())
+            ->count();
+
         $this->table(
             ['Component', 'Count'],
             [
@@ -209,6 +218,7 @@ class GalaxyInitialize extends Command
                 ['Pirate Encounters', number_format($pirateCount)],
                 ['Trading Hubs', number_format($tradingHubCount)],
                 ['Ships in Stock', number_format($shipInventoryCount)],
+                ['Active Market Events', number_format($marketEventCount)],
             ]
         );
 
@@ -216,5 +226,45 @@ class GalaxyInitialize extends Command
         $this->info("🌌 Galaxy '{$this->galaxy->name}' is ready for exploration!");
         $this->info("   View it with: php artisan galaxy:view {$this->galaxy->id}");
         $this->newLine();
+    }
+
+    private function generateInitialMarketEvents(): void
+    {
+        $generator = app(MarketEventGenerator::class);
+
+        // Generate 3-5 initial market events for the new galaxy
+        $eventCount = rand(3, 5);
+        $this->info("Generating {$eventCount} initial market events...");
+
+        $progressBar = $this->output->createProgressBar($eventCount);
+        $progressBar->start();
+
+        $generated = 0;
+        for ($i = 0; $i < $eventCount; $i++) {
+            $event = $generator->generateRandomEvent(1.0); // 100% probability
+            if ($event) {
+                $generated++;
+            }
+            $progressBar->advance();
+        }
+
+        $progressBar->finish();
+        $this->newLine();
+        $this->newLine();
+
+        if ($generated > 0) {
+            $this->info("✅ Created {$generated} market event(s)");
+
+            // Show the generated events
+            $events = \App\Models\MarketEvent::where('is_active', true)
+                ->orderBy('created_at', 'desc')
+                ->take($generated)
+                ->get();
+
+            foreach ($events as $event) {
+                $mineralName = $event->mineral ? $event->mineral->name : 'All Minerals';
+                $this->line("  • {$event->event_type->getDisplayName()}: {$mineralName} ({$event->price_multiplier}x for {$event->getDurationString()})");
+            }
+        }
     }
 }

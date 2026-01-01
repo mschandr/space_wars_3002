@@ -79,6 +79,15 @@ class PlayerInterfaceCommand extends Command
 
         $running = true;
         while ($running) {
+            // Check if player lost their ship (e.g., from pirate combat)
+            $this->player->refresh();
+            if (!$this->player->activeShip) {
+                // Restore terminal and handle no ship scenario
+                system('stty sane');
+                $this->handleNoShip();
+                return;
+            }
+
             $char = $this->readChar();
 
             if ($char === false) {
@@ -502,9 +511,6 @@ class PlayerInterfaceCommand extends Command
         $output = '';
         $ship = $this->player->activeShip;
 
-        // Regenerate fuel before displaying
-        $ship->regenerateFuel();
-
         $headerText = 'SHIP STATUS';
         $headerPadding = 57 - mb_strlen($headerText);
 
@@ -514,6 +520,19 @@ class PlayerInterfaceCommand extends Command
                    str_repeat(' ', $headerPadding) .
                    $this->colorize('║', 'border') . "\n";
         $output .= $this->colorize('╠' . str_repeat('═', 58) . '╣', 'border') . "\n";
+
+        // Check if player has a ship
+        if (!$ship) {
+            $output .= $this->formatBoxLine($this->colorize('⚠ NO ACTIVE SHIP', 'pirate'));
+            $output .= $this->formatBoxLine('');
+            $output .= $this->formatBoxLine('You need to purchase a ship');
+            $output .= $this->formatBoxLine('to continue your journey.');
+            $output .= $this->colorize('╚' . str_repeat('═', 58) . '╝', 'border') . "\n";
+            return $output;
+        }
+
+        // Regenerate fuel before displaying
+        $ship->regenerateFuel();
 
         $output .= $this->formatBoxLine('Name: ' . ($ship->name ?? 'Unnamed'));
         $output .= $this->formatBoxLine('Class: ' . $ship->ship->class);
@@ -820,13 +839,14 @@ class PlayerInterfaceCommand extends Command
 
     private function calculateFuelCost(float $distance, $ship): int
     {
-        // Base fuel cost is distance divided by 10
-        $baseCost = (int) ceil($distance / 10);
+        // Base fuel cost uses actual Euclidean distance
+        // Distance is already calculated as sqrt((x2-x1)^2 + (y2-y1)^2)
+        $baseCost = ceil($distance);
 
         // Warp drive reduces fuel consumption
-        // Higher warp drive = better efficiency
-        $efficiency = $ship->warp_drive ?? 1;
-        $fuelCost = max(1, (int) floor($baseCost / $efficiency));
+        // Higher warp drive = better efficiency (20% reduction per level)
+        $efficiency = 1 + (($ship->warp_drive ?? 1) - 1) * 0.2;
+        $fuelCost = max(1, (int) ceil($baseCost / $efficiency));
 
         return $fuelCost;
     }
@@ -920,6 +940,12 @@ class PlayerInterfaceCommand extends Command
         $this->player->current_poi_id = $destination->id;
         $this->player->save();
 
+        // Award XP for exploration/travel
+        $xpEarned = (int)max(10, $distance * 5); // 5 XP per unit distance, min 10
+        $oldLevel = $this->player->level;
+        $this->player->addExperience($xpEarned);
+        $newLevel = $this->player->level;
+
         // Reload location relationship
         $this->player->load('currentLocation.children', 'currentLocation.parent');
 
@@ -929,8 +955,123 @@ class PlayerInterfaceCommand extends Command
         $this->newLine();
         $this->line('  You have arrived at: ' . $this->colorize($destination->name, 'highlight'));
         $this->line('  Fuel remaining: ' . $this->colorize($ship->current_fuel, 'trade'));
+        $this->line('  XP Earned: ' . $this->colorize('+' . $xpEarned . ' XP', 'highlight'));
+
+        if ($newLevel > $oldLevel) {
+            $this->line('  ' . $this->colorize('🎉 LEVEL UP! You are now level ' . $newLevel . '!', 'trade'));
+        }
+
         $this->newLine();
         $this->line($this->colorize('  Press any key to continue...', 'dim'));
         fgetc(STDIN);
+    }
+
+    private function handleNoShip(): int
+    {
+        system('stty sane');
+        $this->clearScreen();
+
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line($this->colorize('  ⚠ NO ACTIVE SHIP DETECTED', 'pirate'));
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->newLine();
+
+        $this->line($this->colorize('  You currently have no ship!', 'dim'));
+        $this->line($this->colorize('  Location: ', 'label') . $this->player->currentLocation->name);
+        $this->line($this->colorize('  Credits: ', 'label') . $this->colorize(number_format($this->player->credits, 2), 'trade'));
+        $this->newLine();
+
+        // Check if at trading hub with shipyard
+        $tradingHub = LocationValidator::getTradingHub($this->player);
+
+        if ($tradingHub && $tradingHub->is_active && $tradingHub->hasShipyard()) {
+            // At a shipyard - let them buy a ship
+            $this->line($this->colorize('  Fortunately, you are at a trading hub with a shipyard!', 'highlight'));
+            $this->line($this->colorize('  You must purchase a new ship to continue.', 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to enter the shipyard...', 'label'));
+            fgetc(STDIN);
+
+            // Show ship shop
+            $handler = new ShipShopHandler($this, $this->termWidth);
+            $handler->show($this->player, $tradingHub);
+
+            // Check if they now have a ship
+            $this->player->refresh();
+            if (!$this->player->activeShip) {
+                $this->newLine();
+                $this->error('  You still have no ship. You must purchase a ship to continue.');
+                $this->newLine();
+                $this->line($this->colorize('  Press any key to exit...', 'dim'));
+                fgetc(STDIN);
+                return 1;
+            }
+
+            // They bought a ship! Continue to main interface
+            $this->info('  ✓ Ship acquired! Launching player interface...');
+            sleep(1);
+
+            $this->renderInterface();
+            $this->interactiveLoop();
+            return 0;
+        }
+
+        // Not at a shipyard - give them a free starter ship
+        $this->warn('  You are not at a trading hub with a shipyard.');
+        $this->newLine();
+        $this->info('  Emergency protocol activated: Issuing free starter ship...');
+        $this->newLine();
+
+        // Get the cheapest ship (Sparrow-class)
+        $starterShip = \App\Models\Ship::where('is_available', true)
+            ->orderBy('base_price', 'asc')
+            ->first();
+
+        if (!$starterShip) {
+            $this->error('  ERROR: No ships available in database!');
+            return 1;
+        }
+
+        // Deactivate all existing ships (for future armada support - don't delete them)
+        \App\Models\PlayerShip::where('player_id', $this->player->id)
+            ->update(['is_active' => false]);
+
+        // Create new player ship (will be the active ship)
+        $newShip = \App\Models\PlayerShip::create([
+            'uuid' => \Illuminate\Support\Str::uuid(),
+            'player_id' => $this->player->id,
+            'ship_id' => $starterShip->id,
+            'name' => $starterShip->name,
+            'current_fuel' => $starterShip->attributes['max_fuel'] ?? 100,
+            'max_fuel' => $starterShip->attributes['max_fuel'] ?? 100,
+            'fuel_last_updated_at' => now(),
+            'hull' => $starterShip->hull_strength,
+            'max_hull' => $starterShip->hull_strength,
+            'weapons' => $starterShip->attributes['starting_weapons'] ?? 10,
+            'cargo_hold' => $starterShip->cargo_capacity,
+            'sensors' => $starterShip->attributes['starting_sensors'] ?? 1,
+            'warp_drive' => $starterShip->attributes['starting_warp_drive'] ?? 1,
+            'current_cargo' => 0,
+            'is_active' => true,
+            'status' => 'operational',
+        ]);
+
+        $this->info("  ✓ {$starterShip->name} issued!");
+        $this->newLine();
+        $this->line($this->colorize('  Press any key to continue...', 'dim'));
+        fgetc(STDIN);
+
+        // Reload player with new ship
+        $this->player->refresh();
+        $this->player->load([
+            'currentLocation.children',
+            'currentLocation.parent',
+            'activeShip.ship',
+            'activeShip.cargo.mineral'
+        ]);
+
+        $this->renderInterface();
+        $this->interactiveLoop();
+        return 0;
     }
 }
