@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Models;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 use App\Enums\Trading\MineralRarity;
 use Illuminate\Database\Eloquent\Model;
@@ -9,6 +10,7 @@ use Illuminate\Support\Str;
 
 class Mineral extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'uuid',
         'name',

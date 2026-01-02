@@ -9,12 +9,13 @@ use App\Faker\Common\GalaxySuffixes;
 use App\Faker\Common\RomanNumerals;
 use App\Faker\Providers\GalaxyNameProvider;
 use App\Traits\HasUuidAndVersion;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Galaxy extends Model
 {
-    use HasUuidAndVersion;
+    use HasFactory, HasUuidAndVersion;
 
     protected $fillable = [
         'galaxy_uuid', 'name', 'description', 'width', 'height', 'seed', 'distribution_method',

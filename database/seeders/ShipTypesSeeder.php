@@ -210,6 +210,32 @@ class ShipTypesSeeder extends Seeder
                 ],
                 'is_available' => true,
             ],
+            [
+                'name' => 'Colonist-class Transport',
+                'class' => 'Colony Ship',
+                'description' => 'A specialized vessel designed to transport colonists and supplies to establish new settlements. Equipped with cryogenic pods and modular habitat sections.',
+                'base_price' => 45000.00,
+                'cargo_capacity' => 150,
+                'speed' => 90,
+                'hull_strength' => 120,
+                'shield_strength' => 60,
+                'weapon_slots' => 1,
+                'utility_slots' => 4,
+                'rarity' => 'uncommon',
+                'requirements' => [
+                    'level' => 8,
+                ],
+                'attributes' => [
+                    'max_fuel' => 200,
+                    'starting_weapons' => 10,
+                    'starting_sensors' => 2,
+                    'starting_warp_drive' => 2,
+                    'colonist_capacity' => 500,
+                    'is_colony_ship' => true,
+                    'colony_supplies_capacity' => 100,
+                ],
+                'is_available' => true,
+            ],
         ];
 
         foreach ($ships as $shipData) {
