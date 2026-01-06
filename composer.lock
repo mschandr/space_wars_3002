@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b65efac84b69fac1a2ed9db8cbac43e4",
+    "content-hash": "c2757a3194b136a2a5cb3b8964194902",
     "packages": [
         {
             "name": "brick/math",
@@ -6159,6 +6159,56 @@
             "time": "2025-12-04T18:11:45+00:00"
         },
         {
+            "name": "terminalui/framework",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "../terminalui-framework",
+                "reference": "68edc2c1e3e5c2076042a9380d5185a446a65e08"
+            },
+            "require": {
+                "ext-pcntl": "*",
+                "ext-posix": "*",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "TerminalUI\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "TerminalUI\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Space Wars Team",
+                    "email": "dev@spacewars.dev"
+                }
+            ],
+            "description": "A powerful, CSS-like TUI (Text User Interface) framework for PHP - inspired by Turbo Vision",
+            "keywords": [
+                "cli",
+                "console",
+                "ncurses",
+                "terminal",
+                "tui",
+                "turbo-vision",
+                "ui"
+            ],
+            "transport-options": {
+                "relative": true
+            }
+        },
+        {
             "name": "tijsverkoyen/css-to-inline-styles",
             "version": "v2.4.0",
             "source": {
@@ -8668,7 +8718,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "terminalui/framework": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

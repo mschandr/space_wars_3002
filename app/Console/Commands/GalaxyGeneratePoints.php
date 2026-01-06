@@ -5,8 +5,13 @@ namespace App\Console\Commands;
 use App\Enums\Galaxy\GalaxyDistributionMethod;
 use App\Enums\Galaxy\GalaxyRandomEngine;
 use App\Generators\Points\HaltonSequence;
+use App\Generators\Points\LatinHypercube;
 use App\Generators\Points\PoissonDisk;
+use App\Generators\Points\R2Sequence;
 use App\Generators\Points\RandomScatter;
+use App\Generators\Points\StratifiedGrid;
+use App\Generators\Points\UniformRandom;
+use App\Generators\Points\VogelsSpiral;
 use App\Models\Galaxy;
 use Illuminate\Console\Command;
 use Random\RandomException;
@@ -14,7 +19,7 @@ use Random\RandomException;
 class GalaxyGeneratePoints extends Command
 {
     protected $signature = 'galaxy:generate-points
-                            {--method=scatter : Distribution method (scatter, poisson, halton)}
+                            {--method=scatter : Distribution method (scatter, poisson, halton, vogel, stratified, latin, r2, uniform)}
                             {--width=1000 : Width of the galaxy map}
                             {--height=1000 : Height of the galaxy map}
                             {--count=50 : Number of points of interest}
@@ -47,10 +52,15 @@ class GalaxyGeneratePoints extends Command
 
         // Pick generator
         $generator = match ($method) {
-            'scatter' => new RandomScatter($width, $height, $count, 0.75, $seed, [], $engine),
-            'poisson' => new PoissonDisk($width, $height, $count, 0.75, $seed, [], $engine),
-            'halton'  => new HaltonSequence($width, $height, $count, 0.75, $seed, [], $engine),
-            default   => throw new \InvalidArgumentException("Unknown method: {$method}"),
+            'scatter'    => new RandomScatter($width, $height, $count, 0.75, $seed, [], $engine),
+            'poisson'    => new PoissonDisk($width, $height, $count, 0.75, $seed, [], $engine),
+            'halton'     => new HaltonSequence($width, $height, $count, 0.75, $seed, [], $engine),
+            'vogel'      => new VogelsSpiral($width, $height, $count, 0.75, $seed, [], $engine),
+            'stratified' => new StratifiedGrid($width, $height, $count, 0.75, $seed, [], $engine),
+            'latin'      => new LatinHypercube($width, $height, $count, 0.75, $seed, [], $engine),
+            'r2'         => new R2Sequence($width, $height, $count, 0.75, $seed, [], $engine),
+            'uniform'    => new UniformRandom($width, $height, $count, 0.75, $seed, [], $engine),
+            default      => throw new \InvalidArgumentException("Unknown method: {$method}"),
         };
 
         $points = $generator->sample($galaxy);

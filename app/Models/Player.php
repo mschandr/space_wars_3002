@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -187,5 +188,67 @@ class Player extends Model
         }
 
         return true;
+    }
+
+    /**
+     * Check if player is currently in the mirror universe
+     */
+    public function isInMirrorUniverse(): bool
+    {
+        $currentGalaxy = $this->currentLocation?->galaxy;
+
+        return $currentGalaxy ? $currentGalaxy->isMirrorUniverse() : false;
+    }
+
+    /**
+     * Check if player can return from mirror universe (cooldown check)
+     */
+    public function canReturnFromMirror(): bool
+    {
+        if (!$this->isInMirrorUniverse()) {
+            return false;
+        }
+
+        if (!$this->mirror_universe_entry_time) {
+            return true; // No entry time recorded, allow return
+        }
+
+        $cooldownHours = config('game_config.mirror_universe.return_cooldown_hours', 24);
+        $canReturnAt = Carbon::parse($this->mirror_universe_entry_time)->addHours($cooldownHours);
+
+        return now()->greaterThanOrEqualTo($canReturnAt);
+    }
+
+    /**
+     * Get time remaining until can return from mirror universe
+     */
+    public function getMirrorCooldownRemaining(): ?Carbon
+    {
+        if (!$this->isInMirrorUniverse() || !$this->mirror_universe_entry_time) {
+            return null;
+        }
+
+        $cooldownHours = config('game_config.mirror_universe.return_cooldown_hours', 24);
+        $canReturnAt = Carbon::parse($this->mirror_universe_entry_time)->addHours($cooldownHours);
+
+        return $canReturnAt->isFuture() ? $canReturnAt : null;
+    }
+
+    /**
+     * Record mirror universe entry
+     */
+    public function enterMirrorUniverse(): void
+    {
+        $this->mirror_universe_entry_time = now();
+        $this->save();
+    }
+
+    /**
+     * Clear mirror universe entry time
+     */
+    public function exitMirrorUniverse(): void
+    {
+        $this->mirror_universe_entry_time = null;
+        $this->save();
     }
 }

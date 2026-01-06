@@ -73,6 +73,23 @@ class TravelService
             ];
         }
 
+        // Check if this is a mirror universe gate
+        if ($gate->isMirrorGate()) {
+            $mirrorService = app(MirrorUniverseService::class);
+            $canTraverse = $mirrorService->canTraverseMirrorGate($player, $gate);
+
+            if (!$canTraverse['can_traverse']) {
+                return [
+                    'success' => false,
+                    'message' => $canTraverse['reason'],
+                    'cooldown_until' => $canTraverse['cooldown_until'] ?? null,
+                    'xp_earned' => 0,
+                    'old_level' => $player->level,
+                    'new_level' => $player->level,
+                ];
+            }
+        }
+
         $destination = $gate->destinationPoi;
         $distance = $gate->distance ?? $gate->calculateDistance();
         $fuelCost = $this->calculateFuelCost($distance, $ship);
@@ -101,6 +118,19 @@ class TravelService
             $player->last_trading_hub_poi_id = $destination->id;
         }
 
+        // Handle mirror universe entry/exit
+        $message = 'Travel successful';
+        $mirrorGate = false;
+        if ($gate->gate_type === 'mirror_entry') {
+            $player->enterMirrorUniverse();
+            $message = '⚡ QUANTUM SHIFT DETECTED ⚡ You have entered the Mirror Universe!';
+            $mirrorGate = true;
+        } elseif ($gate->gate_type === 'mirror_return') {
+            $player->exitMirrorUniverse();
+            $message = '⚡ REALITY STABILIZING ⚡ You have returned to the Prime Universe';
+            $mirrorGate = true;
+        }
+
         $player->save();
 
         // Award XP
@@ -111,7 +141,7 @@ class TravelService
 
         return [
             'success' => true,
-            'message' => 'Travel successful',
+            'message' => $message,
             'destination' => $destination->name,
             'distance' => $distance,
             'fuel_cost' => $fuelCost,
@@ -120,6 +150,8 @@ class TravelService
             'old_level' => $oldLevel,
             'new_level' => $newLevel,
             'leveled_up' => $newLevel > $oldLevel,
+            'mirror_gate' => $mirrorGate,
+            'universe' => $player->isInMirrorUniverse() ? 'mirror' : 'prime',
         ];
     }
 }

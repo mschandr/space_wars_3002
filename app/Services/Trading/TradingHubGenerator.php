@@ -17,14 +17,21 @@ class TradingHubGenerator
     private float $salvageYardProbability;
     private float $plansProbability;
 
+    private float $hubSpawnProbability;
+    private int $minHubDistance;
+
     public function __construct(
-        int $minGatesForHub = 2,
+        int $minGatesForHub = 3,           // Increased from 2 to 3
         float $salvageYardProbability = 0.3,
-        float $plansProbability = 0.05
+        float $plansProbability = 0.05,
+        float $hubSpawnProbability = 0.25, // Only 25% of eligible locations get hubs
+        int $minHubDistance = 100           // Minimum distance between hubs
     ) {
         $this->minGatesForHub = $minGatesForHub;
         $this->salvageYardProbability = $salvageYardProbability;
         $this->plansProbability = $plansProbability;
+        $this->hubSpawnProbability = $hubSpawnProbability;
+        $this->minHubDistance = $minHubDistance;
     }
 
     /**
@@ -51,6 +58,8 @@ class TradingHubGenerator
     /**
      * Identify POIs that qualify as trading hub locations
      * (locations where multiple warp gates intersect)
+     *
+     * Uses probability and spacing to keep universe mostly empty for colonization
      */
     private function identifyHubLocations(Galaxy $galaxy): Collection
     {
@@ -59,16 +68,62 @@ class TradingHubGenerator
             ->with(['outgoingGates', 'incomingGates'])
             ->get();
 
-        return $pois->filter(function ($poi) {
-            $totalGates = $poi->outgoingGates->count() + $poi->incomingGates->count();
-            return $totalGates >= $this->minGatesForHub * 2; // *2 because gates are bidirectional
+        // Filter by gate count and apply probability
+        $candidates = $pois->filter(function ($poi) {
+            $uniqueGateCount = $poi->outgoingGates->count();
+
+            // Must have minimum gates
+            if ($uniqueGateCount < $this->minGatesForHub) {
+                return false;
+            }
+
+            // Probability check - only spawn hubs at X% of eligible locations
+            // Higher gate count = higher probability (major trade routes)
+            $probability = min(1.0, $this->hubSpawnProbability * ($uniqueGateCount / $this->minGatesForHub));
+            return (mt_rand() / mt_getrandmax()) < $probability;
         })->map(function ($poi) {
-            $uniqueGateCount = $poi->outgoingGates->count(); // Only count outgoing to avoid double-counting
+            $uniqueGateCount = $poi->outgoingGates->count();
             return [
                 'poi' => $poi,
                 'gate_count' => $uniqueGateCount,
             ];
         });
+
+        // Apply spacing filter - remove hubs too close to each other
+        return $this->applyMinimumSpacing($candidates);
+    }
+
+    /**
+     * Filter hub locations to maintain minimum spacing
+     * Keeps universe mostly empty for colonization
+     */
+    private function applyMinimumSpacing(Collection $candidates): Collection
+    {
+        $selected = collect();
+
+        foreach ($candidates->sortByDesc('gate_count') as $candidate) { // Prioritize high-traffic hubs
+            $poi = $candidate['poi'];
+            $tooClose = false;
+
+            foreach ($selected as $existing) {
+                $existingPoi = $existing['poi'];
+                $distance = sqrt(
+                    pow($poi->x - $existingPoi->x, 2) +
+                    pow($poi->y - $existingPoi->y, 2)
+                );
+
+                if ($distance < $this->minHubDistance) {
+                    $tooClose = true;
+                    break;
+                }
+            }
+
+            if (!$tooClose) {
+                $selected->push($candidate);
+            }
+        }
+
+        return $selected;
     }
 
     /**

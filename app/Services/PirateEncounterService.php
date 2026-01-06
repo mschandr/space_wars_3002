@@ -55,19 +55,36 @@ class PirateEncounterService
         $captain = $encounter->captain;
         $faction = $captain->faction;
 
+        // Check if encounter is in mirror universe
+        $galaxy = $encounter->warpGate?->galaxy;
+        $isMirrorUniverse = $galaxy && $galaxy->isMirrorUniverse();
+
+        // Apply mirror universe difficulty boost
+        $difficultyTier = $encounter->difficulty_tier;
+        if ($isMirrorUniverse) {
+            $difficultyTier = (int) round($galaxy->applyMirrorMultiplier($difficultyTier, 'pirate_difficulty'));
+        }
+
         return [
             'captain_name' => $captain->getFullName(),
             'captain_title' => $captain->title,
             'faction_name' => $faction->getFullName(),
             'fleet_size' => $fleet->count(),
-            'difficulty_tier' => $encounter->difficulty_tier,
-            'fleet' => $fleet->map(function ($ship) {
+            'difficulty_tier' => $difficultyTier,
+            'is_mirror_universe' => $isMirrorUniverse,
+            'fleet' => $fleet->map(function ($ship) use ($galaxy, $isMirrorUniverse) {
+                // Boost pirate ship stats in mirror universe
+                $hullMultiplier = $isMirrorUniverse
+                    ? $galaxy->applyMirrorMultiplier(1.0, 'pirate_difficulty')
+                    : 1.0;
+                $weaponsMultiplier = $hullMultiplier;
+
                 return [
                     'name' => $ship->ship_name,
                     'class' => $ship->ship->class ?? 'Unknown',
-                    'hull' => $ship->hull,
-                    'max_hull' => $ship->max_hull,
-                    'weapons' => $ship->weapons,
+                    'hull' => (int) ($ship->hull * $hullMultiplier),
+                    'max_hull' => (int) ($ship->max_hull * $hullMultiplier),
+                    'weapons' => (int) ($ship->weapons * $weaponsMultiplier),
                 ];
             }),
         ];

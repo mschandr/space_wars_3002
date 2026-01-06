@@ -108,4 +108,71 @@ class Galaxy extends Model
     {
         return $this->hasMany(Sector::class);
     }
+
+    /**
+     * Check if this is a mirror universe galaxy
+     */
+    public function isMirrorUniverse(): bool
+    {
+        return ($this->config['is_mirror'] ?? false) === true;
+    }
+
+    /**
+     * Get paired galaxy (works both ways - prime<->mirror)
+     */
+    public function getPairedGalaxy(): ?Galaxy
+    {
+        if ($this->isMirrorUniverse()) {
+            // Mirror galaxy stores prime_galaxy_id
+            $primeId = $this->config['prime_galaxy_id'] ?? null;
+
+            return $primeId ? Galaxy::find($primeId) : null;
+        } else {
+            // Prime galaxy stores mirror_galaxy_id
+            $mirrorId = $this->config['mirror_galaxy_id'] ?? null;
+
+            return $mirrorId ? Galaxy::find($mirrorId) : null;
+        }
+    }
+
+    /**
+     * Get mirror universe modifiers for this galaxy
+     */
+    public function getMirrorModifiers(): array
+    {
+        if (!$this->isMirrorUniverse()) {
+            return [];
+        }
+
+        return $this->config['mirror_modifiers'] ?? [
+            'resource_multiplier' => 2.0,
+            'price_boost' => 1.5,
+            'pirate_difficulty_boost' => 2.0,
+            'rare_mineral_spawn_rate' => 3.0,
+        ];
+    }
+
+    /**
+     * Apply mirror multiplier to a value
+     *
+     * @param  float  $baseValue  The base value to multiply
+     * @param  string  $type  Type of multiplier: resource, price, pirate_difficulty, rare_spawn
+     */
+    public function applyMirrorMultiplier(float $baseValue, string $type): float
+    {
+        if (!$this->isMirrorUniverse()) {
+            return $baseValue;
+        }
+
+        $modifiers = $this->getMirrorModifiers();
+        $multiplier = match ($type) {
+            'resource' => $modifiers['resource_multiplier'] ?? 1.0,
+            'price' => $modifiers['price_boost'] ?? 1.0,
+            'pirate_difficulty' => $modifiers['pirate_difficulty_boost'] ?? 1.0,
+            'rare_spawn' => $modifiers['rare_mineral_spawn_rate'] ?? 1.0,
+            default => 1.0,
+        };
+
+        return $baseValue * $multiplier;
+    }
 }

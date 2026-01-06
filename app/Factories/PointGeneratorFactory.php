@@ -4,8 +4,13 @@ namespace App\Factories;
 
 use App\Contracts\PointGeneratorInterface;
 use App\Generators\Points\HaltonSequence;
+use App\Generators\Points\LatinHypercube;
 use App\Generators\Points\PoissonDisk;
+use App\Generators\Points\R2Sequence;
 use App\Generators\Points\RandomScatter;
+use App\Generators\Points\StratifiedGrid;
+use App\Generators\Points\UniformRandom;
+use App\Generators\Points\VogelsSpiral;
 use App\Models\Galaxy;
 use App\ValueObjects\GalaxyConfig;
 use Random\RandomException;
@@ -57,6 +62,16 @@ class PointGeneratorFactory
                 => new PoissonDisk($width, $height, $count, $spacing, $seed, $options, $engine),
             'halton', 'haltonsequence'
                 => new HaltonSequence($width, $height, $count, $spacing, $seed, $options, $engine),
+            'vogel', 'vogelsspiral'
+                => new VogelsSpiral($width, $height, $count, $spacing, $seed, $options, $engine),
+            'stratified', 'stratifiedgrid'
+                => new StratifiedGrid($width, $height, $count, $spacing, $seed, $options, $engine),
+            'latin', 'latinhypercube'
+                => new LatinHypercube($width, $height, $count, $spacing, $seed, $options, $engine),
+            'r2', 'r2sequence'
+                => new R2Sequence($width, $height, $count, $spacing, $seed, $options, $engine),
+            'uniform', 'uniformrandom'
+                => new UniformRandom($width, $height, $count, $spacing, $seed, $options, $engine),
             default
                 => new RandomScatter($width, $height, $count, $spacing, $seed, $options, $engine),
         };

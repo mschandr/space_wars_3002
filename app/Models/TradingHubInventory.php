@@ -53,7 +53,8 @@ class TradingHubInventory extends Model
     public function updatePricing(): void
     {
         $mineral = $this->mineral;
-        $baseValue = $mineral->getMarketValue();
+        // Use base_value directly - rarity is already reflected in base_value from seeder
+        $baseValue = $mineral->base_value;
 
         // Supply/demand affects price (demand increases price, supply decreases it)
         $demandMultiplier = 1 + (($this->demand_level - 50) / 100);
@@ -65,6 +66,17 @@ class TradingHubInventory extends Model
         $eventService = app(\App\Services\MarketEventService::class);
         $eventMultiplier = $eventService->getCombinedMultiplier($this->mineral_id, $this->trading_hub_id);
         $this->current_price = $this->current_price * $eventMultiplier;
+
+        // Apply mirror universe price boost (high-reward!)
+        $galaxy = $this->tradingHub->pointOfInterest?->galaxy;
+        if ($galaxy && $galaxy->isMirrorUniverse()) {
+            $this->current_price = $galaxy->applyMirrorMultiplier($this->current_price, 'price');
+        }
+
+        // Cap prices at a reasonable maximum (1 billion credits)
+        // Prevents overflow and keeps economy balanced
+        $maxPrice = 1_000_000_000;
+        $this->current_price = min($this->current_price, $maxPrice);
 
         // Hub buys at lower price, sells at higher price (spread)
         $spread = 0.15; // 15% spread

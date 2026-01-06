@@ -63,9 +63,14 @@ class GalaxyViewCommand extends Command
 
         // Load galaxy
         $galaxyId = $this->argument('galaxy');
-        $this->galaxy = $galaxyId
-            ? Galaxy::where('id', $galaxyId)->orWhere('uuid', $galaxyId)->firstOrFail()
-            : Galaxy::latest()->firstOrFail();
+        try {
+            $this->galaxy = $galaxyId
+                ? Galaxy::where('id', $galaxyId)->orWhere('uuid', $galaxyId)->firstOrFail()
+                : Galaxy::latest()->firstOrFail();
+        } catch (ModelNotFoundException $e) {
+            $this->error('This galaxy does not exist');
+            return self::FAILURE;
+        }
 
         // Load data
         $this->loadGalaxyData();
