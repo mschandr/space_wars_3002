@@ -37,18 +37,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('{uuid}', [\App\Http\Controllers\Api\PlayerController::class, 'show']);
         Route::patch('{uuid}', [\App\Http\Controllers\Api\PlayerController::class, 'update']);
         Route::delete('{uuid}', [\App\Http\Controllers\Api\PlayerController::class, 'destroy']);
-        Route::get('{uuid}/status', [\App\Http\Controllers\Api\PlayerController::class, 'status']);
-        Route::get('{uuid}/stats', [\App\Http\Controllers\Api\PlayerController::class, 'stats']);
+        Route::get('{uuid}/status', [\App\Http\Controllers\Api\PlayerStatusController::class, 'status']);
+        Route::get('{uuid}/stats', [\App\Http\Controllers\Api\PlayerStatusController::class, 'stats']);
         Route::post('{uuid}/set-active', [\App\Http\Controllers\Api\PlayerController::class, 'setActive']);
     });
 
     // Ship management routes
     Route::prefix('ships')->group(function () {
-        Route::get('{uuid}/status', [\App\Http\Controllers\Api\ShipController::class, 'status']);
-        Route::get('{uuid}/fuel', [\App\Http\Controllers\Api\ShipController::class, 'fuel']);
+        Route::get('{uuid}/status', [\App\Http\Controllers\Api\ShipStatusController::class, 'status']);
+        Route::get('{uuid}/fuel', [\App\Http\Controllers\Api\ShipStatusController::class, 'fuel']);
         Route::post('{uuid}/regenerate-fuel', [\App\Http\Controllers\Api\ShipController::class, 'regenerateFuel']);
-        Route::get('{uuid}/upgrades', [\App\Http\Controllers\Api\ShipController::class, 'upgrades']);
-        Route::get('{uuid}/damage', [\App\Http\Controllers\Api\ShipController::class, 'damage']);
+        Route::get('{uuid}/upgrades', [\App\Http\Controllers\Api\ShipStatusController::class, 'upgrades']);
+        Route::get('{uuid}/damage', [\App\Http\Controllers\Api\ShipStatusController::class, 'damage']);
         Route::patch('{uuid}/name', [\App\Http\Controllers\Api\ShipController::class, 'rename']);
     });
 
@@ -60,5 +60,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('{uuid}/location', [\App\Http\Controllers\Api\NavigationController::class, 'getLocation']);
         Route::get('{uuid}/nearby-systems', [\App\Http\Controllers\Api\NavigationController::class, 'getNearbySystems']);
         Route::get('{uuid}/scan-local', [\App\Http\Controllers\Api\NavigationController::class, 'scanLocal']);
+    });
+
+    // Travel routes
+    Route::get('warp-gates/{locationUuid}', [\App\Http\Controllers\Api\TravelController::class, 'listWarpGates']);
+
+    Route::prefix('players/{uuid}/travel')->group(function () {
+        Route::post('warp-gate', [\App\Http\Controllers\Api\TravelController::class, 'travelViaWarpGate']);
+        Route::post('coordinate', [\App\Http\Controllers\Api\TravelController::class, 'jumpToCoordinates']);
+        Route::post('direct-jump', [\App\Http\Controllers\Api\TravelController::class, 'directJumpToHub']);
+    });
+
+    // Travel calculation routes
+    Route::prefix('travel')->group(function () {
+        Route::get('xp-preview', [\App\Http\Controllers\Api\TravelCalculationController::class, 'previewXP']);
+        Route::get('fuel-cost', [\App\Http\Controllers\Api\TravelCalculationController::class, 'calculateFuelCost']);
     });
 });
