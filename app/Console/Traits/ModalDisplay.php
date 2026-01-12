@@ -9,8 +9,8 @@ trait ModalDisplay
     /**
      * Display a modal with title and content, wait for key press
      *
-     * @param string $title The modal title
-     * @param callable $contentBuilder Callback function to render content
+     * @param  string  $title  The modal title
+     * @param  callable  $contentBuilder  Callback function to render content
      */
     protected function showModal(string $title, callable $contentBuilder): void
     {
@@ -19,7 +19,7 @@ trait ModalDisplay
 
         // Render header
         $this->renderHorizontalLine();
-        $this->line($this->colorize('  ' . $title, 'header'));
+        $this->line($this->colorize('  '.$title, 'header'));
         $this->renderHorizontalLine();
         $this->newLine();
 

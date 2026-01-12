@@ -81,7 +81,7 @@ class PlayerNotification extends Model
      */
     public function getSeverityIcon(): string
     {
-        return match($this->severity) {
+        return match ($this->severity) {
             'critical' => '🚨',
             'warning' => '⚠️',
             'info' => 'ℹ️',
@@ -95,6 +95,7 @@ class PlayerNotification extends Model
     public function getFormattedDisplay(): string
     {
         $icon = $this->getSeverityIcon();
+
         return "{$icon} {$this->title}: {$this->message}";
     }
 

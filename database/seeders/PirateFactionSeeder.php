@@ -83,6 +83,6 @@ class PirateFactionSeeder extends Seeder
             ]);
         }
 
-        $this->command->info('Created ' . count($factions) . ' pirate factions');
+        $this->command->info('Created '.count($factions).' pirate factions');
     }
 }

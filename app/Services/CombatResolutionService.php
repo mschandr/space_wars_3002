@@ -18,9 +18,7 @@ class CombatResolutionService
      *
      * Damage = weapons ± 20% randomization
      *
-     * @param Player $player
-     * @param PlayerShip $playerShip
-     * @param Collection $pirateFleet Collection of PirateFleet models
+     * @param  Collection  $pirateFleet  Collection of PirateFleet models
      * @return array ['victory' => bool, 'log' => array, 'player_hull_remaining' => int, 'xp_earned' => int]
      */
     public function resolveCombat(Player $player, PlayerShip $playerShip, Collection $pirateFleet): array
@@ -30,7 +28,7 @@ class CombatResolutionService
 
         $combatLog[] = [
             'type' => 'header',
-            'message' => "⚔️  COMBAT INITIATED  ⚔️",
+            'message' => '⚔️  COMBAT INITIATED  ⚔️',
         ];
         $combatLog[] = [
             'type' => 'info',
@@ -86,7 +84,7 @@ class CombatResolutionService
                 if ($playerShip->hull <= 0) {
                     $combatLog[] = [
                         'type' => 'player_destroyed',
-                        'message' => "  ☠️  YOUR SHIP HAS BEEN DESTROYED!",
+                        'message' => '  ☠️  YOUR SHIP HAS BEEN DESTROYED!',
                     ];
                     break;
                 }
@@ -98,7 +96,7 @@ class CombatResolutionService
             if ($round > 100) {
                 $combatLog[] = [
                     'type' => 'error',
-                    'message' => "Combat timeout - draw!",
+                    'message' => 'Combat timeout - draw!',
                 ];
                 break;
             }
@@ -121,7 +119,7 @@ class CombatResolutionService
 
             $combatLog[] = [
                 'type' => 'victory',
-                'message' => "🏆 VICTORY! All enemy ships destroyed!",
+                'message' => '🏆 VICTORY! All enemy ships destroyed!',
             ];
             $combatLog[] = [
                 'type' => 'info',
@@ -142,7 +140,7 @@ class CombatResolutionService
         } else {
             $combatLog[] = [
                 'type' => 'defeat',
-                'message' => "☠️  DEFEAT - Your ship has been destroyed...",
+                'message' => '☠️  DEFEAT - Your ship has been destroyed...',
             ];
         }
 
@@ -174,8 +172,8 @@ class CombatResolutionService
     private function calculateDamage(int $weaponsPower): int
     {
         $variance = $weaponsPower * 0.20;
-        $min = (int)floor($weaponsPower - $variance);
-        $max = (int)ceil($weaponsPower + $variance);
+        $min = (int) floor($weaponsPower - $variance);
+        $max = (int) ceil($weaponsPower + $variance);
 
         return rand($min, $max);
     }
@@ -236,7 +234,7 @@ class CombatResolutionService
 
         // Difficulty bonus based on average weapons power per pirate
         $avgWeapons = $totalWeapons / max(1, $pirateCount);
-        $difficultyBonus = (int)($avgWeapons / 2); // 1 XP per 2 weapons points
+        $difficultyBonus = (int) ($avgWeapons / 2); // 1 XP per 2 weapons points
 
         // Fleet size bonus (more dangerous to fight multiple ships)
         $fleetBonus = ($pirateCount - 1) * 25; // 25 XP per additional ship

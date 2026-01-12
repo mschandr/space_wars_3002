@@ -298,6 +298,7 @@ class PointOfInterest extends Model
             if ($stellarClass) {
                 return $stellarClass;
             }
+
             return $this->children()->exists() ? 'star_with_planets' : 'star_no_planets';
         }
 

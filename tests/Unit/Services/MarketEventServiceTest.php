@@ -19,7 +19,7 @@ class MarketEventServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->marketEventService = new MarketEventService();
+        $this->marketEventService = new MarketEventService;
     }
 
     /** @test */

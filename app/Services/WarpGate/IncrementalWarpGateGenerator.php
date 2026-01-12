@@ -12,11 +12,18 @@ use Illuminate\Support\Str;
 class IncrementalWarpGateGenerator
 {
     private float $adjacencyThreshold;
+
     private float $hiddenGatePercentage;
+
     private int $maxGatesPerSystem;
+
     private ?Command $command;
+
     private int $gatesCreated = 0;
+
     private int $gatesSkipped = 0;
+
+    private Galaxy $galaxy;
 
     public function __construct(
         float $adjacencyThreshold = 1.5,
@@ -36,6 +43,7 @@ class IncrementalWarpGateGenerator
      */
     public function generateGatesIncremental(Galaxy $galaxy): array
     {
+        $this->galaxy = $galaxy;
         $this->gatesCreated = 0;
         $this->gatesSkipped = 0;
 
@@ -75,7 +83,7 @@ class IncrementalWarpGateGenerator
                     if ($starsProcessed % 10 === 0 || $starsProcessed === $totalStars) {
                         $percent = round(($starsProcessed / $totalStars) * 100, 1);
                         $this->output(
-                            "Progress: {$starsProcessed}/{$totalStars} stars ({$percent}%) | " .
+                            "Progress: {$starsProcessed}/{$totalStars} stars ({$percent}%) | ".
                             "Gates created: {$this->gatesCreated} | Skipped: {$this->gatesSkipped}",
                             true // Overwrite line
                         );
@@ -98,6 +106,29 @@ class IncrementalWarpGateGenerator
     }
 
     /**
+     * Calculate gate density multiplier based on distance from galactic center
+     * Linear falloff: center = 2.0x, edge = 1.0x
+     *
+     * @param  PointOfInterest  $star  The star system
+     * @param  Galaxy  $galaxy  The galaxy
+     * @return float Multiplier between 1.0 (edge) and 2.0 (center)
+     */
+    private function calculateGateDensityMultiplier(PointOfInterest $star, Galaxy $galaxy): float
+    {
+        $centerX = $galaxy->width / 2.0;
+        $centerY = $galaxy->height / 2.0;
+
+        $dx = $star->x - $centerX;
+        $dy = $star->y - $centerY;
+        $distance = sqrt($dx * $dx + $dy * $dy);
+
+        $maxDistance = sqrt($centerX * $centerX + $centerY * $centerY);
+        $normalizedDistance = min(1.0, $distance / $maxDistance);
+
+        return 2.0 - $normalizedDistance;
+    }
+
+    /**
      * Process a single star system, creating gates to nearby stars
      */
     private function processStarSystem(PointOfInterest $star, Galaxy $galaxy): void
@@ -105,15 +136,23 @@ class IncrementalWarpGateGenerator
         // Get current connection count for this star
         $currentConnections = WarpGate::where('source_poi_id', $star->id)->count();
 
+        // Calculate gate density multiplier based on distance from galactic center
+        $densityMultiplier = $this->calculateGateDensityMultiplier($star, $galaxy);
+
+        // Adjust max gates based on density multiplier
+        // Center stars can have up to 2x more gates than edge stars
+        $effectiveMaxGates = (int) round($this->maxGatesPerSystem * ($densityMultiplier / 1.5));
+        $effectiveMaxGates = max(2, min($this->maxGatesPerSystem * 2, $effectiveMaxGates));
+
         // Skip if already at max connections
-        if ($currentConnections >= $this->maxGatesPerSystem) {
+        if ($currentConnections >= $effectiveMaxGates) {
             return;
         }
 
         // Find nearby stars within adjacency threshold
         $nearbyStars = $this->findNearbyStars($star, $galaxy);
 
-        $connectionsToCreate = $this->maxGatesPerSystem - $currentConnections;
+        $connectionsToCreate = $effectiveMaxGates - $currentConnections;
         $connectionsCreated = 0;
 
         foreach ($nearbyStars as $nearbyStarData) {
@@ -126,14 +165,24 @@ class IncrementalWarpGateGenerator
             // Check if bidirectional gate already exists
             if ($this->gateExists($star->id, $destinationId)) {
                 $this->gatesSkipped++;
+
                 continue;
             }
 
             // Check if destination star is at max connections
-            $destinationConnections = WarpGate::where('source_poi_id', $destinationId)->count();
-            if ($destinationConnections >= $this->maxGatesPerSystem) {
-                $this->gatesSkipped++;
-                continue;
+            // Need to get the destination POI to calculate its effective max gates
+            $destinationPoi = PointOfInterest::find($destinationId);
+            if ($destinationPoi) {
+                $destDensityMultiplier = $this->calculateGateDensityMultiplier($destinationPoi, $galaxy);
+                $destEffectiveMaxGates = (int) round($this->maxGatesPerSystem * ($destDensityMultiplier / 1.5));
+                $destEffectiveMaxGates = max(2, min($this->maxGatesPerSystem * 2, $destEffectiveMaxGates));
+
+                $destinationConnections = WarpGate::where('source_poi_id', $destinationId)->count();
+                if ($destinationConnections >= $destEffectiveMaxGates) {
+                    $this->gatesSkipped++;
+
+                    continue;
+                }
             }
 
             // Create bidirectional gates
@@ -185,7 +234,7 @@ class IncrementalWarpGateGenerator
         }
 
         // Sort by distance and return closest ones
-        usort($nearbyStars, fn($a, $b) => $a['distance'] <=> $b['distance']);
+        usort($nearbyStars, fn ($a, $b) => $a['distance'] <=> $b['distance']);
 
         return array_slice($nearbyStars, 0, $this->maxGatesPerSystem * 2);
     }
@@ -197,10 +246,10 @@ class IncrementalWarpGateGenerator
     {
         return WarpGate::where(function ($query) use ($sourceId, $destinationId) {
             $query->where('source_poi_id', $sourceId)
-                  ->where('destination_poi_id', $destinationId);
+                ->where('destination_poi_id', $destinationId);
         })->orWhere(function ($query) use ($sourceId, $destinationId) {
             $query->where('source_poi_id', $destinationId)
-                  ->where('destination_poi_id', $sourceId);
+                ->where('destination_poi_id', $sourceId);
         })->exists();
     }
 
@@ -214,7 +263,7 @@ class IncrementalWarpGateGenerator
         float $distance
     ): void {
         // Calculate fuel cost based on distance
-        $fuelCost = max(1, (int)ceil($distance / 2));
+        $fuelCost = max(1, (int) ceil($distance / 2));
 
         // Create gate: source -> destination
         WarpGate::create([
@@ -247,7 +296,7 @@ class IncrementalWarpGateGenerator
     private function applyHiddenGates(Galaxy $galaxy): void
     {
         $totalGates = WarpGate::where('galaxy_id', $galaxy->id)->count();
-        $hiddenCount = (int)ceil($totalGates * $this->hiddenGatePercentage);
+        $hiddenCount = (int) ceil($totalGates * $this->hiddenGatePercentage);
 
         if ($hiddenCount > 0) {
             $this->output("Marking {$hiddenCount} gates as hidden ({$this->hiddenGatePercentage}%)...");
@@ -277,7 +326,7 @@ class IncrementalWarpGateGenerator
     {
         if ($this->command) {
             if ($overwrite) {
-                $this->command->getOutput()->write("\r\033[K" . $message);
+                $this->command->getOutput()->write("\r\033[K".$message);
             } else {
                 $this->command->line($message);
             }

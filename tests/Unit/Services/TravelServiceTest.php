@@ -33,7 +33,7 @@ class TravelServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->travelService = new TravelService();
+        $this->travelService = new TravelService;
     }
 
     /** @test */

@@ -67,29 +67,26 @@ class MoonGenerator
 
         // Outer planets can have many moons
         return match ($planetType) {
-            PointOfInterestType::GAS_GIANT =>
-                $this->randomWeighted([
-                    5 => 20,
-                    10 => 30,
-                    15 => 25,
-                    20 => 15,
-                    30 => 10,
-                ]),
-            PointOfInterestType::ICE_GIANT =>
-                $this->randomWeighted([
-                    2 => 25,
-                    5 => 35,
-                    8 => 25,
-                    12 => 15,
-                ]),
+            PointOfInterestType::GAS_GIANT => $this->randomWeighted([
+                5 => 20,
+                10 => 30,
+                15 => 25,
+                20 => 15,
+                30 => 10,
+            ]),
+            PointOfInterestType::ICE_GIANT => $this->randomWeighted([
+                2 => 25,
+                5 => 35,
+                8 => 25,
+                12 => 15,
+            ]),
             PointOfInterestType::SUPER_EARTH,
-            PointOfInterestType::TERRESTRIAL =>
-                $this->randomWeighted([
-                    0 => 40,
-                    1 => 35,
-                    2 => 20,
-                    3 => 5,
-                ]),
+            PointOfInterestType::TERRESTRIAL => $this->randomWeighted([
+                0 => 40,
+                1 => 35,
+                2 => 20,
+                3 => 5,
+            ]),
             default => 0,
         };
     }
@@ -98,7 +95,6 @@ class MoonGenerator
      * Weighted random selection helper
      *
      * @param  array<int, int>  $weights  [value => weight]
-     * @return int
      *
      * @throws AssertionFailedException
      */

@@ -21,10 +21,6 @@ class TradingService
     /**
      * Buy minerals from a trading hub
      *
-     * @param Player $player
-     * @param PlayerShip $ship
-     * @param TradingHubInventory $inventory
-     * @param int $quantity
      * @return array ['success' => bool, 'message' => string, 'xp_earned' => int]
      */
     public function buyMineral(Player $player, PlayerShip $ship, TradingHubInventory $inventory, int $quantity): array
@@ -33,7 +29,7 @@ class TradingService
         $totalCost = $inventory->sell_price * $quantity;
 
         // Validations
-        if (!$inventory->hasStock($quantity)) {
+        if (! $inventory->hasStock($quantity)) {
             return [
                 'success' => false,
                 'message' => 'Insufficient stock available',
@@ -75,7 +71,7 @@ class TradingService
         $ship->save();
 
         // Award XP for trading
-        $xpEarned = (int)max(5, $quantity / 10); // 1 XP per 10 units, min 5
+        $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
         $player->addExperience($xpEarned);
 
         return [
@@ -89,11 +85,6 @@ class TradingService
     /**
      * Sell minerals to a trading hub
      *
-     * @param Player $player
-     * @param PlayerShip $ship
-     * @param PlayerCargo $cargo
-     * @param TradingHubInventory $hubInventory
-     * @param int $quantity
      * @return array ['success' => bool, 'message' => string, 'xp_earned' => int]
      */
     public function sellMineral(Player $player, PlayerShip $ship, PlayerCargo $cargo, TradingHubInventory $hubInventory, int $quantity): array
@@ -128,7 +119,7 @@ class TradingService
         $ship->save();
 
         // Award XP for trading
-        $xpEarned = (int)max(10, $totalRevenue / 100); // 1 XP per 100 credits, min 10
+        $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits, min 10
         $player->addExperience($xpEarned);
 
         return [
@@ -144,7 +135,7 @@ class TradingService
      */
     public function getMaxAffordableQuantity(Player $player, TradingHubInventory $inventory): int
     {
-        $maxByCredits = (int)floor($player->credits / $inventory->sell_price);
+        $maxByCredits = (int) floor($player->credits / $inventory->sell_price);
         $maxByStock = $inventory->quantity;
 
         return min($maxByCredits, $maxByStock);

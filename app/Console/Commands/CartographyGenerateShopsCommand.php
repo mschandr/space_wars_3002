@@ -37,7 +37,7 @@ class CartographyGenerateShopsCommand extends Command
         }
 
         $this->info("Generating Stellar Cartographer shops for galaxy: {$galaxy->name}");
-        $this->info("Spawn rate: ".($spawnRate * 100).'%');
+        $this->info('Spawn rate: '.($spawnRate * 100).'%');
         $this->newLine();
 
         // Delete existing cartographers if regenerating
@@ -80,6 +80,7 @@ class CartographyGenerateShopsCommand extends Command
             // Check if already has a cartographer
             if ($location->stellarCartographer) {
                 $progressBar->advance();
+
                 continue;
             }
 

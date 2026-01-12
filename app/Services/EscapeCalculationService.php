@@ -13,8 +13,7 @@ class EscapeCalculationService
      * Player must have BOTH higher speed AND higher warp drive than ALL pirate ships
      * to successfully escape.
      *
-     * @param PlayerShip $playerShip
-     * @param Collection $pirateFleet Collection of PirateFleet models
+     * @param  Collection  $pirateFleet  Collection of PirateFleet models
      * @return array ['success' => bool, 'message' => string, 'interceptor' => PirateFleet|null]
      */
     public function attemptEscape(PlayerShip $playerShip, Collection $pirateFleet): array
@@ -35,9 +34,9 @@ class EscapeCalculationService
             if ($playerSpeed <= $pirateShip->speed || $playerShip->warp_drive <= $pirateShip->warp_drive) {
                 return [
                     'success' => false,
-                    'message' => "{$pirateShip->ship_name} intercepts you! Their superior " .
-                                ($playerSpeed <= $pirateShip->speed ? 'speed' : 'warp drive') .
-                                " prevents your escape.",
+                    'message' => "{$pirateShip->ship_name} intercepts you! Their superior ".
+                                ($playerSpeed <= $pirateShip->speed ? 'speed' : 'warp drive').
+                                ' prevents your escape.',
                     'interceptor' => $pirateShip,
                 ];
             }
@@ -53,8 +52,6 @@ class EscapeCalculationService
     /**
      * Calculate the probability of escape (for display purposes)
      *
-     * @param PlayerShip $playerShip
-     * @param Collection $pirateFleet
      * @return int Percentage (0-100)
      */
     public function calculateEscapeChance(PlayerShip $playerShip, Collection $pirateFleet): int
@@ -73,7 +70,7 @@ class EscapeCalculationService
 
         if ($canOutrunSpeed && $canOutrunWarp) {
             return 100;
-        } elseif (!$canOutrunSpeed && !$canOutrunWarp) {
+        } elseif (! $canOutrunSpeed && ! $canOutrunWarp) {
             return 0;
         } else {
             return 50; // One stat is better, one is worse
@@ -82,10 +79,6 @@ class EscapeCalculationService
 
     /**
      * Get escape analysis for display
-     *
-     * @param PlayerShip $playerShip
-     * @param Collection $pirateFleet
-     * @return array
      */
     public function getEscapeAnalysis(PlayerShip $playerShip, Collection $pirateFleet): array
     {

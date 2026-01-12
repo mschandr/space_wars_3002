@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 class ColonyCycleService
 {
     private NotificationService $notificationService;
+
     private MiningService $miningService;
 
     public function __construct(
@@ -52,7 +53,7 @@ class ColonyCycleService
                 $stats['alerts_sent'] += $result['alerts_sent'];
                 $stats['gates_shutdown'] += $result['gates_shutdown'];
             } catch (\Exception $e) {
-                Log::error("Error processing colony {$colony->id}: " . $e->getMessage());
+                Log::error("Error processing colony {$colony->id}: ".$e->getMessage());
             }
         }
 

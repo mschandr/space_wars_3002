@@ -22,7 +22,7 @@ class PirateFactionFactory extends Factory
     {
         return [
             'uuid' => Str::uuid(),
-            'name' => fake()->unique()->company() . ' Pirates', // Make it unique
+            'name' => fake()->unique()->company().' Pirates', // Make it unique
             'description' => fake()->sentence(),
             'attributes' => null,
             'is_active' => true,

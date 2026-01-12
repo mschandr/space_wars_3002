@@ -11,7 +11,9 @@ use Illuminate\Support\Collection;
 class WarpGateGenerator
 {
     private float $adjacencyThreshold;
+
     private float $hiddenGatePercentage;
+
     private int $maxGatesPerSystem;
 
     public function __construct(
@@ -47,7 +49,7 @@ class WarpGateGenerator
         $gates = $gates->merge($mstGates);
 
         // Add redundant connections for realism and accessibility
-        $redundantGates = $this->addRedundantConnections($stars, $galaxy->id, $gates);
+        $redundantGates = $this->addRedundantConnections($stars, $galaxy, $gates);
         $gates = $gates->merge($redundantGates);
 
         // Mark 2% of gates as hidden
@@ -59,6 +61,29 @@ class WarpGateGenerator
         }
 
         return $gates;
+    }
+
+    /**
+     * Calculate gate density multiplier based on distance from galactic center
+     * Linear falloff: center = 2.0x, edge = 1.0x
+     *
+     * @param  PointOfInterest  $star  The star system
+     * @param  Galaxy  $galaxy  The galaxy
+     * @return float Multiplier between 1.0 (edge) and 2.0 (center)
+     */
+    private function calculateGateDensityMultiplier(PointOfInterest $star, Galaxy $galaxy): float
+    {
+        $centerX = $galaxy->width / 2.0;
+        $centerY = $galaxy->height / 2.0;
+
+        $dx = $star->x - $centerX;
+        $dy = $star->y - $centerY;
+        $distance = sqrt($dx * $dx + $dy * $dy);
+
+        $maxDistance = sqrt($centerX * $centerX + $centerY * $centerY);
+        $normalizedDistance = min(1.0, $distance / $maxDistance);
+
+        return 2.0 - $normalizedDistance;
     }
 
     /**
@@ -76,7 +101,7 @@ class WarpGateGenerator
         $visited->push($currentId);
         $unvisited = array_values(array_diff($unvisited, [$currentId]));
 
-        while (!empty($unvisited)) {
+        while (! empty($unvisited)) {
             $shortestDistance = PHP_FLOAT_MAX;
             $closestPair = null;
 
@@ -112,8 +137,9 @@ class WarpGateGenerator
 
     /**
      * Add additional redundant connections for network robustness
+     * Uses gate density multiplier to add more connections at galactic center
      */
-    private function addRedundantConnections(Collection $stars, int $galaxyId, Collection $existingGates): Collection
+    private function addRedundantConnections(Collection $stars, Galaxy $galaxy, Collection $existingGates): Collection
     {
         $gates = collect();
         $connectionCount = [];
@@ -131,15 +157,21 @@ class WarpGateGenerator
                 continue;
             }
 
+            // Calculate gate density multiplier for this star
+            $densityMultiplier = $this->calculateGateDensityMultiplier($sourceStar, $galaxy);
+
+            // Determine redundant connections: center (2.0x) = 4, edge (1.0x) = 2
+            $redundantConnectionsToAdd = (int) round(2 * $densityMultiplier);
+
             // Find nearby stars that aren't already connected
-            $nearbyStars = $this->findNearbyStars($sourceStar, $stars, $existingGates, $gates);
+            $nearbyStars = $this->findNearbyStars($sourceStar, $stars, $existingGates, $gates, $galaxy, $redundantConnectionsToAdd);
 
             foreach ($nearbyStars as $destinationStar) {
                 if ($connectionCount[$sourceStar->id] >= $this->maxGatesPerSystem) {
                     break;
                 }
 
-                if (!isset($connectionCount[$destinationStar->id])) {
+                if (! isset($connectionCount[$destinationStar->id])) {
                     $connectionCount[$destinationStar->id] = 0;
                 }
 
@@ -148,8 +180,8 @@ class WarpGateGenerator
                 }
 
                 // Create bidirectional gates
-                $outgoing = $this->createGate($galaxyId, $sourceStar, $destinationStar);
-                $incoming = $this->createGate($galaxyId, $destinationStar, $sourceStar);
+                $outgoing = $this->createGate($galaxy->id, $sourceStar, $destinationStar);
+                $incoming = $this->createGate($galaxy->id, $destinationStar, $sourceStar);
 
                 $gates->push($outgoing);
                 $gates->push($incoming);
@@ -169,11 +201,13 @@ class WarpGateGenerator
         PointOfInterest $source,
         Collection $allStars,
         Collection $existingGates,
-        Collection $newGates
+        Collection $newGates,
+        Galaxy $galaxy,
+        int $limit = 4
     ): Collection {
         $allGates = $existingGates->merge($newGates);
         $connectedIds = $allGates
-            ->filter(fn($gate) => $gate->source_poi_id === $source->id)
+            ->filter(fn ($gate) => $gate->source_poi_id === $source->id)
             ->pluck('destination_poi_id')
             ->all();
 
@@ -187,10 +221,11 @@ class WarpGateGenerator
                 }
 
                 $distance = $this->calculateDistance($source, $star);
+
                 return $distance <= $this->adjacencyThreshold * 5; // Consider stars within 5x adjacency threshold
             })
-            ->sortBy(fn($star) => $this->calculateDistance($source, $star))
-            ->take(2); // Add at most 2 redundant connections
+            ->sortBy(fn ($star) => $this->calculateDistance($source, $star))
+            ->take($limit); // Dynamic limit based on gate density multiplier
     }
 
     /**

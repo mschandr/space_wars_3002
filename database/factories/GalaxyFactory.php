@@ -7,7 +7,6 @@ use App\Enums\Galaxy\GalaxyRandomEngine;
 use App\Enums\Galaxy\GalaxyStatus;
 use App\Models\Galaxy;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Str;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Galaxy>
@@ -24,7 +23,7 @@ class GalaxyFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->words(2, true) . ' Galaxy',
+            'name' => fake()->words(2, true).' Galaxy',
             'description' => fake()->sentence(),
             'width' => 1000,
             'height' => 1000,

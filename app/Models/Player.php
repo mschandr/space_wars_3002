@@ -13,6 +13,7 @@ use Illuminate\Support\Str;
 class Player extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'uuid',
         'user_id',
@@ -70,15 +71,15 @@ class Player extends Model
     public function plans(): BelongsToMany
     {
         return $this->belongsToMany(Plan::class, 'player_plans')
-                    ->withTimestamps()
-                    ->withPivot('acquired_at');
+            ->withTimestamps()
+            ->withPivot('acquired_at');
     }
 
     public function starCharts(): BelongsToMany
     {
         return $this->belongsToMany(PointOfInterest::class, 'player_star_charts', 'player_id', 'revealed_poi_id')
-                    ->withPivot('purchased_from_poi_id', 'price_paid', 'purchased_at')
-                    ->withTimestamps();
+            ->withPivot('purchased_from_poi_id', 'price_paid', 'purchased_at')
+            ->withTimestamps();
     }
 
     public function hasChartFor(PointOfInterest $poi): bool
@@ -127,8 +128,8 @@ class Player extends Model
     public function getAdditionalLevelsForComponent(string $component): int
     {
         return $this->plans()
-                    ->where('component', $component)
-                    ->sum('additional_levels');
+            ->where('component', $component)
+            ->sum('additional_levels');
     }
 
     /**
@@ -137,8 +138,8 @@ class Player extends Model
     public function getPlanCount(int $planId): int
     {
         return $this->plans()
-                    ->where('plans.id', $planId)
-                    ->count();
+            ->where('plans.id', $planId)
+            ->count();
     }
 
     /**
@@ -155,7 +156,7 @@ class Player extends Model
         }
 
         // Check requirements (if any)
-        if (!$this->meetsRequirements($plan->requirements)) {
+        if (! $this->meetsRequirements($plan->requirements)) {
             return [
                 'success' => false,
                 'message' => 'Requirements not met',
@@ -163,7 +164,7 @@ class Player extends Model
         }
 
         // Deduct credits
-        if (!$this->deductCredits($plan->price)) {
+        if (! $this->deductCredits($plan->price)) {
             return [
                 'success' => false,
                 'message' => 'Transaction failed',
@@ -223,11 +224,11 @@ class Player extends Model
      */
     public function canReturnFromMirror(): bool
     {
-        if (!$this->isInMirrorUniverse()) {
+        if (! $this->isInMirrorUniverse()) {
             return false;
         }
 
-        if (!$this->mirror_universe_entry_time) {
+        if (! $this->mirror_universe_entry_time) {
             return true; // No entry time recorded, allow return
         }
 
@@ -242,7 +243,7 @@ class Player extends Model
      */
     public function getMirrorCooldownRemaining(): ?Carbon
     {
-        if (!$this->isInMirrorUniverse() || !$this->mirror_universe_entry_time) {
+        if (! $this->isInMirrorUniverse() || ! $this->mirror_universe_entry_time) {
             return null;
         }
 

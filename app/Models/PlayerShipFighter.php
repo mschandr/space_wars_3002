@@ -58,7 +58,7 @@ class PlayerShipFighter extends Model
     /**
      * Repair the fighter
      */
-    public function repair(int $amount = null): void
+    public function repair(?int $amount = null): void
     {
         if ($amount === null) {
             $this->hull = $this->max_hull;

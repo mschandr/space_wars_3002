@@ -12,7 +12,6 @@ return new class extends Migration
     public function up(): void
     {
         /**
-         *
          *  Schema::create('star_systems', function (Blueprint $table) {
          *      $table->id();
          *      $table->uuid('uuid')->index();

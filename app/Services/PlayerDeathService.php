@@ -17,8 +17,6 @@ class PlayerDeathService
      * 4. Respawn at last trading hub (or fallback location)
      * 5. Keep credits and XP
      *
-     * @param Player $player
-     * @param PlayerShip $playerShip
      * @return array Death summary
      */
     public function processPlayerDeath(Player $player, PlayerShip $playerShip): array
@@ -110,8 +108,8 @@ class PlayerDeathService
 
             // Find nearest trading hub
             $nearestHub = PointOfInterest::whereHas('tradingHub', function ($query) {
-                    $query->where('is_active', true);
-                })
+                $query->where('is_active', true);
+            })
                 ->where('galaxy_id', $galaxy->id)
                 ->where('is_hidden', false)
                 ->first();
@@ -128,8 +126,8 @@ class PlayerDeathService
 
         // Ultimate fallback: any trading hub anywhere
         return PointOfInterest::whereHas('tradingHub', function ($query) {
-                $query->where('is_active', true);
-            })
+            $query->where('is_active', true);
+        })
             ->where('is_hidden', false)
             ->first();
     }
@@ -143,31 +141,31 @@ class PlayerDeathService
         $respawn = $deathResult['respawn_location'];
 
         $messages = [];
-        $messages[] = "═══════════════════════════════════════════════";
-        $messages[] = "           SHIP DESTROYED - ESCAPE POD LAUNCHED";
-        $messages[] = "═══════════════════════════════════════════════";
-        $messages[] = "";
+        $messages[] = '═══════════════════════════════════════════════';
+        $messages[] = '           SHIP DESTROYED - ESCAPE POD LAUNCHED';
+        $messages[] = '═══════════════════════════════════════════════';
+        $messages[] = '';
         $messages[] = "Your ship, the {$losses['ship_name']} ({$losses['ship_class']}), has been destroyed!";
-        $messages[] = "";
-        $messages[] = "LOSSES:";
-        $messages[] = "  Ship Value: \$" . number_format($losses['ship_value']);
-        $messages[] = "  Cargo Items: {$losses['cargo_items_lost']} items (~\$" . number_format($losses['estimated_cargo_value']) . ")";
+        $messages[] = '';
+        $messages[] = 'LOSSES:';
+        $messages[] = '  Ship Value: $'.number_format($losses['ship_value']);
+        $messages[] = "  Cargo Items: {$losses['cargo_items_lost']} items (~\$".number_format($losses['estimated_cargo_value']).')';
         $messages[] = "  Upgrade Plans: {$losses['upgrade_plans_lost']} plans";
-        $messages[] = "";
-        $messages[] = "RETAINED:";
-        $messages[] = "  Credits: \$" . number_format($deathResult['credits_retained']);
+        $messages[] = '';
+        $messages[] = 'RETAINED:';
+        $messages[] = '  Credits: $'.number_format($deathResult['credits_retained']);
         $messages[] = "  Experience: {$deathResult['xp_retained']} XP";
-        $messages[] = "";
+        $messages[] = '';
 
         if ($respawn) {
             $messages[] = "Your escape pod drifts to {$respawn->name}...";
             $messages[] = "You'll need to purchase a new ship to continue your journey.";
         } else {
-            $messages[] = "Your escape pod is drifting in space...";
-            $messages[] = "ERROR: No safe haven found!";
+            $messages[] = 'Your escape pod is drifting in space...';
+            $messages[] = 'ERROR: No safe haven found!';
         }
 
-        $messages[] = "═══════════════════════════════════════════════";
+        $messages[] = '═══════════════════════════════════════════════';
 
         return implode("\n", $messages);
     }

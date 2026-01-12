@@ -12,19 +12,19 @@ class PirateCaptainSeeder extends Seeder
     private const FIRST_NAMES = [
         'Vex', 'Kira', 'Drax', 'Zara', 'Thane', 'Nyx', 'Kor', 'Lyra', 'Sable', 'Raze',
         'Vex', 'Kael', 'Dax', 'Rhea', 'Zeph', 'Nova', 'Jax', 'Mira', 'Rex', 'Vara',
-        'Kane', 'Lena', 'Gage', 'Tessa', 'Vale', 'Rook', 'Echo', 'Ash', 'Blaze', 'Storm'
+        'Kane', 'Lena', 'Gage', 'Tessa', 'Vale', 'Rook', 'Echo', 'Ash', 'Blaze', 'Storm',
     ];
 
     private const LAST_NAMES = [
         'Blackthorne', 'Steelclaw', 'Ironfist', 'Darkwater', 'Shadowbane',
         'Stormrider', 'Voidwalker', 'Skullcrusher', 'Bloodfang', 'Nightshade',
         'Grimlock', 'Fireborn', 'Coldsteel', 'Ravencrest', 'Warforge',
-        'Ghostblade', 'Dreadmaw', 'Ironheart', 'Bonecrusher', 'Hellspawn'
+        'Ghostblade', 'Dreadmaw', 'Ironheart', 'Bonecrusher', 'Hellspawn',
     ];
 
     private const TITLES = [
         'Captain', 'Commander', 'Admiral', 'Warlord', 'Commodore',
-        'Reaver', 'Marauder', 'Scourge', 'Terror', 'Dread Lord'
+        'Reaver', 'Marauder', 'Scourge', 'Terror', 'Dread Lord',
     ];
 
     public function run(): void

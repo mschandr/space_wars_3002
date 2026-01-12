@@ -33,11 +33,13 @@ class GalaxyCreateMirror extends Command
 
         if (! $primeGalaxy) {
             $this->error("❌ Galaxy not found: {$galaxyIdentifier}");
+
             return Command::FAILURE;
         }
 
         if ($primeGalaxy->isMirrorUniverse()) {
             $this->error('❌ Cannot create a mirror of a mirror universe!');
+
             return Command::FAILURE;
         }
 
@@ -157,7 +159,7 @@ class GalaxyCreateMirror extends Command
         $this->info("  • Trading Prices: {$modifiers['price_boost']}x");
         $this->info("  • Pirate Difficulty: {$modifiers['pirate_difficulty_boost']}x");
         $this->newLine();
-        $this->info("Return Cooldown: ".config('game_config.mirror_universe.return_cooldown_hours', 24).' hours');
+        $this->info('Return Cooldown: '.config('game_config.mirror_universe.return_cooldown_hours', 24).' hours');
         $this->newLine();
         $this->info('⚠️  The mirror universe awaits brave explorers... ⚠️');
 

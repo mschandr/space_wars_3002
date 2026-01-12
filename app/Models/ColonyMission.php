@@ -124,7 +124,7 @@ class ColonyMission extends Model
         $this->save();
 
         // Process mission based on type
-        match($this->mission_type) {
+        match ($this->mission_type) {
             'colonize' => $this->processColonization(),
             'trade_route' => $this->processTradeRoute(),
             'defend' => $this->processDefense(),
@@ -141,10 +141,11 @@ class ColonyMission extends Model
         $destination = $this->destination;
 
         // Check if destination is colonizable
-        if (!$destination->is_colonizable || $destination->is_colonized) {
+        if (! $destination->is_colonizable || $destination->is_colonized) {
             $this->status = 'failed';
             $this->completed_at = now();
             $this->save();
+
             return;
         }
 
@@ -153,7 +154,7 @@ class ColonyMission extends Model
             'uuid' => Str::uuid(),
             'player_id' => $this->colony->player_id,
             'poi_id' => $destination->id,
-            'name' => $destination->name . ' Colony',
+            'name' => $destination->name.' Colony',
             'population' => $this->colonists_aboard,
             'habitability_rating' => $destination->habitability_score,
             'established_at' => now(),
@@ -164,7 +165,7 @@ class ColonyMission extends Model
         $destination->save();
 
         // Transfer cargo to new colony
-        if (!empty($this->cargo_manifest)) {
+        if (! empty($this->cargo_manifest)) {
             // Logic to transfer minerals and resources
         }
 
@@ -211,7 +212,7 @@ class ColonyMission extends Model
      */
     public function getMissionTypeDisplay(): string
     {
-        return match($this->mission_type) {
+        return match ($this->mission_type) {
             'colonize' => '🌍 Colonization',
             'trade_route' => '🚚 Trade Route',
             'defend' => '🛡️ Defense',
@@ -225,7 +226,7 @@ class ColonyMission extends Model
      */
     public function getStatusDisplay(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'preparing' => '⏳ Preparing',
             'in_transit' => '🚀 In Transit',
             'arrived' => '📍 Arrived',

@@ -29,7 +29,7 @@ class PrecursorShipSeeder extends Seeder
         $this->command->info('✨ Precursor Ships hidden in the void...');
     }
 
-    private function seedPrecursorShip(Galaxy $galaxy): void
+    public function seedPrecursorShip(Galaxy $galaxy): void
     {
         // Get all POIs in this galaxy
         $pois = PointOfInterest::where('galaxy_id', $galaxy->id)
@@ -42,8 +42,14 @@ class PrecursorShipSeeder extends Seeder
 
         do {
             // Generate random coordinates in interstellar space
-            $x = rand(50, 450); // Avoid edges
-            $y = rand(50, 450);
+            // Use galaxy dimensions with 10% margin from edges
+            $minX = (int) ($galaxy->width * 0.1);
+            $maxX = (int) ($galaxy->width * 0.9);
+            $minY = (int) ($galaxy->height * 0.1);
+            $maxY = (int) ($galaxy->height * 0.9);
+
+            $x = rand($minX, $maxX);
+            $y = rand($minY, $maxY);
 
             // Check distance from all POIs
             $tooClose = false;
@@ -60,7 +66,7 @@ class PrecursorShipSeeder extends Seeder
 
             $attempts++;
 
-            if (!$tooClose) {
+            if (! $tooClose) {
                 break; // Found a good spot
             }
 
@@ -68,9 +74,11 @@ class PrecursorShipSeeder extends Seeder
 
         if ($attempts >= $maxAttempts) {
             // Fallback: Place in center of galaxy
-            $x = 250;
-            $y = 250;
-            $this->command->warn("Could not find isolated spot, placing Precursor Ship at center ({$x}, {$y})");
+            $x = (int) ($galaxy->width / 2);
+            $y = (int) ($galaxy->height / 2);
+            if ($this->command) {
+                $this->command->warn("Could not find isolated spot, placing Precursor Ship at center ({$x}, {$y})");
+            }
         }
 
         // Create the Precursor Ship
@@ -93,7 +101,17 @@ class PrecursorShipSeeder extends Seeder
             'precursor_name' => $this->generatePrecursorName(),
         ]);
 
-        $this->command->info("🛸 Precursor Ship '{$this->generatePrecursorName()}' hidden at ({$x}, {$y}) in galaxy '{$galaxy->name}'");
+        if ($this->command) {
+            $this->command->info("🛸 Precursor Ship hidden at ({$x}, {$y}) in galaxy '{$galaxy->name}'");
+        }
+    }
+
+    /**
+     * Set the command instance for output
+     */
+    public function setCommand($command): void
+    {
+        $this->command = $command;
     }
 
     /**
@@ -111,6 +129,6 @@ class PrecursorShipSeeder extends Seeder
             'Architect', 'Engineer', 'Sentinel', 'Guardian', 'Harbinger',
         ];
 
-        return $prefixes[array_rand($prefixes)] . ' ' . $suffixes[array_rand($suffixes)];
+        return $prefixes[array_rand($prefixes)].' '.$suffixes[array_rand($suffixes)];
     }
 }

@@ -21,36 +21,36 @@ class PointGeneratorFactory
      * @throws RandomException
      */
     public static function make(
-        ?int   $width   = null,
-        ?int   $height  = null,
-        ?int   $count   = null,
+        ?int $width = null,
+        ?int $height = null,
+        ?int $count = null,
         ?float $spacing = null,
-        ?int   $seed    = null
+        ?int $seed = null
     ): PointGeneratorInterface {
-        $config  = config('game_config.galaxy');
+        $config = config('game_config.galaxy');
         $options = $options ?? config('game_config.generator_options');
 
-        $width      = $width ?? $config['width'];
-        $height     = $height ?? $config['height'];
-        $count      = $count ?? $config['points'];
-        $spacing    = $spacing ?? $config['spacing'];
-        $seed       = $seed ?? $config['seed'] ?? null;
-        $engine     = $config['engine'] ?? 'mt19937';
-        $type       = strtolower($config['generator']) ?? 'scatter';
+        $width = $width ?? $config['width'];
+        $height = $height ?? $config['height'];
+        $count = $count ?? $config['points'];
+        $spacing = $spacing ?? $config['spacing'];
+        $seed = $seed ?? $config['seed'] ?? null;
+        $engine = $config['engine'] ?? 'mt19937';
+        $type = strtolower($config['generator']) ?? 'scatter';
         $turn_limit = $config['turn_limit'] ?? 0;
-        $is_public  = $config['is_public'] ?? false;
+        $is_public = $config['is_public'] ?? false;
 
         $config = GalaxyConfig::fromArray([
-            'width'                 => $width,
-            'height'                => $height,
-            'count'                 => $count,
-            'seed'                  => $seed,
-            'distribution_method'   => $type,
-            'spacing'               => $spacing,
-            'engine'                => $engine,
-            'turn_limit'            => $turn_limit,
-            'is_public'             => $is_public,
-            'config'                => $config,
+            'width' => $width,
+            'height' => $height,
+            'count' => $count,
+            'seed' => $seed,
+            'distribution_method' => $type,
+            'spacing' => $spacing,
+            'engine' => $engine,
+            'turn_limit' => $turn_limit,
+            'is_public' => $is_public,
+            'config' => $config,
         ]);
 
         Galaxy::createGalaxy([
@@ -58,22 +58,14 @@ class PointGeneratorFactory
         ]);
 
         return match ($type) {
-            'poisson', 'poissondisk'
-                => new PoissonDisk($width, $height, $count, $spacing, $seed, $options, $engine),
-            'halton', 'haltonsequence'
-                => new HaltonSequence($width, $height, $count, $spacing, $seed, $options, $engine),
-            'vogel', 'vogelsspiral'
-                => new VogelsSpiral($width, $height, $count, $spacing, $seed, $options, $engine),
-            'stratified', 'stratifiedgrid'
-                => new StratifiedGrid($width, $height, $count, $spacing, $seed, $options, $engine),
-            'latin', 'latinhypercube'
-                => new LatinHypercube($width, $height, $count, $spacing, $seed, $options, $engine),
-            'r2', 'r2sequence'
-                => new R2Sequence($width, $height, $count, $spacing, $seed, $options, $engine),
-            'uniform', 'uniformrandom'
-                => new UniformRandom($width, $height, $count, $spacing, $seed, $options, $engine),
-            default
-                => new RandomScatter($width, $height, $count, $spacing, $seed, $options, $engine),
+            'poisson', 'poissondisk' => new PoissonDisk($width, $height, $count, $spacing, $seed, $options, $engine),
+            'halton', 'haltonsequence' => new HaltonSequence($width, $height, $count, $spacing, $seed, $options, $engine),
+            'vogel', 'vogelsspiral' => new VogelsSpiral($width, $height, $count, $spacing, $seed, $options, $engine),
+            'stratified', 'stratifiedgrid' => new StratifiedGrid($width, $height, $count, $spacing, $seed, $options, $engine),
+            'latin', 'latinhypercube' => new LatinHypercube($width, $height, $count, $spacing, $seed, $options, $engine),
+            'r2', 'r2sequence' => new R2Sequence($width, $height, $count, $spacing, $seed, $options, $engine),
+            'uniform', 'uniformrandom' => new UniformRandom($width, $height, $count, $spacing, $seed, $options, $engine),
+            default => new RandomScatter($width, $height, $count, $spacing, $seed, $options, $engine),
         };
     }
 }

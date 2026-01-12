@@ -14,7 +14,7 @@ class LocationValidator
     public static function getTradingHub(Player $player): ?TradingHub
     {
         $location = $player->currentLocation;
-        if (!$location) {
+        if (! $location) {
             return null;
         }
 
@@ -31,6 +31,7 @@ class LocationValidator
     public static function isAtTradingHub(Player $player): bool
     {
         $hub = self::getTradingHub($player);
+
         return $hub && $hub->is_active;
     }
 
@@ -40,6 +41,7 @@ class LocationValidator
     public static function isAtPlansHub(Player $player): bool
     {
         $hub = self::getTradingHub($player);
+
         return $hub && $hub->is_active && $hub->has_plans;
     }
 }

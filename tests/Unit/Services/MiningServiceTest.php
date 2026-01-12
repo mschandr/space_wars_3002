@@ -20,7 +20,7 @@ class MiningServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->miningService = new MiningService();
+        $this->miningService = new MiningService;
     }
 
     /** @test */
@@ -89,7 +89,7 @@ class MiningServiceTest extends TestCase
         $this->assertEquals(6, $result['sensor_level']);
 
         // With sensor level 6 (~62.3%), should extract ~3,115 units
-        $expectedAmount = (int)($depositSize * 0.623);
+        $expectedAmount = (int) ($depositSize * 0.623);
         $this->assertEqualsWithDelta($expectedAmount, $result['amount_extracted'], 50);
     }
 

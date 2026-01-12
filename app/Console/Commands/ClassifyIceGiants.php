@@ -67,6 +67,7 @@ class ClassifyIceGiants extends Command
             if ($skipExisting && $existingIceGiants > 0) {
                 $stats['systems_skipped']++;
                 $progressBar->advance();
+
                 continue;
             }
 
@@ -100,7 +101,7 @@ class ClassifyIceGiants extends Command
                     ->where('type', 'asteroid_belt')
                     ->exists();
 
-                if (!$hasAsteroidBelt) {
+                if (! $hasAsteroidBelt) {
                     $this->createAsteroidBelt($star, $quantiumMin, $quantiumMax);
                     $stats['asteroid_belts_created']++;
                     $stats['quantium_deposits_added']++;
@@ -198,7 +199,7 @@ class ClassifyIceGiants extends Command
             'uuid' => \Illuminate\Support\Str::uuid(),
             'star_id' => $star->id,
             'galaxy_id' => $star->galaxy_id,
-            'name' => $star->name . ' Asteroid Belt',
+            'name' => $star->name.' Asteroid Belt',
             'type' => 'asteroid_belt',
             'x' => $x,
             'y' => $y,
@@ -223,7 +224,7 @@ class ClassifyIceGiants extends Command
 
         // 30% chance of Quantium in asteroid belts (less than ice giants)
         if (rand(1, 100) <= 30) {
-            $quantiumDeposit = rand((int)($quantiumMin * 0.5), (int)($quantiumMax * 0.7)); // Smaller deposits
+            $quantiumDeposit = rand((int) ($quantiumMin * 0.5), (int) ($quantiumMax * 0.7)); // Smaller deposits
             $mineralDeposits['Quantium'] = [
                 'size' => $quantiumDeposit,
                 'richness' => $this->determineRichness($quantiumDeposit, $quantiumMin, $quantiumMax),
@@ -258,7 +259,7 @@ class ClassifyIceGiants extends Command
         $range = $max - $min;
         $relative = ($size - $min) / $range;
 
-        return match(true) {
+        return match (true) {
             $relative >= 0.8 => 'abundant',
             $relative >= 0.6 => 'rich',
             $relative >= 0.4 => 'moderate',

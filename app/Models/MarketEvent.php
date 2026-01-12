@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 class MarketEvent extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'uuid',
         'mineral_id',
@@ -132,7 +133,7 @@ class MarketEvent extends Model
      */
     public function getTimeRemainingString(): string
     {
-        if (!$this->isCurrentlyActive()) {
+        if (! $this->isCurrentlyActive()) {
             return 'Expired';
         }
 

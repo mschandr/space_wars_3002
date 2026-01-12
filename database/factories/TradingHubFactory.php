@@ -24,7 +24,7 @@ class TradingHubFactory extends Factory
         return [
             'uuid' => Str::uuid(),
             'poi_id' => PointOfInterest::factory(),
-            'name' => fake()->company() . ' Trading Post',
+            'name' => fake()->company().' Trading Post',
             'type' => fake()->randomElement(['standard', 'major', 'premium']),
             'has_salvage_yard' => fake()->boolean(30), // 30% chance of having salvage yard
             'gate_count' => fake()->numberBetween(1, 5),

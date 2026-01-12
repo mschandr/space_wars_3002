@@ -7,7 +7,6 @@ use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
 use App\Models\PointOfInterest;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Str;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\PointOfInterest>
@@ -32,7 +31,7 @@ class PointOfInterestFactory extends Factory
             'status' => PointOfInterestStatus::DRAFT,
             'x' => fake()->numberBetween(0, 1000),
             'y' => fake()->numberBetween(0, 1000),
-            'name' => fake()->words(2, true) . ' Star',
+            'name' => fake()->words(2, true).' Star',
             'attributes' => [],
             'is_hidden' => false,
             'version' => '',
@@ -56,7 +55,7 @@ class PointOfInterestFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'type' => PointOfInterestType::TERRESTRIAL,
-            'name' => fake()->words(2, true) . ' Planet',
+            'name' => fake()->words(2, true).' Planet',
         ]);
     }
 }

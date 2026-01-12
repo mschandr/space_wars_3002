@@ -17,8 +17,7 @@ class PirateEncounterService
         private readonly SurrenderService $surrenderService,
         private readonly SalvageService $salvageService,
         private readonly PlayerDeathService $deathService,
-    ) {
-    }
+    ) {}
 
     /**
      * Check if a warp gate has active pirate presence

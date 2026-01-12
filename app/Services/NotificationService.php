@@ -49,7 +49,7 @@ class NotificationService
             ->where('is_read', false)
             ->exists();
 
-        if (!$existingAlert && $quantiumLevel < 24) {
+        if (! $existingAlert && $quantiumLevel < 24) {
             $this->createNotification(
                 $player,
                 'low_quantium',
@@ -143,7 +143,7 @@ class NotificationService
             ->where('status', 'operational')
             ->exists();
 
-        if (!$hasSensors) {
+        if (! $hasSensors) {
             return; // No early warning without sensors
         }
 
@@ -235,7 +235,7 @@ class NotificationService
             ->where('is_read', false)
             ->exists();
 
-        if (!$existingAlert && $foodLevel < 100) {
+        if (! $existingAlert && $foodLevel < 100) {
             $this->createNotification(
                 $colony->player,
                 'low_food',
@@ -263,7 +263,7 @@ class NotificationService
             ->where('is_read', false)
             ->exists();
 
-        if (!$existingAlert && $mineralLevel < 100) {
+        if (! $existingAlert && $mineralLevel < 100) {
             $this->createNotification(
                 $colony->player,
                 'low_minerals',
@@ -322,7 +322,7 @@ class NotificationService
         // Get the star system the player is in
         $star = $currentPOI->star;
 
-        if (!$star) {
+        if (! $star) {
             return;
         }
 
@@ -355,6 +355,7 @@ class NotificationService
         // Build list of all colonizable planets
         $planetList = $colonizablePlanets->map(function ($planet) {
             $hab = round($planet->habitability_score * 100);
+
             return "{$planet->name} ({$hab}% habitable)";
         })->join(', ');
 
@@ -384,7 +385,7 @@ class NotificationService
                 'planet_count' => $colonizablePlanets->count(),
                 'best_planet_id' => $bestPlanet->id,
                 'best_habitability' => $bestPlanet->habitability_score,
-                'planets' => $colonizablePlanets->map(fn($p) => [
+                'planets' => $colonizablePlanets->map(fn ($p) => [
                     'id' => $p->id,
                     'name' => $p->name,
                     'habitability' => $p->habitability_score,

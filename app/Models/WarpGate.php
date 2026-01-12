@@ -63,7 +63,7 @@ class WarpGate extends Model
         $source = $this->sourcePoi;
         $destination = $this->destinationPoi;
 
-        if (!$source || !$destination) {
+        if (! $source || ! $destination) {
             return 0.0;
         }
 
@@ -75,7 +75,7 @@ class WarpGate extends Model
 
     public function isAccessible(): bool
     {
-        return !$this->is_hidden && $this->status === 'active';
+        return ! $this->is_hidden && $this->status === 'active';
     }
 
     /**
@@ -96,7 +96,7 @@ class WarpGate extends Model
     public function canPlayerDetect(PlayerShip $ship): bool
     {
         // Visible gates are always detectable
-        if (!$this->is_hidden) {
+        if (! $this->is_hidden) {
             return true;
         }
 

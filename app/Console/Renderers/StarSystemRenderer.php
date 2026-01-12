@@ -31,28 +31,28 @@ class StarSystemRenderer
 
     private function renderHeader(PointOfInterest $star): void
     {
-        $this->command->line($this->colorize('═' . str_repeat('═', $this->termWidth - 2) . '═', 'border'));
+        $this->command->line($this->colorize('═'.str_repeat('═', $this->termWidth - 2).'═', 'border'));
         $this->command->line(
-            $this->colorize('  STAR SYSTEM: ', 'header') .
+            $this->colorize('  STAR SYSTEM: ', 'header').
             $this->colorize(strtoupper($star->name), 'highlight')
         );
-        $this->command->line($this->colorize('═' . str_repeat('═', $this->termWidth - 2) . '═', 'border'));
+        $this->command->line($this->colorize('═'.str_repeat('═', $this->termWidth - 2).'═', 'border'));
         $this->command->newLine();
     }
 
     private function renderStarDetails(PointOfInterest $star): void
     {
         $stellarClass = $star->attributes['stellar_class'] ?? 'Unknown';
-        $temperature  = $star->attributes['temperature'] ?? 'Unknown';
+        $temperature = $star->attributes['temperature'] ?? 'Unknown';
 
-        $this->command->line($this->colorize('  Star Classification: ', 'label') .
+        $this->command->line($this->colorize('  Star Classification: ', 'label').
                            $this->colorize($stellarClass, $stellarClass));
 
         // Format temperature only if it's numeric
-        $tempDisplay = is_numeric($temperature) ? number_format($temperature) . ' K' : $temperature;
-        $this->command->line($this->colorize('  Temperature: ', 'label') . $tempDisplay);
+        $tempDisplay = is_numeric($temperature) ? number_format($temperature).' K' : $temperature;
+        $this->command->line($this->colorize('  Temperature: ', 'label').$tempDisplay);
 
-        $this->command->line($this->colorize('  Coordinates: ', 'label') .
+        $this->command->line($this->colorize('  Coordinates: ', 'label').
                            "({$star->x}, {$star->y})");
         $this->command->newLine();
     }
@@ -80,10 +80,10 @@ class StarSystemRenderer
         $color = $poi->getDisplayColor();
         $orbitalIndex = $poi->orbital_index ?? '?';
 
-        $line = $prefix . $this->colorize($icon, $color) . ' ' .
-                $this->colorize("[$orbitalIndex]", 'label') . ' ' .
-                $this->colorize($poi->name, $color) . ' ' .
-                $this->colorize('(' . $poi->type->name . ')', 'dim');
+        $line = $prefix.$this->colorize($icon, $color).' '.
+                $this->colorize("[$orbitalIndex]", 'label').' '.
+                $this->colorize($poi->name, $color).' '.
+                $this->colorize('('.$poi->type->name.')', 'dim');
 
         if (isset($poi->attributes['orbital_distance_au'])) {
             $distance = number_format($poi->attributes['orbital_distance_au'], 2);
@@ -100,10 +100,10 @@ class StarSystemRenderer
         // Render trading hub if present
         if ($poi->tradingHub && $poi->tradingHub->is_active) {
             $hub = $poi->tradingHub;
-            $hubLine = str_repeat(' ', $indent + 2) .
-                       $this->colorize('⚓', 'trade') . ' ' .
-                       $this->colorize('Trading Hub: ', 'label') .
-                       $this->colorize($hub->name, 'trade') . ' ' .
+            $hubLine = str_repeat(' ', $indent + 2).
+                       $this->colorize('⚓', 'trade').' '.
+                       $this->colorize('Trading Hub: ', 'label').
+                       $this->colorize($hub->name, 'trade').' '.
                        $this->colorize("(Tier {$hub->tier})", 'dim');
             $this->command->line($hubLine);
         }
@@ -120,11 +120,12 @@ class StarSystemRenderer
     private function renderWarpGates(PointOfInterest $star, Collection $gates): void
     {
         $this->command->newLine();
-        $outgoingGates = $gates->filter(fn($gate) => $gate->source_poi_id === $star->id);
+        $outgoingGates = $gates->filter(fn ($gate) => $gate->source_poi_id === $star->id);
 
         if ($outgoingGates->isEmpty()) {
-            $this->command->line($this->colorize('  WARP GATES: ', 'header') .
+            $this->command->line($this->colorize('  WARP GATES: ', 'header').
                                $this->colorize('None', 'dim'));
+
             return;
         }
 
@@ -133,7 +134,7 @@ class StarSystemRenderer
 
         foreach ($outgoingGates as $gate) {
             $destination = $gate->destinationPoi;
-            if (!$destination) {
+            if (! $destination) {
                 continue;
             }
 
@@ -141,9 +142,9 @@ class StarSystemRenderer
             $statusText = $gate->is_hidden ? ' (Hidden)' : '';
             $distance = number_format($gate->distance, 2);
 
-            $line = '    ' . $this->colorize($statusIcon, 'gate') . ' ' .
-                    $this->colorize($destination->name, 'highlight') . ' ' .
-                    $this->colorize("({$distance} units)", 'dim') .
+            $line = '    '.$this->colorize($statusIcon, 'gate').' '.
+                    $this->colorize($destination->name, 'highlight').' '.
+                    $this->colorize("({$distance} units)", 'dim').
                     $this->colorize($statusText, 'gate_hidden');
 
             $this->command->line($line);
@@ -153,7 +154,7 @@ class StarSystemRenderer
     private function renderTradingHubSummary(PointOfInterest $star): void
     {
         $hub = $star->tradingHub;
-        if (!$hub) {
+        if (! $hub) {
             return;
         }
 
@@ -164,22 +165,22 @@ class StarSystemRenderer
         $typeIcon = $hub->getTypeIcon();
         $salvageIcon = $hub->has_salvage_yard ? ' 🔧' : '';
 
-        $this->command->line('    ' . $this->colorize($typeIcon, 'trade') . ' ' .
-                           $this->colorize($hub->name, 'trade') . ' ' .
-                           $this->colorize('(' . ucfirst($hub->type) . ')', 'dim') .
+        $this->command->line('    '.$this->colorize($typeIcon, 'trade').' '.
+                           $this->colorize($hub->name, 'trade').' '.
+                           $this->colorize('('.ucfirst($hub->type).')', 'dim').
                            $salvageIcon);
 
-        $this->command->line('    ' . $this->colorize('Minerals: ', 'label') .
-                           $hub->inventories()->count() . ' types');
-        $this->command->line('    ' . $this->colorize('Tax Rate: ', 'label') .
-                           $hub->tax_rate . '%');
+        $this->command->line('    '.$this->colorize('Minerals: ', 'label').
+                           $hub->inventories()->count().' types');
+        $this->command->line('    '.$this->colorize('Tax Rate: ', 'label').
+                           $hub->tax_rate.'%');
 
         if ($hub->has_salvage_yard) {
-            $this->command->line('    ' . $this->colorize('Services: ', 'label') .
+            $this->command->line('    '.$this->colorize('Services: ', 'label').
                                'Ship Salvage & Upgrades Available');
         }
 
         $this->command->newLine();
-        $this->command->line('    ' . $this->colorize('Press [t] to view detailed prices', 'dim'));
+        $this->command->line('    '.$this->colorize('Press [t] to view detailed prices', 'dim'));
     }
 }

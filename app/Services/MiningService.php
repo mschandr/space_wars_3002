@@ -22,6 +22,7 @@ class MiningService
     public function calculateSensorEfficiency(int $sensorLevel): float
     {
         $efficiency = 0.1 * pow(1.18, $sensorLevel);
+
         return min(2.0, $efficiency); // Cap at 200%
     }
 
@@ -44,7 +45,7 @@ class MiningService
         }
 
         // Validate the POI is suitable for mining
-        if (!$this->canMineFromPOI($poi, $mineral)) {
+        if (! $this->canMineFromPOI($poi, $mineral)) {
             return [
                 'success' => false,
                 'message' => "Cannot mine {$mineral->name} from {$poi->type}",
@@ -81,7 +82,7 @@ class MiningService
         $foundIn = $mineralAttributes['found_in'] ?? [];
 
         // Check if this mineral can be found in this POI type
-        if (!empty($foundIn)) {
+        if (! empty($foundIn)) {
             return in_array($poi->planet_class, $foundIn) || in_array($poi->type, $foundIn);
         }
 
@@ -136,7 +137,7 @@ class MiningService
             $nextEfficiency = $this->calculateSensorEfficiency($sensorLevel + 1);
             $nextPercent = round($nextEfficiency * 100, 1);
             $improvement = $nextPercent - $percent;
-            $explanation .= "Upgrade to Level " . ($sensorLevel + 1) . ": {$nextPercent}% (+{$improvement}%)";
+            $explanation .= 'Upgrade to Level '.($sensorLevel + 1).": {$nextPercent}% (+{$improvement}%)";
         }
 
         return $explanation;
@@ -154,7 +155,7 @@ class MiningService
         // Get Quantium mineral
         $quantium = Mineral::where('name', 'Quantium')->first();
 
-        if (!$quantium) {
+        if (! $quantium) {
             return [
                 'success' => false,
                 'message' => 'Quantium mineral not found in database',
@@ -192,7 +193,7 @@ class MiningService
             ->where('status', 'operational')
             ->first();
 
-        if (!$miningFacility) {
+        if (! $miningFacility) {
             return [
                 'success' => false,
                 'message' => 'No operational orbital mining facility',
@@ -205,7 +206,7 @@ class MiningService
             ->orderBy('sensors', 'desc')
             ->first();
 
-        if (!$bestShip) {
+        if (! $bestShip) {
             return [
                 'success' => false,
                 'message' => 'No ship available for sensor operations',

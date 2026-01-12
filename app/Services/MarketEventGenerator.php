@@ -29,8 +29,7 @@ class MarketEventGenerator
     /**
      * Generate a random market event
      *
-     * @param float $probability Probability of generating an event (0.0-1.0)
-     * @return MarketEvent|null
+     * @param  float  $probability  Probability of generating an event (0.0-1.0)
      */
     public function generateRandomEvent(float $probability = 0.15): ?MarketEvent
     {
@@ -56,19 +55,19 @@ class MarketEventGenerator
 
         // Duration: 30 minutes to 4 hours
         $durationMinutes = mt_rand(30, 240);
-        $startedAt       = now();
-        $expiresAt       = now()->addMinutes($durationMinutes);
+        $startedAt = now();
+        $expiresAt = now()->addMinutes($durationMinutes);
 
         return MarketEvent::create([
-            'uuid'             => Str::uuid(),
-            'mineral_id'       => $mineralId,
-            'trading_hub_id'   => $tradingHubId,
-            'event_type'       => $eventType,
+            'uuid' => Str::uuid(),
+            'mineral_id' => $mineralId,
+            'trading_hub_id' => $tradingHubId,
+            'event_type' => $eventType,
             'price_multiplier' => $multiplier,
-            'description'      => $description,
-            'started_at'       => $startedAt,
-            'expires_at'       => $expiresAt,
-            'is_active'        => true,
+            'description' => $description,
+            'started_at' => $startedAt,
+            'expires_at' => $expiresAt,
+            'is_active' => true,
         ]);
     }
 
@@ -96,16 +95,16 @@ class MarketEventGenerator
         $mineralName = $mineralId ? (Mineral::find($mineralId)?->name ?? 'Unknown') : 'various minerals';
 
         return match ($eventType) {
-            MarketEventType::SUPPLY_SHORTAGE   => "⚠️  BREAKING: Supply shortage of {$mineralName} reported across multiple sectors!",
-            MarketEventType::DEMAND_SPIKE      => "📈 MARKET ALERT: Massive demand surge for {$mineralName} from industrial consortiums!",
-            MarketEventType::TRADE_EMBARGO     => "🚨 EMBARGO: Government restrictions imposed on {$mineralName} trade!",
-            MarketEventType::MARKET_FLOODING   => "📉 CRASH: Market flooded with {$mineralName} as reserves dumped!",
-            MarketEventType::DISCOVERY         => "🎉 DISCOVERY: New rich deposits of {$mineralName} found in outer sectors!",
-            MarketEventType::SPECULATION_BOOM  => "💰 SPECULATION: Traders hoarding {$mineralName} expecting price surge!",
-            MarketEventType::MINING_ACCIDENT   => "💥 DISASTER: Mining accident severely limits {$mineralName} production!",
+            MarketEventType::SUPPLY_SHORTAGE => "⚠️  BREAKING: Supply shortage of {$mineralName} reported across multiple sectors!",
+            MarketEventType::DEMAND_SPIKE => "📈 MARKET ALERT: Massive demand surge for {$mineralName} from industrial consortiums!",
+            MarketEventType::TRADE_EMBARGO => "🚨 EMBARGO: Government restrictions imposed on {$mineralName} trade!",
+            MarketEventType::MARKET_FLOODING => "📉 CRASH: Market flooded with {$mineralName} as reserves dumped!",
+            MarketEventType::DISCOVERY => "🎉 DISCOVERY: New rich deposits of {$mineralName} found in outer sectors!",
+            MarketEventType::SPECULATION_BOOM => "💰 SPECULATION: Traders hoarding {$mineralName} expecting price surge!",
+            MarketEventType::MINING_ACCIDENT => "💥 DISASTER: Mining accident severely limits {$mineralName} production!",
             MarketEventType::TECH_BREAKTHROUGH => "🔬 BREAKTHROUGH: New technology requires massive quantities of {$mineralName}!",
-            MarketEventType::PIRATE_RAID       => "☠️  PIRATE ATTACK: Raiders disrupt {$mineralName} supply lanes!",
-            MarketEventType::CORPORATE_BUYOUT  => "🏢 BUYOUT: Mega-corp monopolizing {$mineralName} supplies!",
+            MarketEventType::PIRATE_RAID => "☠️  PIRATE ATTACK: Raiders disrupt {$mineralName} supply lanes!",
+            MarketEventType::CORPORATE_BUYOUT => "🏢 BUYOUT: Mega-corp monopolizing {$mineralName} supplies!",
         };
     }
 }

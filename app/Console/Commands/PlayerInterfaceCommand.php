@@ -7,8 +7,8 @@ use App\Console\Shops\ComponentShopHandler;
 use App\Console\Shops\MineralTradingHandler;
 use App\Console\Shops\PirateEncounterHandler;
 use App\Console\Shops\PlansShopHandler;
-use App\Console\Shops\ShipShopHandler;
 use App\Console\Shops\RepairShopHandler;
+use App\Console\Shops\ShipShopHandler;
 use App\Console\Traits\ConsoleBoxRenderer;
 use App\Console\Traits\ConsoleColorizer;
 use App\Console\Traits\TerminalInputHandler;
@@ -19,15 +19,16 @@ use Illuminate\Console\Command;
 
 class PlayerInterfaceCommand extends Command
 {
+    use ConsoleBoxRenderer;
     use ConsoleColorizer;
     use TerminalInputHandler;
-    use ConsoleBoxRenderer;
 
     protected $signature = 'player:interface {player_id}';
 
     protected $description = 'Display player interface with current location and ship status';
 
     private Player $player;
+
     private int $termWidth = 120;
 
     public function handle()
@@ -39,16 +40,18 @@ class PlayerInterfaceCommand extends Command
             'currentLocation.children',
             'currentLocation.parent',
             'activeShip.ship',
-            'activeShip.cargo.mineral'
+            'activeShip.cargo.mineral',
         ])->find($playerId);
 
-        if (!$this->player) {
+        if (! $this->player) {
             $this->error("Player with ID {$playerId} not found.");
+
             return 1;
         }
 
-        if (!$this->player->activeShip) {
-            $this->error("Player has no active ship.");
+        if (! $this->player->activeShip) {
+            $this->error('Player has no active ship.');
+
             return 1;
         }
 
@@ -81,10 +84,11 @@ class PlayerInterfaceCommand extends Command
         while ($running) {
             // Check if player lost their ship (e.g., from pirate combat)
             $this->player->refresh();
-            if (!$this->player->activeShip) {
+            if (! $this->player->activeShip) {
                 // Restore terminal and handle no ship scenario
                 system('stty sane');
                 $this->handleNoShip();
+
                 return;
             }
 
@@ -92,6 +96,7 @@ class PlayerInterfaceCommand extends Command
 
             if ($char === false) {
                 usleep(50000); // 50ms
+
                 continue;
             }
 
@@ -129,7 +134,7 @@ class PlayerInterfaceCommand extends Command
             'currentLocation.children',
             'currentLocation.parent',
             'activeShip.ship',
-            'activeShip.cargo.mineral'
+            'activeShip.cargo.mineral',
         ]);
 
         $this->renderInterface();
@@ -148,7 +153,7 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
 
-        $this->line($this->colorize('  Player Credits: ', 'label') . $this->colorize(number_format($this->player->credits, 2), 'trade'));
+        $this->line($this->colorize('  Player Credits: ', 'label').$this->colorize(number_format($this->player->credits, 2), 'trade'));
         $this->newLine();
 
         $upgradeInfo = $upgradeService->getUpgradeInfo($ship);
@@ -190,15 +195,15 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
 
-        $this->line($this->colorize('  Ship Name: ', 'label') . $ship->name);
-        $this->line($this->colorize('  Ship Class: ', 'label') . $shipTemplate->class);
-        $this->line($this->colorize('  Ship Type: ', 'label') . $shipTemplate->name);
-        $this->line($this->colorize('  Status: ', 'label') . $this->colorize(ucfirst($ship->status),
+        $this->line($this->colorize('  Ship Name: ', 'label').$ship->name);
+        $this->line($this->colorize('  Ship Class: ', 'label').$shipTemplate->class);
+        $this->line($this->colorize('  Ship Type: ', 'label').$shipTemplate->name);
+        $this->line($this->colorize('  Status: ', 'label').$this->colorize(ucfirst($ship->status),
             $ship->status === 'operational' ? 'highlight' : 'dim'));
         $this->newLine();
 
         $this->line($this->colorize('  Description:', 'header'));
-        $this->line('  ' . $shipTemplate->description);
+        $this->line('  '.$shipTemplate->description);
         $this->newLine();
 
         $this->line($this->colorize('  Current Stats:', 'header'));
@@ -206,35 +211,35 @@ class PlayerInterfaceCommand extends Command
         // Hull
         $hullPercent = ($ship->hull / $ship->max_hull) * 100;
         $hullColor = $hullPercent > 70 ? 'highlight' : ($hullPercent > 30 ? 'trade' : 'dim');
-        $this->line($this->colorize('    Hull: ', 'label') .
-                   $this->colorize($ship->hull . '/' . $ship->max_hull, $hullColor) .
-                   $this->colorize(' (' . round($hullPercent) . '%)', 'dim'));
+        $this->line($this->colorize('    Hull: ', 'label').
+                   $this->colorize($ship->hull.'/'.$ship->max_hull, $hullColor).
+                   $this->colorize(' ('.round($hullPercent).'%)', 'dim'));
 
         // Fuel
         $ship->regenerateFuel();
         $fuelPercent = ($ship->current_fuel / $ship->max_fuel) * 100;
         $fuelColor = $fuelPercent > 70 ? 'highlight' : ($fuelPercent > 30 ? 'trade' : 'dim');
-        $this->line($this->colorize('    Fuel: ', 'label') .
-                   $this->colorize($ship->current_fuel . '/' . $ship->max_fuel, $fuelColor) .
-                   $this->colorize(' (' . round($fuelPercent) . '%)', 'dim'));
+        $this->line($this->colorize('    Fuel: ', 'label').
+                   $this->colorize($ship->current_fuel.'/'.$ship->max_fuel, $fuelColor).
+                   $this->colorize(' ('.round($fuelPercent).'%)', 'dim'));
 
         // Cargo
         $cargoPercent = $ship->cargo_hold > 0 ? ($ship->current_cargo / $ship->cargo_hold) * 100 : 0;
-        $this->line($this->colorize('    Cargo Hold: ', 'label') .
-                   $this->colorize($ship->current_cargo . '/' . $ship->cargo_hold, 'highlight') .
-                   $this->colorize(' (' . round($cargoPercent) . '% full)', 'dim'));
+        $this->line($this->colorize('    Cargo Hold: ', 'label').
+                   $this->colorize($ship->current_cargo.'/'.$ship->cargo_hold, 'highlight').
+                   $this->colorize(' ('.round($cargoPercent).'% full)', 'dim'));
 
         // Other stats
-        $this->line($this->colorize('    Weapons: ', 'label') . $this->colorize($ship->weapons, 'highlight'));
-        $this->line($this->colorize('    Sensors: ', 'label') . $this->colorize($ship->sensors, 'highlight'));
-        $this->line($this->colorize('    Warp Drive: ', 'label') . $this->colorize($ship->warp_drive, 'highlight'));
+        $this->line($this->colorize('    Weapons: ', 'label').$this->colorize($ship->weapons, 'highlight'));
+        $this->line($this->colorize('    Sensors: ', 'label').$this->colorize($ship->sensors, 'highlight'));
+        $this->line($this->colorize('    Warp Drive: ', 'label').$this->colorize($ship->warp_drive, 'highlight'));
 
         $this->newLine();
         $this->line($this->colorize('  Base Template:', 'header'));
-        $this->line($this->colorize('    Base Cargo: ', 'dim') . $shipTemplate->cargo_capacity);
-        $this->line($this->colorize('    Base Hull: ', 'dim') . $shipTemplate->hull_strength);
-        $this->line($this->colorize('    Speed: ', 'dim') . $shipTemplate->speed);
-        $this->line($this->colorize('    Rarity: ', 'dim') . ucfirst($shipTemplate->rarity));
+        $this->line($this->colorize('    Base Cargo: ', 'dim').$shipTemplate->cargo_capacity);
+        $this->line($this->colorize('    Base Hull: ', 'dim').$shipTemplate->hull_strength);
+        $this->line($this->colorize('    Speed: ', 'dim').$shipTemplate->speed);
+        $this->line($this->colorize('    Rarity: ', 'dim').ucfirst($shipTemplate->rarity));
 
         $this->newLine();
         $this->line($this->colorize('  Press any key to return...', 'dim'));
@@ -258,7 +263,7 @@ class PlayerInterfaceCommand extends Command
         $this->newLine();
 
         $cargoUsed = $ship->cargo->sum('quantity');
-        $this->line($this->colorize('  Cargo Capacity: ', 'label') .
+        $this->line($this->colorize('  Cargo Capacity: ', 'label').
                    $this->colorize("{$cargoUsed}/{$ship->cargo_hold}", 'highlight'));
         $this->newLine();
 
@@ -285,8 +290,8 @@ class PlayerInterfaceCommand extends Command
             });
 
             $this->newLine();
-            $this->line($this->colorize('  Total Cargo Value: ', 'label') .
-                       $this->colorize(number_format($totalValue, 2) . ' credits', 'trade'));
+            $this->line($this->colorize('  Total Cargo Value: ', 'label').
+                       $this->colorize(number_format($totalValue, 2).' credits', 'trade'));
         }
 
         $this->newLine();
@@ -302,7 +307,7 @@ class PlayerInterfaceCommand extends Command
     {
         $tradingHub = LocationValidator::getTradingHub($this->player);
 
-        if (!$tradingHub || !$tradingHub->is_active) {
+        if (! $tradingHub || ! $tradingHub->is_active) {
             system('stty sane');
             $this->clearScreen();
             $this->error('No active trading hub at this location.');
@@ -313,6 +318,7 @@ class PlayerInterfaceCommand extends Command
             system('stty -icanon -echo');
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -327,7 +333,7 @@ class PlayerInterfaceCommand extends Command
     {
         $tradingHub = LocationValidator::getTradingHub($this->player);
 
-        if (!$tradingHub || !$tradingHub->is_active) {
+        if (! $tradingHub || ! $tradingHub->is_active) {
             system('stty sane');
             $this->clearScreen();
             $this->error('No active trading hub at this location.');
@@ -338,6 +344,7 @@ class PlayerInterfaceCommand extends Command
             system('stty -icanon -echo');
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -352,7 +359,7 @@ class PlayerInterfaceCommand extends Command
     {
         $tradingHub = LocationValidator::getTradingHub($this->player);
 
-        if (!$tradingHub || !$tradingHub->is_active) {
+        if (! $tradingHub || ! $tradingHub->is_active) {
             system('stty sane');
             $this->clearScreen();
             $this->error('No active trading hub at this location.');
@@ -363,11 +370,12 @@ class PlayerInterfaceCommand extends Command
             system('stty -icanon -echo');
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
         // Check if this trading hub has a shipyard
-        if (!$tradingHub->hasShipyard()) {
+        if (! $tradingHub->hasShipyard()) {
             system('stty sane');
             $this->clearScreen();
             $this->error('This trading hub does not have a shipyard.');
@@ -378,6 +386,7 @@ class PlayerInterfaceCommand extends Command
             system('stty -icanon -echo');
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -410,10 +419,10 @@ class PlayerInterfaceCommand extends Command
         $level = $this->colorize($this->player->level, 'highlight');
         $xp = $this->colorize(number_format($this->player->experience), 'dim');
 
-        $this->line("  " . $this->colorize('CAPTAIN:', 'label') . " {$callSign}  |  " .
-                   $this->colorize('CREDITS:', 'label') . " {$credits}  |  " .
-                   $this->colorize('LEVEL:', 'label') . " {$level}  |  " .
-                   $this->colorize('XP:', 'label') . " {$xp}");
+        $this->line('  '.$this->colorize('CAPTAIN:', 'label')." {$callSign}  |  ".
+                   $this->colorize('CREDITS:', 'label')." {$credits}  |  ".
+                   $this->colorize('LEVEL:', 'label')." {$level}  |  ".
+                   $this->colorize('XP:', 'label')." {$xp}");
     }
 
     private function renderTwoColumnLayout(): void
@@ -446,7 +455,7 @@ class PlayerInterfaceCommand extends Command
             $leftPadding = str_repeat(' ', max(0, 60 - $leftVisualWidth));
 
             // Each box is exactly 60 chars wide, add 2 spaces between columns
-            $this->line($left . $leftPadding . '  ' . $right);
+            $this->line($left.$leftPadding.'  '.$right);
         }
     }
 
@@ -455,7 +464,7 @@ class PlayerInterfaceCommand extends Command
         $output = '';
         $location = $this->player->currentLocation;
 
-        if (!$location) {
+        if (! $location) {
             return $this->colorize('  LOCATION: Unknown', 'dim');
         }
 
@@ -463,12 +472,12 @@ class PlayerInterfaceCommand extends Command
         $headerText = 'CURRENT LOCATION';
         $headerPadding = 57 - mb_strlen($headerText);
 
-        $output .= $this->colorize('╔' . str_repeat('═', 58) . '╗', 'border') . "\n";
-        $output .= $this->colorize('║', 'border') . ' ' .
-                   $this->colorize($headerText, 'header') .
-                   str_repeat(' ', $headerPadding) .
-                   $this->colorize('║', 'border') . "\n";
-        $output .= $this->colorize('╠' . str_repeat('═', 58) . '╣', 'border') . "\n";
+        $output .= $this->colorize('╔'.str_repeat('═', 58).'╗', 'border')."\n";
+        $output .= $this->colorize('║', 'border').' '.
+                   $this->colorize($headerText, 'header').
+                   str_repeat(' ', $headerPadding).
+                   $this->colorize('║', 'border')."\n";
+        $output .= $this->colorize('╠'.str_repeat('═', 58).'╣', 'border')."\n";
 
         // Get root star
         $star = $location->type === PointOfInterestType::STAR
@@ -476,28 +485,28 @@ class PlayerInterfaceCommand extends Command
             : $location->getRootStar();
 
         if ($star) {
-            $output .= $this->formatBoxLine('System: ' . $star->name);
-            $output .= $this->formatBoxLine('Coordinates: (' . $star->x . ', ' . $star->y . ')');
+            $output .= $this->formatBoxLine('System: '.$star->name);
+            $output .= $this->formatBoxLine('Coordinates: ('.$star->x.', '.$star->y.')');
 
             if (isset($star->attributes['stellar_class'])) {
-                $output .= $this->formatBoxLine('Class: ' . $star->attributes['stellar_class']);
+                $output .= $this->formatBoxLine('Class: '.$star->attributes['stellar_class']);
             }
 
             // Show inhabited status
             $inhabitedStatus = $star->is_inhabited
                 ? $this->colorize('INHABITED', 'trade')
                 : $this->colorize('UNINHABITED', 'dim');
-            $output .= $this->formatBoxLine('Status: ' . $inhabitedStatus);
+            $output .= $this->formatBoxLine('Status: '.$inhabitedStatus);
 
             // Show warp gate count
             $gateCount = $star->outgoingGates()->where('is_hidden', false)->count();
             if ($gateCount > 0) {
-                $output .= $this->formatBoxLine('Warp Gates: ' . $this->colorize($gateCount, 'highlight'));
+                $output .= $this->formatBoxLine('Warp Gates: '.$this->colorize($gateCount, 'highlight'));
             } else {
-                $output .= $this->formatBoxLine('Warp Gates: ' . $this->colorize('None (Isolated)', 'dim'));
+                $output .= $this->formatBoxLine('Warp Gates: '.$this->colorize('None (Isolated)', 'dim'));
             }
 
-            $output .= $this->colorize('╟' . str_repeat('─', 58) . '╢', 'border') . "\n";
+            $output .= $this->colorize('╟'.str_repeat('─', 58).'╢', 'border')."\n";
 
             // Show planets
             $planets = $star->children;
@@ -514,12 +523,12 @@ class PlayerInterfaceCommand extends Command
                 $output .= $this->formatBoxLine('No orbital bodies');
             }
         } else {
-            $output .= $this->formatBoxLine('System: ' . $location->name);
-            $output .= $this->formatBoxLine('Type: ' . $location->type->name);
-            $output .= $this->formatBoxLine('Coordinates: (' . $location->x . ', ' . $location->y . ')');
+            $output .= $this->formatBoxLine('System: '.$location->name);
+            $output .= $this->formatBoxLine('Type: '.$location->type->name);
+            $output .= $this->formatBoxLine('Coordinates: ('.$location->x.', '.$location->y.')');
         }
 
-        $output .= $this->colorize('╚' . str_repeat('═', 58) . '╝', 'border') . "\n";
+        $output .= $this->colorize('╚'.str_repeat('═', 58).'╝', 'border')."\n";
 
         return $output;
     }
@@ -532,42 +541,43 @@ class PlayerInterfaceCommand extends Command
         $headerText = 'SHIP STATUS';
         $headerPadding = 57 - mb_strlen($headerText);
 
-        $output .= $this->colorize('╔' . str_repeat('═', 58) . '╗', 'border') . "\n";
-        $output .= $this->colorize('║', 'border') . ' ' .
-                   $this->colorize($headerText, 'header') .
-                   str_repeat(' ', $headerPadding) .
-                   $this->colorize('║', 'border') . "\n";
-        $output .= $this->colorize('╠' . str_repeat('═', 58) . '╣', 'border') . "\n";
+        $output .= $this->colorize('╔'.str_repeat('═', 58).'╗', 'border')."\n";
+        $output .= $this->colorize('║', 'border').' '.
+                   $this->colorize($headerText, 'header').
+                   str_repeat(' ', $headerPadding).
+                   $this->colorize('║', 'border')."\n";
+        $output .= $this->colorize('╠'.str_repeat('═', 58).'╣', 'border')."\n";
 
         // Check if player has a ship
-        if (!$ship) {
+        if (! $ship) {
             $output .= $this->formatBoxLine($this->colorize('⚠ NO ACTIVE SHIP', 'pirate'));
             $output .= $this->formatBoxLine('');
             $output .= $this->formatBoxLine('You need to purchase a ship');
             $output .= $this->formatBoxLine('to continue your journey.');
-            $output .= $this->colorize('╚' . str_repeat('═', 58) . '╝', 'border') . "\n";
+            $output .= $this->colorize('╚'.str_repeat('═', 58).'╝', 'border')."\n";
+
             return $output;
         }
 
         // Regenerate fuel before displaying
         $ship->regenerateFuel();
 
-        $output .= $this->formatBoxLine('Name: ' . ($ship->name ?? 'Unnamed'));
-        $output .= $this->formatBoxLine('Class: ' . $ship->ship->class);
-        $output .= $this->formatBoxLine('Status: ' . ucfirst($ship->status));
+        $output .= $this->formatBoxLine('Name: '.($ship->name ?? 'Unnamed'));
+        $output .= $this->formatBoxLine('Class: '.$ship->ship->class);
+        $output .= $this->formatBoxLine('Status: '.ucfirst($ship->status));
 
-        $output .= $this->colorize('╟' . str_repeat('─', 58) . '╢', 'border') . "\n";
+        $output .= $this->colorize('╟'.str_repeat('─', 58).'╢', 'border')."\n";
 
         // Ship components
         $output .= $this->formatBoxLine('COMPONENTS:', true);
         $output .= $this->formatBoxLine('');
-        $output .= $this->formatBoxLine('  Fuel:       ' . $ship->current_fuel . '/' . $ship->max_fuel);
-        $output .= $this->formatBoxLine('  Hull:       ' . $ship->hull . '/' . $ship->max_hull);
-        $output .= $this->formatBoxLine('  Weapons:    ' . $ship->weapons);
-        $output .= $this->formatBoxLine('  Sensors:    Level ' . $ship->sensors);
-        $output .= $this->formatBoxLine('  Warp Drive: Level ' . $ship->warp_drive);
+        $output .= $this->formatBoxLine('  Fuel:       '.$ship->current_fuel.'/'.$ship->max_fuel);
+        $output .= $this->formatBoxLine('  Hull:       '.$ship->hull.'/'.$ship->max_hull);
+        $output .= $this->formatBoxLine('  Weapons:    '.$ship->weapons);
+        $output .= $this->formatBoxLine('  Sensors:    Level '.$ship->sensors);
+        $output .= $this->formatBoxLine('  Warp Drive: Level '.$ship->warp_drive);
 
-        $output .= $this->colorize('╟' . str_repeat('─', 58) . '╢', 'border') . "\n";
+        $output .= $this->colorize('╟'.str_repeat('─', 58).'╢', 'border')."\n";
 
         // Cargo
         $cargoUsed = 0;
@@ -579,7 +589,7 @@ class PlayerInterfaceCommand extends Command
         }
 
         $output .= $this->formatBoxLine('CARGO:', true);
-        $output .= $this->formatBoxLine('  Capacity: ' . $cargoUsed . '/' . $ship->cargo_hold);
+        $output .= $this->formatBoxLine('  Capacity: '.$cargoUsed.'/'.$ship->cargo_hold);
         $output .= $this->formatBoxLine('');
 
         if (empty($cargoDetails)) {
@@ -590,7 +600,7 @@ class PlayerInterfaceCommand extends Command
             }
         }
 
-        $output .= $this->colorize('╚' . str_repeat('═', 58) . '╝', 'border') . "\n";
+        $output .= $this->colorize('╚'.str_repeat('═', 58).'╝', 'border')."\n";
 
         return $output;
     }
@@ -604,7 +614,7 @@ class PlayerInterfaceCommand extends Command
             $content = $this->colorize($content, 'header');
         }
 
-        return $this->colorize('║', 'border') . ' ' . $content . str_repeat(' ', $padding) . $this->colorize('║', 'border') . "\n";
+        return $this->colorize('║', 'border').' '.$content.str_repeat(' ', $padding).$this->colorize('║', 'border')."\n";
     }
 
     private function renderControls(): void
@@ -621,88 +631,88 @@ class PlayerInterfaceCommand extends Command
         $col2Width = 40;
 
         // First row
-        $line1_col1 = $this->colorize('  [u]', 'label') . ' - View upgrade info';
+        $line1_col1 = $this->colorize('  [u]', 'label').' - View upgrade info';
         $line1_col1_plain = preg_replace('/\033\[[0-9;]*m/', '', $line1_col1);
         $line1_col1_padding = str_repeat(' ', max(0, $col1Width - mb_strlen($line1_col1_plain)));
 
         if ($atTradingHub) {
-            $line1_col2 = $this->colorize('  [p]', 'label') . ' - Purchase upgrades';
+            $line1_col2 = $this->colorize('  [p]', 'label').' - Purchase upgrades';
         } else {
-            $line1_col2 = $this->colorize('  [p]', 'dim') . ' - ' . $this->colorize('Upgrades (Trading Hub only)', 'dim');
+            $line1_col2 = $this->colorize('  [p]', 'dim').' - '.$this->colorize('Upgrades (Trading Hub only)', 'dim');
         }
         $line1_col2_plain = preg_replace('/\033\[[0-9;]*m/', '', $line1_col2);
         $line1_col2_padding = str_repeat(' ', max(0, $col2Width - mb_strlen($line1_col2_plain)));
 
-        $line1_col3 = $this->colorize('  [s]', 'label') . ' - Ship information';
+        $line1_col3 = $this->colorize('  [s]', 'label').' - Ship information';
 
-        $this->line($line1_col1 . $line1_col1_padding . $line1_col2 . $line1_col2_padding . $line1_col3);
+        $this->line($line1_col1.$line1_col1_padding.$line1_col2.$line1_col2_padding.$line1_col3);
 
         // Second row
-        $line2_col1 = $this->colorize('  [c]', 'label') . ' - Cargo manifest';
+        $line2_col1 = $this->colorize('  [c]', 'label').' - Cargo manifest';
         $line2_col1_plain = preg_replace('/\033\[[0-9;]*m/', '', $line2_col1);
         $line2_col1_padding = str_repeat(' ', max(0, $col1Width - mb_strlen($line2_col1_plain)));
 
-        $line2_col2 = $this->colorize('  [r]', 'label') . ' - Refresh display';
+        $line2_col2 = $this->colorize('  [r]', 'label').' - Refresh display';
         $line2_col2_plain = preg_replace('/\033\[[0-9;]*m/', '', $line2_col2);
         $line2_col2_padding = str_repeat(' ', max(0, $col2Width - mb_strlen($line2_col2_plain)));
 
-        $line2_col3 = $this->colorize('  [q/ESC]', 'label') . ' - Exit';
+        $line2_col3 = $this->colorize('  [q/ESC]', 'label').' - Exit';
 
-        $this->line($line2_col1 . $line2_col1_padding . $line2_col2 . $line2_col2_padding . $line2_col3);
+        $this->line($line2_col1.$line2_col1_padding.$line2_col2.$line2_col2_padding.$line2_col3);
 
         // Third row
         if ($atPlansHub) {
-            $line3_col1 = $this->colorize('  [l]', 'label') . ' - Browse upgrade plans';
+            $line3_col1 = $this->colorize('  [l]', 'label').' - Browse upgrade plans';
         } else {
-            $line3_col1 = $this->colorize('  [l]', 'dim') . ' - ' . $this->colorize('Plans (Special hubs only)', 'dim');
+            $line3_col1 = $this->colorize('  [l]', 'dim').' - '.$this->colorize('Plans (Special hubs only)', 'dim');
         }
         $line3_col1_plain = preg_replace('/\033\[[0-9;]*m/', '', $line3_col1);
         $line3_col1_padding = str_repeat(' ', max(0, $col1Width - mb_strlen($line3_col1_plain)));
 
         if ($atTradingHub) {
-            $line3_col2 = $this->colorize('  [t]', 'label') . ' - Trade minerals';
+            $line3_col2 = $this->colorize('  [t]', 'label').' - Trade minerals';
         } else {
-            $line3_col2 = $this->colorize('  [t]', 'dim') . ' - ' . $this->colorize('Trade (Trading Hub only)', 'dim');
+            $line3_col2 = $this->colorize('  [t]', 'dim').' - '.$this->colorize('Trade (Trading Hub only)', 'dim');
         }
         $line3_col2_plain = preg_replace('/\033\[[0-9;]*m/', '', $line3_col2);
         $line3_col2_padding = str_repeat(' ', max(0, $col2Width - mb_strlen($line3_col2_plain)));
 
-        $line3_col3 = $this->colorize('  [w]', 'label') . ' - Warp gate travel';
+        $line3_col3 = $this->colorize('  [w]', 'label').' - Warp gate travel';
 
-        $this->line($line3_col1 . $line3_col1_padding . $line3_col2 . $line3_col2_padding . $line3_col3);
+        $this->line($line3_col1.$line3_col1_padding.$line3_col2.$line3_col2_padding.$line3_col3);
 
         // Fourth row - Repair & Shipyard
         if ($atTradingHub) {
-            $line4_col1 = $this->colorize('  [m]', 'label') . ' - Repair & Refit';
+            $line4_col1 = $this->colorize('  [m]', 'label').' - Repair & Refit';
         } else {
-            $line4_col1 = $this->colorize('  [m]', 'dim') . ' - ' . $this->colorize('Repair (Trading Hub only)', 'dim');
+            $line4_col1 = $this->colorize('  [m]', 'dim').' - '.$this->colorize('Repair (Trading Hub only)', 'dim');
         }
         $line4_col1_plain = preg_replace('/\033\[[0-9;]*m/', '', $line4_col1);
         $line4_col1_padding = str_repeat(' ', max(0, $col1Width - mb_strlen($line4_col1_plain)));
 
         if ($atTradingHub) {
-            $line4_col2 = $this->colorize('  [b]', 'label') . ' - Browse ships (Shipyard)';
+            $line4_col2 = $this->colorize('  [b]', 'label').' - Browse ships (Shipyard)';
         } else {
-            $line4_col2 = $this->colorize('  [b]', 'dim') . ' - ' . $this->colorize('Shipyard (Trading Hub only)', 'dim');
+            $line4_col2 = $this->colorize('  [b]', 'dim').' - '.$this->colorize('Shipyard (Trading Hub only)', 'dim');
         }
 
-        $this->line($line4_col1 . $line4_col1_padding . $line4_col2);
+        $this->line($line4_col1.$line4_col1_padding.$line4_col2);
 
         // Fifth row - Navigation & Map
-        $line5_col1 = $this->colorize('  [v]', 'label') . ' - View star map (Sensors)';
+        $line5_col1 = $this->colorize('  [v]', 'label').' - View star map (Sensors)';
         $line5_col1_plain = preg_replace('/\033\[[0-9;]*m/', '', $line5_col1);
         $line5_col1_padding = str_repeat(' ', max(0, $col1Width - mb_strlen($line5_col1_plain)));
 
-        $line5_col2 = $this->colorize('  [j]', 'label') . ' - Jump to coordinates';
+        $line5_col2 = $this->colorize('  [j]', 'label').' - Jump to coordinates';
         $line5_col2_plain = preg_replace('/\033\[[0-9;]*m/', '', $line5_col2);
         $line5_col2_padding = str_repeat(' ', max(0, $col2Width - mb_strlen($line5_col2_plain)));
 
-        $line5_col3 = $this->colorize('  [n]', 'label') . ' - Scan local area';
+        $line5_col3 = $this->colorize('  [n]', 'label').' - Scan local area';
 
-        $this->line($line5_col1 . $line5_col1_padding . $line5_col2 . $line5_col2_padding . $line5_col3);
+        $this->line($line5_col1.$line5_col1_padding.$line5_col2.$line5_col2_padding.$line5_col3);
 
         // Sixth row - Find nearest trading hub
-        $line6_col1 = $this->colorize('  [h]', 'label') . ' - Find nearest trading hub';
+        $line6_col1 = $this->colorize('  [h]', 'label').' - Find nearest trading hub';
 
         $this->line($line6_col1);
 
@@ -712,7 +722,7 @@ class PlayerInterfaceCommand extends Command
 
     private function showPlansShop(): void
     {
-        if (!LocationValidator::isAtPlansHub($this->player)) {
+        if (! LocationValidator::isAtPlansHub($this->player)) {
             system('stty sane');
             $this->clearScreen();
             $this->error('This trading hub does not sell upgrade plans.');
@@ -723,6 +733,7 @@ class PlayerInterfaceCommand extends Command
             system('stty -icanon -echo');
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -737,7 +748,7 @@ class PlayerInterfaceCommand extends Command
     {
         $tradingHub = LocationValidator::getTradingHub($this->player);
 
-        if (!$tradingHub || !$tradingHub->is_active) {
+        if (! $tradingHub || ! $tradingHub->is_active) {
             system('stty sane');
             $this->clearScreen();
             $this->error('No active trading hub at this location.');
@@ -748,6 +759,7 @@ class PlayerInterfaceCommand extends Command
             system('stty -icanon -echo');
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -762,7 +774,7 @@ class PlayerInterfaceCommand extends Command
         system('stty sane');
 
         $location = $this->player->currentLocation;
-        if (!$location) {
+        if (! $location) {
             $this->clearScreen();
             $this->error('You must be at a location to travel.');
             $this->newLine();
@@ -770,6 +782,7 @@ class PlayerInterfaceCommand extends Command
             system('stty -icanon -echo');
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -788,6 +801,7 @@ class PlayerInterfaceCommand extends Command
             system('stty -icanon -echo');
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -807,9 +821,9 @@ class PlayerInterfaceCommand extends Command
             $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
             $this->newLine();
 
-            $this->line($this->colorize('  Current Location: ', 'label') . $location->name);
-            $this->line($this->colorize('  Fuel: ', 'label') .
-                       $this->colorize($ship->current_fuel . '/' . $ship->max_fuel, 'highlight'));
+            $this->line($this->colorize('  Current Location: ', 'label').$location->name);
+            $this->line($this->colorize('  Fuel: ', 'label').
+                       $this->colorize($ship->current_fuel.'/'.$ship->max_fuel, 'highlight'));
             $this->newLine();
 
             $this->line($this->colorize('  AVAILABLE DESTINATIONS:', 'header'));
@@ -827,18 +841,18 @@ class PlayerInterfaceCommand extends Command
 
                 $canAfford = $ship->current_fuel >= $fuelCost;
                 $statusColor = $canAfford ? 'highlight' : 'dim';
-                $status = $canAfford ? '' : ' ' . $this->colorize('[INSUFFICIENT FUEL]', 'dim');
+                $status = $canAfford ? '' : ' '.$this->colorize('[INSUFFICIENT FUEL]', 'dim');
 
                 $this->line(
-                    $this->colorize("  [{$number}] ", 'label') .
-                    $this->colorize($destination->name, $statusColor) .
-                    $this->colorize(' - Distance: ' . round($distance, 1), 'dim') .
-                    $this->colorize(' - Fuel Cost: ' . $fuelCost, $statusColor) .
+                    $this->colorize("  [{$number}] ", 'label').
+                    $this->colorize($destination->name, $statusColor).
+                    $this->colorize(' - Distance: '.round($distance, 1), 'dim').
+                    $this->colorize(' - Fuel Cost: '.$fuelCost, $statusColor).
                     $status
                 );
 
                 // Show destination type and status
-                $typeInfo = '      Type: ' . $destination->type->name;
+                $typeInfo = '      Type: '.$destination->type->name;
                 if ($destination->type === PointOfInterestType::STAR) {
                     $tradingHub = $destination->tradingHub;
                     if ($tradingHub && $tradingHub->is_active) {
@@ -857,8 +871,8 @@ class PlayerInterfaceCommand extends Command
             }
 
             $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
-            $this->line('  ' . $this->colorize('[1-9]', 'label') . ' Select destination  |  ' .
-                       $this->colorize('[q]', 'label') . ' Cancel');
+            $this->line('  '.$this->colorize('[1-9]', 'label').' Select destination  |  '.
+                       $this->colorize('[q]', 'label').' Cancel');
             $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
 
             // Get input
@@ -868,7 +882,7 @@ class PlayerInterfaceCommand extends Command
             if ($char === 'q' || $char === "\033") {
                 $running = false;
             } elseif (is_numeric($char) && $char >= '1' && $char <= '9') {
-                $selectedIndex = (int)$char - 1;
+                $selectedIndex = (int) $char - 1;
                 if ($selectedIndex < $displayGates->count()) {
                     $selectedGate = $displayGates[$selectedIndex];
                     $this->executeTravel($selectedGate);
@@ -907,22 +921,23 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
 
-        $this->line($this->colorize('  Destination: ', 'label') . $this->colorize($destination->name, 'highlight'));
-        $this->line($this->colorize('  Distance: ', 'label') . round($distance, 1) . ' units');
-        $this->line($this->colorize('  Fuel Cost: ', 'label') . $this->colorize($fuelCost, 'trade'));
+        $this->line($this->colorize('  Destination: ', 'label').$this->colorize($destination->name, 'highlight'));
+        $this->line($this->colorize('  Distance: ', 'label').round($distance, 1).' units');
+        $this->line($this->colorize('  Fuel Cost: ', 'label').$this->colorize($fuelCost, 'trade'));
         $this->newLine();
-        $this->line($this->colorize('  Current Fuel: ', 'label') . $ship->current_fuel);
-        $this->line($this->colorize('  Fuel After Travel: ', 'label') .
+        $this->line($this->colorize('  Current Fuel: ', 'label').$ship->current_fuel);
+        $this->line($this->colorize('  Fuel After Travel: ', 'label').
                    $this->colorize($ship->current_fuel - $fuelCost, 'highlight'));
         $this->newLine();
 
-        if (!$ship->consumeFuel($fuelCost)) {
+        if (! $ship->consumeFuel($fuelCost)) {
             $this->error('  INSUFFICIENT FUEL!');
             $this->newLine();
-            $this->line($this->colorize('  You need ' . $fuelCost . ' fuel but only have ' . $ship->current_fuel, 'dim'));
+            $this->line($this->colorize('  You need '.$fuelCost.' fuel but only have '.$ship->current_fuel, 'dim'));
             $this->newLine();
             $this->line($this->colorize('  Press any key to continue...', 'dim'));
             fgetc(STDIN);
+
             return;
         }
 
@@ -945,10 +960,11 @@ class PlayerInterfaceCommand extends Command
                     // Don't update location - PlayerDeathService already did that
                     // Show message and return to main interface
                     $this->clearScreen();
-                    $this->line($this->colorize('  You have respawned at ' . $this->player->currentLocation->name, 'highlight'));
+                    $this->line($this->colorize('  You have respawned at '.$this->player->currentLocation->name, 'highlight'));
                     $this->newLine();
                     $this->line($this->colorize('  Press any key to continue...', 'dim'));
                     fgetc(STDIN);
+
                     return;
                 } elseif ($outcome === 'escaped') {
                     // Successfully escaped - refund some fuel? Or just continue
@@ -957,6 +973,7 @@ class PlayerInterfaceCommand extends Command
                     $this->newLine();
                     $this->line($this->colorize('  Press any key to continue...', 'dim'));
                     fgetc(STDIN);
+
                     // Don't proceed with travel - stay at current location
                     return;
                 } elseif ($outcome === 'surrendered') {
@@ -984,7 +1001,7 @@ class PlayerInterfaceCommand extends Command
         $this->player->save();
 
         // Award XP for exploration/travel
-        $xpEarned = (int)max(10, $distance * 5); // 5 XP per unit distance, min 10
+        $xpEarned = (int) max(10, $distance * 5); // 5 XP per unit distance, min 10
         $oldLevel = $this->player->level;
         $this->player->addExperience($xpEarned);
         $newLevel = $this->player->level;
@@ -996,12 +1013,12 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize('  ✓ TRAVEL SUCCESSFUL!', 'highlight'));
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
-        $this->line('  You have arrived at: ' . $this->colorize($destination->name, 'highlight'));
-        $this->line('  Fuel remaining: ' . $this->colorize($ship->current_fuel, 'trade'));
-        $this->line('  XP Earned: ' . $this->colorize('+' . $xpEarned . ' XP', 'highlight'));
+        $this->line('  You have arrived at: '.$this->colorize($destination->name, 'highlight'));
+        $this->line('  Fuel remaining: '.$this->colorize($ship->current_fuel, 'trade'));
+        $this->line('  XP Earned: '.$this->colorize('+'.$xpEarned.' XP', 'highlight'));
 
         if ($newLevel > $oldLevel) {
-            $this->line('  ' . $this->colorize('🎉 LEVEL UP! You are now level ' . $newLevel . '!', 'trade'));
+            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$newLevel.'!', 'trade'));
         }
 
         $this->newLine();
@@ -1020,8 +1037,8 @@ class PlayerInterfaceCommand extends Command
         $this->newLine();
 
         $this->line($this->colorize('  You currently have no ship!', 'dim'));
-        $this->line($this->colorize('  Location: ', 'label') . $this->player->currentLocation->name);
-        $this->line($this->colorize('  Credits: ', 'label') . $this->colorize(number_format($this->player->credits, 2), 'trade'));
+        $this->line($this->colorize('  Location: ', 'label').$this->player->currentLocation->name);
+        $this->line($this->colorize('  Credits: ', 'label').$this->colorize(number_format($this->player->credits, 2), 'trade'));
         $this->newLine();
 
         // Check if at trading hub with shipyard
@@ -1041,12 +1058,13 @@ class PlayerInterfaceCommand extends Command
 
             // Check if they now have a ship
             $this->player->refresh();
-            if (!$this->player->activeShip) {
+            if (! $this->player->activeShip) {
                 $this->newLine();
                 $this->error('  You still have no ship. You must purchase a ship to continue.');
                 $this->newLine();
                 $this->line($this->colorize('  Press any key to exit...', 'dim'));
                 fgetc(STDIN);
+
                 return 1;
             }
 
@@ -1056,6 +1074,7 @@ class PlayerInterfaceCommand extends Command
 
             $this->renderInterface();
             $this->interactiveLoop();
+
             return 0;
         }
 
@@ -1070,8 +1089,9 @@ class PlayerInterfaceCommand extends Command
             ->orderBy('base_price', 'asc')
             ->first();
 
-        if (!$starterShip) {
+        if (! $starterShip) {
             $this->error('  ERROR: No ships available in database!');
+
             return 1;
         }
 
@@ -1110,11 +1130,12 @@ class PlayerInterfaceCommand extends Command
             'currentLocation.children',
             'currentLocation.parent',
             'activeShip.ship',
-            'activeShip.cargo.mineral'
+            'activeShip.cargo.mineral',
         ]);
 
         $this->renderInterface();
         $this->interactiveLoop();
+
         return 0;
     }
 
@@ -1137,9 +1158,9 @@ class PlayerInterfaceCommand extends Command
         $sensorRange = ($this->player->activeShip->sensors ?? 1) * 100; // Base 100 units per sensor level
         $scanRadius = $sensorRange;
 
-        $this->line($this->colorize('  Current Position: ', 'label') . $playerLocation->name);
-        $this->line($this->colorize('  Coordinates: ', 'label') . "({$playerLocation->x}, {$playerLocation->y})");
-        $this->line($this->colorize('  Sensor Range: ', 'label') . $this->colorize($scanRadius . ' units', 'highlight'));
+        $this->line($this->colorize('  Current Position: ', 'label').$playerLocation->name);
+        $this->line($this->colorize('  Coordinates: ', 'label')."({$playerLocation->x}, {$playerLocation->y})");
+        $this->line($this->colorize('  Sensor Range: ', 'label').$this->colorize($scanRadius.' units', 'highlight'));
         $this->newLine();
 
         // Find nearby stars
@@ -1151,12 +1172,13 @@ class PlayerInterfaceCommand extends Command
                     pow($star->x - $playerLocation->x, 2) +
                     pow($star->y - $playerLocation->y, 2)
                 );
+
                 return [
                     'star' => $star,
                     'distance' => $distance,
                 ];
             })
-            ->filter(fn($item) => $item['distance'] <= $scanRadius)
+            ->filter(fn ($item) => $item['distance'] <= $scanRadius)
             ->sortBy('distance')
             ->take(20); // Show top 20 nearest systems
 
@@ -1178,7 +1200,7 @@ class PlayerInterfaceCommand extends Command
                 'Gates',
                 'Services'
             ));
-            $this->line($this->colorize('  ' . str_repeat('─', 115), 'border'));
+            $this->line($this->colorize('  '.str_repeat('─', 115), 'border'));
 
             foreach ($nearbyStars as $item) {
                 $star = $item['star'];
@@ -1205,7 +1227,7 @@ class PlayerInterfaceCommand extends Command
 
                 $this->line(sprintf(
                     '  %-30s %-18s %-10s %-12s %-8s %s%s',
-                    substr($star->name, 0, 28) . $currentMarker,
+                    substr($star->name, 0, 28).$currentMarker,
                     "({$star->x}, {$star->y})",
                     $distance,
                     $status,
@@ -1241,8 +1263,8 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
 
-        $this->line($this->colorize('  Current Position: ', 'label') . $star->name);
-        $this->line($this->colorize('  Coordinates: ', 'label') . "({$star->x}, {$star->y})");
+        $this->line($this->colorize('  Current Position: ', 'label').$star->name);
+        $this->line($this->colorize('  Coordinates: ', 'label')."({$star->x}, {$star->y})");
         $this->newLine();
 
         // Get target coordinates
@@ -1267,17 +1289,19 @@ class PlayerInterfaceCommand extends Command
                     pow($poi->x - $targetX, 2) +
                     pow($poi->y - $targetY, 2)
                 );
+
                 return $distance <= $tolerance;
             });
 
-        if (!$targetStar) {
-            $this->error('  No star system found at coordinates (' . $targetX . ', ' . $targetY . ')');
+        if (! $targetStar) {
+            $this->error('  No star system found at coordinates ('.$targetX.', '.$targetY.')');
             $this->newLine();
             $this->line($this->colorize('  Searching within 5 unit radius...', 'dim'));
             $this->newLine();
             $this->line($this->colorize('  Press any key to return...', 'dim'));
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -1290,31 +1314,32 @@ class PlayerInterfaceCommand extends Command
         $ship = $this->player->activeShip;
         $fuelCost = $this->calculateFuelCost($distance, $ship);
 
-        $this->line($this->colorize('  Target Found: ', 'label') . $this->colorize($targetStar->name, 'highlight'));
-        $this->line($this->colorize('  Exact Coordinates: ', 'label') . "({$targetStar->x}, {$targetStar->y})");
-        $this->line($this->colorize('  Distance: ', 'label') . round($distance, 1) . ' units');
-        $this->line($this->colorize('  Fuel Cost: ', 'label') . $this->colorize($fuelCost, 'trade'));
-        $this->line($this->colorize('  Current Fuel: ', 'label') . $ship->current_fuel);
+        $this->line($this->colorize('  Target Found: ', 'label').$this->colorize($targetStar->name, 'highlight'));
+        $this->line($this->colorize('  Exact Coordinates: ', 'label')."({$targetStar->x}, {$targetStar->y})");
+        $this->line($this->colorize('  Distance: ', 'label').round($distance, 1).' units');
+        $this->line($this->colorize('  Fuel Cost: ', 'label').$this->colorize($fuelCost, 'trade'));
+        $this->line($this->colorize('  Current Fuel: ', 'label').$ship->current_fuel);
         $this->newLine();
 
         // Show status
         $statusInfo = $targetStar->is_inhabited
             ? $this->colorize('Inhabited System', 'trade')
             : $this->colorize('Uninhabited System', 'dim');
-        $this->line($this->colorize('  Status: ', 'label') . $statusInfo);
+        $this->line($this->colorize('  Status: ', 'label').$statusInfo);
 
         $gateCount = $targetStar->outgoingGates()->where('is_hidden', false)->count();
-        $this->line($this->colorize('  Warp Gates: ', 'label') . $gateCount);
+        $this->line($this->colorize('  Warp Gates: ', 'label').$gateCount);
         $this->newLine();
 
         if ($ship->current_fuel < $fuelCost) {
             $this->error('  INSUFFICIENT FUEL!');
             $this->newLine();
-            $this->line($this->colorize('  You need ' . $fuelCost . ' fuel but only have ' . $ship->current_fuel, 'dim'));
+            $this->line($this->colorize('  You need '.$fuelCost.' fuel but only have '.$ship->current_fuel, 'dim'));
             $this->newLine();
             $this->line($this->colorize('  Press any key to return...', 'dim'));
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -1327,16 +1352,18 @@ class PlayerInterfaceCommand extends Command
             $this->line($this->colorize('  Press any key to return...', 'dim'));
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
         // Execute jump
-        if (!$ship->consumeFuel($fuelCost)) {
+        if (! $ship->consumeFuel($fuelCost)) {
             $this->error('  ERROR: Failed to consume fuel!');
             $this->newLine();
             $this->line($this->colorize('  Press any key to return...', 'dim'));
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -1363,12 +1390,12 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize('  ✓ JUMP SUCCESSFUL!', 'highlight'));
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
-        $this->line('  Arrived at: ' . $this->colorize($targetStar->name, 'highlight'));
-        $this->line('  Fuel remaining: ' . $this->colorize($ship->current_fuel, 'trade'));
-        $this->line('  XP Earned: ' . $this->colorize('+' . $xpEarned . ' XP', 'highlight'));
+        $this->line('  Arrived at: '.$this->colorize($targetStar->name, 'highlight'));
+        $this->line('  Fuel remaining: '.$this->colorize($ship->current_fuel, 'trade'));
+        $this->line('  XP Earned: '.$this->colorize('+'.$xpEarned.' XP', 'highlight'));
 
         if ($newLevel > $oldLevel) {
-            $this->line('  ' . $this->colorize('🎉 LEVEL UP! You are now level ' . $newLevel . '!', 'trade'));
+            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$newLevel.'!', 'trade'));
         }
 
         $this->newLine();
@@ -1395,9 +1422,9 @@ class PlayerInterfaceCommand extends Command
 
         // Get sensor range
         $sensorRange = ($this->player->activeShip->sensors ?? 1) * 100;
-        $this->line($this->colorize('  Current Position: ', 'label') . $playerLocation->name);
-        $this->line($this->colorize('  Coordinates: ', 'label') . "({$playerLocation->x}, {$playerLocation->y})");
-        $this->line($this->colorize('  Sensor Range: ', 'label') . $this->colorize($sensorRange . ' units', 'highlight'));
+        $this->line($this->colorize('  Current Position: ', 'label').$playerLocation->name);
+        $this->line($this->colorize('  Coordinates: ', 'label')."({$playerLocation->x}, {$playerLocation->y})");
+        $this->line($this->colorize('  Sensor Range: ', 'label').$this->colorize($sensorRange.' units', 'highlight'));
         $this->newLine();
 
         // Find all POIs in range (not just stars)
@@ -1408,12 +1435,13 @@ class PlayerInterfaceCommand extends Command
                     pow($poi->x - $playerLocation->x, 2) +
                     pow($poi->y - $playerLocation->y, 2)
                 );
+
                 return [
                     'poi' => $poi,
                     'distance' => $distance,
                 ];
             })
-            ->filter(fn($item) => $item['distance'] <= $sensorRange && $item['distance'] > 0)
+            ->filter(fn ($item) => $item['distance'] <= $sensorRange && $item['distance'] > 0)
             ->sortBy('distance')
             ->take(30);
 
@@ -1422,11 +1450,11 @@ class PlayerInterfaceCommand extends Command
             $this->newLine();
             $this->line($this->colorize('  Upgrade your sensors to scan further.', 'dim'));
         } else {
-            $this->line($this->colorize('  DETECTED OBJECTS (' . $nearbyPois->count() . '):', 'header'));
+            $this->line($this->colorize('  DETECTED OBJECTS ('.$nearbyPois->count().'):', 'header'));
             $this->newLine();
 
             // Group by type
-            $byType = $nearbyPois->groupBy(fn($item) => $item['poi']->type->name);
+            $byType = $nearbyPois->groupBy(fn ($item) => $item['poi']->type->name);
 
             foreach ($byType as $typeName => $items) {
                 $this->line($this->colorize("  {$typeName}s:", 'trade'));
@@ -1448,7 +1476,7 @@ class PlayerInterfaceCommand extends Command
                 }
 
                 if ($items->count() > 10) {
-                    $this->line($this->colorize("    ... and " . ($items->count() - 10) . " more", 'dim'));
+                    $this->line($this->colorize('    ... and '.($items->count() - 10).' more', 'dim'));
                 }
                 $this->newLine();
             }
@@ -1493,6 +1521,7 @@ class PlayerInterfaceCommand extends Command
                     pow($star->x - $playerLocation->x, 2) +
                     pow($star->y - $playerLocation->y, 2)
                 );
+
                 return [
                     'star' => $star,
                     'distance' => $distance,
@@ -1500,7 +1529,8 @@ class PlayerInterfaceCommand extends Command
                 ];
             })
             ->sortBy('distance')
-            ->take(10);
+            ->take(10)
+            ->values(); // Reindex from 0
 
         if ($tradingHubs->isEmpty()) {
             $this->error('  No trading hubs found in galaxy!');
@@ -1508,6 +1538,7 @@ class PlayerInterfaceCommand extends Command
             $this->line($this->colorize('  Press any key to return...', 'dim'));
             fgetc(STDIN);
             $this->refreshInterface();
+
             return;
         }
 
@@ -1523,7 +1554,7 @@ class PlayerInterfaceCommand extends Command
             'Distance',
             'Status'
         ));
-        $this->line($this->colorize('  ' . str_repeat('─', 115), 'border'));
+        $this->line($this->colorize('  '.str_repeat('─', 115), 'border'));
 
         foreach ($tradingHubs as $index => $item) {
             $number = $index + 1;
@@ -1547,7 +1578,7 @@ class PlayerInterfaceCommand extends Command
                 "[{$number}]",
                 substr($star->name, 0, 33),
                 "({$star->x}, {$star->y})",
-                $distance . ' units',
+                $distance.' units',
                 $statusText
             ));
             $this->line($this->colorize("        Fuel cost: {$fuelCost} | {$inhabited}", 'dim'));
@@ -1555,8 +1586,8 @@ class PlayerInterfaceCommand extends Command
 
         $this->newLine();
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line('  ' . $this->colorize('[1-9]', 'label') . ' Jump to hub  |  ' .
-                   $this->colorize('[q]', 'label') . ' Cancel');
+        $this->line('  '.$this->colorize('[1-9]', 'label').' Jump to hub  |  '.
+                   $this->colorize('[q]', 'label').' Cancel');
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
 
         // Get input
@@ -1565,11 +1596,12 @@ class PlayerInterfaceCommand extends Command
 
         if ($char === 'q' || $char === "\033") {
             $this->refreshInterface();
+
             return;
         }
 
         if (is_numeric($char) && $char >= '1' && $char <= '9') {
-            $selectedIndex = (int)$char - 1;
+            $selectedIndex = (int) $char - 1;
             if ($selectedIndex < $tradingHubs->count()) {
                 $selectedHub = $tradingHubs[$selectedIndex];
                 $this->executeDirectJump($selectedHub['star']);
@@ -1601,22 +1633,23 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
 
-        $this->line($this->colorize('  Destination: ', 'label') . $this->colorize($targetStar->name, 'highlight'));
-        $this->line($this->colorize('  Distance: ', 'label') . round($distance, 1) . ' units');
-        $this->line($this->colorize('  Fuel Cost: ', 'label') . $this->colorize($fuelCost, 'trade'));
+        $this->line($this->colorize('  Destination: ', 'label').$this->colorize($targetStar->name, 'highlight'));
+        $this->line($this->colorize('  Distance: ', 'label').round($distance, 1).' units');
+        $this->line($this->colorize('  Fuel Cost: ', 'label').$this->colorize($fuelCost, 'trade'));
         $this->newLine();
-        $this->line($this->colorize('  Current Fuel: ', 'label') . $ship->current_fuel);
-        $this->line($this->colorize('  Fuel After Jump: ', 'label') .
+        $this->line($this->colorize('  Current Fuel: ', 'label').$ship->current_fuel);
+        $this->line($this->colorize('  Fuel After Jump: ', 'label').
                    $this->colorize($ship->current_fuel - $fuelCost, 'highlight'));
         $this->newLine();
 
         if ($ship->current_fuel < $fuelCost) {
             $this->error('  INSUFFICIENT FUEL!');
             $this->newLine();
-            $this->line($this->colorize('  You need ' . $fuelCost . ' fuel but only have ' . $ship->current_fuel, 'dim'));
+            $this->line($this->colorize('  You need '.$fuelCost.' fuel but only have '.$ship->current_fuel, 'dim'));
             $this->newLine();
             $this->line($this->colorize('  Press any key to return...', 'dim'));
             fgetc(STDIN);
+
             return;
         }
 
@@ -1628,15 +1661,17 @@ class PlayerInterfaceCommand extends Command
             $this->newLine();
             $this->line($this->colorize('  Press any key to return...', 'dim'));
             fgetc(STDIN);
+
             return;
         }
 
         // Execute jump
-        if (!$ship->consumeFuel($fuelCost)) {
+        if (! $ship->consumeFuel($fuelCost)) {
             $this->error('  ERROR: Failed to consume fuel!');
             $this->newLine();
             $this->line($this->colorize('  Press any key to return...', 'dim'));
             fgetc(STDIN);
+
             return;
         }
 
@@ -1663,12 +1698,12 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize('  ✓ JUMP SUCCESSFUL!', 'highlight'));
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
-        $this->line('  Arrived at: ' . $this->colorize($targetStar->name, 'highlight'));
-        $this->line('  Fuel remaining: ' . $this->colorize($ship->current_fuel, 'trade'));
-        $this->line('  XP Earned: ' . $this->colorize('+' . $xpEarned . ' XP', 'highlight'));
+        $this->line('  Arrived at: '.$this->colorize($targetStar->name, 'highlight'));
+        $this->line('  Fuel remaining: '.$this->colorize($ship->current_fuel, 'trade'));
+        $this->line('  XP Earned: '.$this->colorize('+'.$xpEarned.' XP', 'highlight'));
 
         if ($newLevel > $oldLevel) {
-            $this->line('  ' . $this->colorize('🎉 LEVEL UP! You are now level ' . $newLevel . '!', 'trade'));
+            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$newLevel.'!', 'trade'));
         }
 
         $this->newLine();

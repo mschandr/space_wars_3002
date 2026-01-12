@@ -37,9 +37,10 @@ class GalaxyInitialize extends Command
                             {--density=scatter : Distribution method (scatter, poisson, cluster)}
                             {--grid-size=10 : Sector grid size (default 10x10)}
                             {--skip-gates : Skip warp gate generation}
-                            {--skip-pirates : Skip pirate distribution}
+                            {--skip-pirates : Skip pirate distribution (enabled by default)}
                             {--skip-inventory : Skip trading hub inventory population}
-                            {--skip-mirror : Skip mirror universe creation}
+                            {--skip-mirror : Skip mirror universe creation (enabled by default)}
+                            {--skip-precursors : Skip precursor ship spawning (enabled by default)}
                             {--mirror-poi= : Specific POI ID for mirror gate placement}';
 
     /**
@@ -164,7 +165,7 @@ class GalaxyInitialize extends Command
         // Step 9: Generate Stellar Cartographer Shops
         $this->step(9, 'Establishing Stellar Cartographer Shops');
         $spawnRate = config('game_config.star_charts.spawn_rate', 0.3);
-        $this->info("  Spawning cartographers at ".($spawnRate * 100).'% of trading hubs...');
+        $this->info('  Spawning cartographers at '.($spawnRate * 100).'% of trading hubs...');
         $this->callCommand('cartography:generate-shops', [
             'galaxy' => $this->galaxy->id,
             '--spawn-rate' => $spawnRate,
@@ -175,29 +176,59 @@ class GalaxyInitialize extends Command
         $this->step(10, 'Generating Initial Market Events');
         $this->generateInitialMarketEvents();
 
-        // Step 11: Distribute Pirates
+        // Step 11: Spawn Precursor Ship in Prime Galaxy (ENABLED BY DEFAULT - skip with --skip-precursors)
+        if (! $this->option('skip-precursors')) {
+            $this->step(11, '🛸 Spawning Precursor Ship in the Void 🛸');
+            $this->info('  Hiding ancient vessel in interstellar space...');
+
+            $seeder = app(\Database\Seeders\PrecursorShipSeeder::class);
+            $seeder->setCommand($this);
+            $seeder->seedPrecursorShip($this->galaxy);
+
+            $this->info('✅ Precursor Ship hidden in the void');
+        } else {
+            $this->warn('⊘ Precursor ship spawning skipped');
+        }
+
+        // Step 12: Distribute Pirates (ENABLED BY DEFAULT - skip with --skip-pirates)
         if (! $this->option('skip-pirates')) {
-            $this->step(11, 'Distributing Pirates to Warp Lanes');
+            $this->step(12, 'Distributing Pirates to Warp Lanes');
             $this->callCommand('galaxy:distribute-pirates', [
                 'galaxy' => $this->galaxy->id,
             ]);
         } else {
-            $this->warn('⊘ Skipping pirate distribution');
+            $this->warn('⊘ Pirate distribution skipped');
         }
 
-        // Step 12: Create Mirror Universe
+        // Step 13: Create Mirror Universe (ENABLED BY DEFAULT - skip with --skip-mirror)
         if (! $this->option('skip-mirror') && config('game_config.mirror_universe.enabled', true)) {
-            $this->step(12, '🌌 Creating Mirror Universe (High-Risk, High-Reward) 🌌');
+            $this->step(13, '🌌 Creating Mirror Universe (High-Risk, High-Reward) 🌌');
             $this->callCommand('galaxy:create-mirror', array_filter([
                 'galaxy' => $this->galaxy->id,
                 '--poi' => $this->option('mirror-poi'),
 
             ]));
+
+            // Step 14: Spawn Precursor Ship in Mirror Universe
+            if (! $this->option('skip-precursors')) {
+                $mirrorGalaxy = $this->galaxy->getPairedGalaxy();
+
+                if ($mirrorGalaxy) {
+                    $this->newLine();
+                    $this->info('🛸 Spawning Precursor Ship in Mirror Universe 🛸');
+
+                    $seeder = app(\Database\Seeders\PrecursorShipSeeder::class);
+                    $seeder->setCommand($this);
+                    $seeder->seedPrecursorShip($mirrorGalaxy);
+
+                    $this->info('✅ Mirror universe Precursor Ship hidden');
+                }
+            }
         } else {
-            if ($this->option('skip-mirror')) {
-                $this->warn('⊘ Skipping mirror universe creation');
-            } else {
+            if (! config('game_config.mirror_universe.enabled', true)) {
                 $this->warn('⊘ Mirror universe disabled in config');
+            } else {
+                $this->warn('⊘ Mirror universe skipped');
             }
         }
 
@@ -307,14 +338,7 @@ class GalaxyInitialize extends Command
             $skipped[] = 'Pirate Captains (already exist)';
         }
 
-        // Check and seed Precursor Ships
-        if (PrecursorShip::count() === 0) {
-            $this->info('  Seeding precursor ships...');
-            Artisan::call('db:seed', ['--class' => 'PrecursorShipSeeder'], $this->output);
-            $seeded[] = 'Precursor Ships';
-        } else {
-            $skipped[] = 'Precursor Ships (already exist)';
-        }
+        // Note: Precursor Ships are now seeded per-galaxy in steps 11 and 14 (not globally)
 
         $this->newLine();
         if (! empty($seeded)) {

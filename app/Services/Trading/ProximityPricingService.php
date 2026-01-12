@@ -93,7 +93,7 @@ class ProximityPricingService
     private static function calculateDemandFromRarity(Mineral $mineral, TradingHub $hub): int
     {
         // Base demand from rarity
-        $baseDemand = match($mineral->rarity->value) {
+        $baseDemand = match ($mineral->rarity->value) {
             'abundant' => 30,
             'common' => 40,
             'uncommon' => 50,
@@ -106,7 +106,7 @@ class ProximityPricingService
 
         // Hub connectivity affects demand (more gates = more traffic = higher demand)
         // Premium hubs with lots of traffic have higher demand
-        $connectivityBonus = match($hub->type) {
+        $connectivityBonus = match ($hub->type) {
             'premium' => 10,
             'major' => 5,
             'standard' => 0,
@@ -161,7 +161,7 @@ class ProximityPricingService
     public static function shouldStockMineral(
         TradingHub $hub,
         Mineral $mineral,
-        float $nearestDistance = null
+        ?float $nearestDistance = null
     ): bool {
         // Premium hubs stock everything
         if ($hub->type === 'premium') {
@@ -179,6 +179,7 @@ class ProximityPricingService
             if ($nearestDistance < 8) {
                 return true;
             }
+
             // Still might stock rare items from farther away
             return in_array($mineral->rarity->value, ['rare', 'very_rare', 'epic', 'legendary', 'mythic'])
                 && mt_rand(1, 100) <= 40;
@@ -197,7 +198,7 @@ class ProximityPricingService
      */
     public static function getSupplyDescription(int $supplyLevel): string
     {
-        return match(true) {
+        return match (true) {
             $supplyLevel >= 80 => 'Abundant local supply',
             $supplyLevel >= 60 => 'Good local availability',
             $supplyLevel >= 40 => 'Moderate supply',

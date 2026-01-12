@@ -19,8 +19,8 @@ class StarChartService
      * Get chart coverage from a purchase location
      * Uses BFS to traverse warp gates up to maxHops distance
      *
-     * @param PointOfInterest $purchaseLocation Center of the chart
-     * @param int $maxHops Number of warp gate hops to traverse
+     * @param  PointOfInterest  $purchaseLocation  Center of the chart
+     * @param  int  $maxHops  Number of warp gate hops to traverse
      * @return Collection Collection of POIs revealed by this chart
      */
     public function getChartCoverage(PointOfInterest $purchaseLocation, int $maxHops = 2): Collection
@@ -68,9 +68,9 @@ class StarChartService
      * Calculate chart price based on unknown systems
      * Uses exponential pricing: basePrice * (multiplier ^ unknownCount)
      *
-     * @param PointOfInterest $purchaseLocation Center of the chart
-     * @param Player $player The player purchasing
-     * @param StellarCartographer|null $shop The cartographer shop (for markup)
+     * @param  PointOfInterest  $purchaseLocation  Center of the chart
+     * @param  Player  $player  The player purchasing
+     * @param  StellarCartographer|null  $shop  The cartographer shop (for markup)
      * @return float Price in credits
      */
     public function calculateChartPrice(
@@ -110,9 +110,9 @@ class StarChartService
     /**
      * Purchase a chart and unlock systems for player
      *
-     * @param Player $player The player
-     * @param StellarCartographer $shop The cartographer shop
-     * @param PointOfInterest $centerSystem Center of chart coverage
+     * @param  Player  $player  The player
+     * @param  StellarCartographer  $shop  The cartographer shop
+     * @param  PointOfInterest  $centerSystem  Center of chart coverage
      * @return array Result with success status and systems revealed
      */
     public function purchaseChart(
@@ -178,8 +178,8 @@ class StarChartService
     /**
      * Get available charts at a shop (excluding already purchased)
      *
-     * @param StellarCartographer $shop The cartographer shop
-     * @param Player $player The player
+     * @param  StellarCartographer  $shop  The cartographer shop
+     * @param  Player  $player  The player
      * @return Collection Collection of available chart options
      */
     public function getAvailableCharts(StellarCartographer $shop, Player $player): Collection
@@ -217,8 +217,8 @@ class StarChartService
     /**
      * Get revealed information for a system
      *
-     * @param PointOfInterest $poi The system
-     * @param Player $player The player
+     * @param  PointOfInterest  $poi  The system
+     * @param  Player  $player  The player
      * @return array|null System information or null if no chart
      */
     public function getSystemInfo(PointOfInterest $poi, Player $player): ?array
@@ -251,8 +251,8 @@ class StarChartService
     /**
      * Detect pirate presence with probabilistic accuracy
      *
-     * @param PointOfInterest $poi The system
-     * @param Player $player The player (for sensor bonus)
+     * @param  PointOfInterest  $poi  The system
+     * @param  Player  $player  The player (for sensor bonus)
      * @return array Detection result
      */
     public function detectPiratePresence(PointOfInterest $poi, Player $player): array
@@ -295,7 +295,7 @@ class StarChartService
      * Grant free starting charts to a new player
      * Reveals 2-3 closest inhabited systems
      *
-     * @param Player $player The new player
+     * @param  Player  $player  The new player
      * @return int Number of charts granted
      */
     public function grantStartingCharts(Player $player): int
@@ -344,7 +344,7 @@ class StarChartService
     /**
      * Generate a descriptive name for a star chart
      *
-     * @param PointOfInterest $centerPoi Center of the chart
+     * @param  PointOfInterest  $centerPoi  Center of the chart
      * @return string Chart name
      */
     private function generateChartName(PointOfInterest $centerPoi): string

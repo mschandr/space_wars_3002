@@ -25,6 +25,7 @@ class ProcessMarketEventsCommand extends Command
     protected $description = 'Process market events (expire old, generate new)';
 
     private MarketEventService $eventService;
+
     private MarketEventGenerator $generator;
 
     public function __construct(MarketEventService $eventService, MarketEventGenerator $generator)
@@ -56,7 +57,7 @@ class ProcessMarketEventsCommand extends Command
 
         // Step 2: Generate new events
         $this->info('[2/2] Generating new market events...');
-        $probability = (float)$this->option('probability');
+        $probability = (float) $this->option('probability');
 
         if ($this->option('generate')) {
             // Force generate event
@@ -70,7 +71,7 @@ class ProcessMarketEventsCommand extends Command
             // Random chance to generate
             $newEvent = $this->generator->generateRandomEvent($probability);
             if ($newEvent) {
-                $this->info("  ✓ New event generated!");
+                $this->info('  ✓ New event generated!');
                 $this->info("    {$newEvent->description}");
                 $this->info("    Multiplier: {$newEvent->price_multiplier}x");
                 $this->info("    Duration: {$newEvent->getDurationString()}");

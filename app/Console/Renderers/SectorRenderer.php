@@ -14,23 +14,20 @@ class SectorRenderer
 
     public function __construct(
         private readonly Command $command,
-        private readonly int     $termWidth,
-        private readonly int     $termHeight
-    )
-    {
-    }
+        private readonly int $termWidth,
+        private readonly int $termHeight
+    ) {}
 
     public function render(
-        Galaxy     $galaxy,
+        Galaxy $galaxy,
         Collection $sectors,
-        array      &$sectorMap
-    ): void
-    {
+        array &$sectorMap
+    ): void {
         $this->clearScreen();
         $this->renderHeader($galaxy, $sectors);
 
         // Group sectors by grid position
-        $gridSize = (int)sqrt($sectors->count());
+        $gridSize = (int) sqrt($sectors->count());
         $grid = [];
 
         foreach ($sectors as $sector) {
@@ -46,21 +43,21 @@ class SectorRenderer
 
     private function renderHeader(Galaxy $galaxy, Collection $sectors): void
     {
-        $this->command->line($this->colorize('╔' . str_repeat('═', $this->termWidth - 2) . '╗', 'border'));
+        $this->command->line($this->colorize('╔'.str_repeat('═', $this->termWidth - 2).'╗', 'border'));
 
-        $title   = "  GALAXY: {$galaxy->name} - SECTOR OVERVIEW  ";
-        $stats   = "Sectors: {$sectors->count()} | Grid: " . (int)sqrt($sectors->count()) . "x" . (int)sqrt($sectors->count()) . "  ";
+        $title = "  GALAXY: {$galaxy->name} - SECTOR OVERVIEW  ";
+        $stats = "Sectors: {$sectors->count()} | Grid: ".(int) sqrt($sectors->count()).'x'.(int) sqrt($sectors->count()).'  ';
         $padding = $this->termWidth - strlen($title) - strlen($stats) - 2;
 
         $this->command->line(
-            $this->colorize('║', 'border') .
-            $this->colorize($title, 'header') .
-            str_repeat(' ', max(0, $padding)) .
-            $this->colorize($stats, 'dim') .
+            $this->colorize('║', 'border').
+            $this->colorize($title, 'header').
+            str_repeat(' ', max(0, $padding)).
+            $this->colorize($stats, 'dim').
             $this->colorize('║', 'border')
         );
 
-        $this->command->line($this->colorize('╚' . str_repeat('═', $this->termWidth - 2) . '╝', 'border'));
+        $this->command->line($this->colorize('╚'.str_repeat('═', $this->termWidth - 2).'╝', 'border'));
     }
 
     private function renderCompactGrid(array $grid, int $gridSize, array &$sectorMap): void
@@ -73,8 +70,9 @@ class SectorRenderer
             for ($x = 0; $x < $gridSize; $x++) {
                 $sector = $grid[$y][$x] ?? null;
 
-                if (!$sector) {
+                if (! $sector) {
                     $rowOutput .= str_pad('', 12);
+
                     continue;
                 }
 
@@ -85,7 +83,7 @@ class SectorRenderer
                 // Determine cell color: bright for sectors with stars, dim for empty
                 if ($stats['star_count'] > 0) {
                     // Sectors with stars - color by danger level
-                    $cellColor = match($dangerLevel) {
+                    $cellColor = match ($dangerLevel) {
                         'high' => 'pirate',
                         'medium' => 'highlight',
                         'low' => 'header',  // Bright color for populated sectors
@@ -105,7 +103,7 @@ class SectorRenderer
                 $stars = $stats['star_count'];
                 $pirates = $stats['pirate_count'];
 
-                $cellText = '[' . $this->colorize($char, 'header') . '] ';
+                $cellText = '['.$this->colorize($char, 'header').'] ';
                 $cellText .= $this->colorize(str_pad(substr($sector->name, 0, 6), 6), $cellColor);
 
                 if ($pirates > 0) {
@@ -114,7 +112,7 @@ class SectorRenderer
                     $cellText .= ' ';
                 }
 
-                $rowOutput .= $cellText . ' ';
+                $rowOutput .= $cellText.' ';
             }
 
             $this->command->line($rowOutput);
@@ -133,7 +131,7 @@ class SectorRenderer
         // Add letters a-z excluding reserved ones
         for ($i = 0; $i < 26; $i++) {
             $letter = chr(ord('a') + $i);
-            if (!in_array($letter, $reservedLetters)) {
+            if (! in_array($letter, $reservedLetters)) {
                 $singleChars[] = $letter;
             }
         }
@@ -150,16 +148,16 @@ class SectorRenderer
         $letters = [];
         for ($i = 0; $i < 26; $i++) {
             $letter = chr(ord('a') + $i);
-            if (!in_array($letter, $reservedLetters)) {
+            if (! in_array($letter, $reservedLetters)) {
                 $letters[] = $letter;
             }
         }
 
         $letterCount = count($letters);
-        $first = $letters[(int)floor($doubleIndex / $letterCount)];
+        $first = $letters[(int) floor($doubleIndex / $letterCount)];
         $second = $letters[$doubleIndex % $letterCount];
 
-        return $first . $second;
+        return $first.$second;
     }
 
     private function renderLegend(): void
@@ -180,7 +178,7 @@ class SectorRenderer
 
         foreach ($legends as $legend) {
             [$char, $color, $desc] = $legend;
-            $this->command->line('  ' . $this->colorize($char, $color) . ' = ' . $desc);
+            $this->command->line('  '.$this->colorize($char, $color).' = '.$desc);
         }
 
         $this->command->newLine();

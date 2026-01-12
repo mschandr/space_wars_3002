@@ -17,6 +17,7 @@ class WarpLanePirateSeeder extends Seeder
 
         if ($captains->isEmpty()) {
             $this->command->error('No pirate captains found. Run PirateCaptainSeeder first.');
+
             return;
         }
 
@@ -34,7 +35,7 @@ class WarpLanePirateSeeder extends Seeder
             }
 
             // Calculate 10% of warp gates (minimum 1)
-            $pirateGateCount = max(1, (int)round($gates->count() * 0.10));
+            $pirateGateCount = max(1, (int) round($gates->count() * 0.10));
 
             // Randomly select gates for pirate presence
             $selectedGates = $gates->random(min($pirateGateCount, $gates->count()));

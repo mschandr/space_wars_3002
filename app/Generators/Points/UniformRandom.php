@@ -31,9 +31,9 @@ final class UniformRandom extends AbstractPointGenerator implements PointGenerat
             $y = $this->randomizer->getInt(0, $this->height - 1);
 
             // Only check for exact duplicates (no spacing constraint)
-            $key = $x . ':' . $y;
+            $key = $x.':'.$y;
 
-            if (!isset($seen[$key])) {
+            if (! isset($seen[$key])) {
                 $pts[] = [$x, $y];
                 $seen[$key] = true;
             }

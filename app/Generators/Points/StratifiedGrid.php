@@ -78,7 +78,7 @@ final class StratifiedGrid extends AbstractPointGenerator implements PointGenera
             $x = $this->randomizer->getInt($minX, $maxX);
             $y = $this->randomizer->getInt($minY, $maxY);
 
-            if (!in_array([$x, $y], $pts, true)) {
+            if (! in_array([$x, $y], $pts, true)) {
                 $pts[] = [$x, $y];
             }
         }

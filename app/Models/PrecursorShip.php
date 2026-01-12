@@ -97,7 +97,7 @@ class PrecursorShip extends Model
 
             // Set lore description
             if (empty($ship->description)) {
-                $ship->description = <<<LORE
+                $ship->description = <<<'LORE'
 The Void Strider - Flagship of the Precursor Stellar Engineering Corps.
 
 500,000 years ago, this vessel coordinated the repositioning of entire star systems.
@@ -150,7 +150,7 @@ LORE;
     {
         $ship = $player->activeShip;
 
-        if (!$ship) {
+        if (! $ship) {
             return false;
         }
 
@@ -302,7 +302,7 @@ LORE;
      */
     public function getDisplayName(): string
     {
-        return $this->precursor_name . ' (Precursor Vessel)';
+        return $this->precursor_name.' (Precursor Vessel)';
     }
 
     /**
@@ -326,7 +326,7 @@ LORE;
      */
     public function getDiscoveryLore(): string
     {
-        return <<<LORE
+        return <<<'LORE'
 Your sensors detect something impossible.
 
 A ship. Impossibly old. Impossibly advanced.

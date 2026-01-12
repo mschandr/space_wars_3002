@@ -21,6 +21,7 @@ enum MarketEventType: string
     public static function random(): self
     {
         $cases = self::cases();
+
         return $cases[array_rand($cases)];
     }
 
@@ -29,7 +30,7 @@ enum MarketEventType: string
      */
     public function getDisplayName(): string
     {
-        return match($this) {
+        return match ($this) {
             self::SUPPLY_SHORTAGE => 'Supply Shortage',
             self::DEMAND_SPIKE => 'Demand Spike',
             self::TRADE_EMBARGO => 'Trade Embargo',
@@ -48,7 +49,7 @@ enum MarketEventType: string
      */
     public function getPriceMultiplierRange(): array
     {
-        return match($this) {
+        return match ($this) {
             self::SUPPLY_SHORTAGE => [2.0, 3.0],      // 200-300%
             self::DEMAND_SPIKE => [2.0, 2.5],         // 200-250%
             self::TRADE_EMBARGO => [2.5, 3.5],        // 250-350%
@@ -68,6 +69,7 @@ enum MarketEventType: string
     public function getRandomMultiplier(): float
     {
         [$min, $max] = $this->getPriceMultiplierRange();
+
         return round($min + (($max - $min) * (mt_rand() / mt_getrandmax())), 2);
     }
 
@@ -76,7 +78,7 @@ enum MarketEventType: string
      */
     public function isPriceIncrease(): bool
     {
-        return match($this) {
+        return match ($this) {
             self::MARKET_FLOODING, self::DISCOVERY => false,
             default => true,
         };

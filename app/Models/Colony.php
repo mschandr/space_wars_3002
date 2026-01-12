@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 class Colony extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'uuid',
         'player_id',
@@ -216,7 +217,7 @@ class Colony extends Model
      */
     public function getStatusDisplay(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'establishing' => '🏗️ Establishing',
             'growing' => '📈 Growing',
             'established' => '✅ Established',

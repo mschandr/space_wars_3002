@@ -22,9 +22,6 @@ class SurrenderService
      * 1. Jettison all cargo (delete PlayerCargo)
      * 2. 25% chance: Steal upgrades (detach plans + downgrade 1-2 components)
      *
-     * @param Player $player
-     * @param PlayerShip $playerShip
-     * @param Collection $pirateFleet
      * @return array Surrender result with details
      */
     public function processSurrender(Player $player, PlayerShip $playerShip, Collection $pirateFleet): array

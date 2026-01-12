@@ -27,12 +27,13 @@ class GalaxyGenerateSectors extends Command
             ? Galaxy::find($galaxyIdentifier)
             : Galaxy::where('name', 'like', "%{$galaxyIdentifier}%")->first();
 
-        if (!$galaxy) {
+        if (! $galaxy) {
             $this->error("Galaxy not found: {$galaxyIdentifier}");
+
             return Command::FAILURE;
         }
 
-        $gridSize = max(2, min(20, (int)$this->option('grid-size')));
+        $gridSize = max(2, min(20, (int) $this->option('grid-size')));
 
         $this->info("Generating sectors for galaxy: {$galaxy->name}");
         $this->info("Galaxy size: {$galaxy->width}x{$galaxy->height}");
@@ -92,14 +93,15 @@ class GalaxyGenerateSectors extends Command
             }
         }
 
-        $this->info("Created " . count($sectors) . " sectors");
+        $this->info('Created '.count($sectors).' sectors');
+
         return $sectors;
     }
 
     private function assignPoisToSectors(Galaxy $galaxy, array $sectors): void
     {
         $this->newLine();
-        $this->info("Assigning POIs to sectors...");
+        $this->info('Assigning POIs to sectors...');
 
         $totalPois = $galaxy->pointsOfInterest()->count();
         $assigned = 0;
@@ -135,7 +137,7 @@ class GalaxyGenerateSectors extends Command
         $greekLetters = [
             'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta',
             'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu', 'Xi', 'Omicron', 'Pi',
-            'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega'
+            'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega',
         ];
 
         $names = [];
@@ -145,9 +147,9 @@ class GalaxyGenerateSectors extends Command
                 // Use Greek letters for rows, numbers for columns
                 $rowName = $greekLetters[$y % count($greekLetters)];
                 if ($y >= count($greekLetters)) {
-                    $rowName .= '-' . floor($y / count($greekLetters));
+                    $rowName .= '-'.floor($y / count($greekLetters));
                 }
-                $names[$y][$x] = "{$rowName}-" . ($x + 1);
+                $names[$y][$x] = "{$rowName}-".($x + 1);
             }
         }
 
@@ -157,7 +159,7 @@ class GalaxyGenerateSectors extends Command
     private function showSummary(Galaxy $galaxy, array $sectors): void
     {
         $this->newLine();
-        $this->info("✅ Sector generation complete!");
+        $this->info('✅ Sector generation complete!');
         $this->newLine();
 
         // Calculate statistics

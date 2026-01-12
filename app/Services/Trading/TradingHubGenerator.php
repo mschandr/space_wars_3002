@@ -14,10 +14,13 @@ use Illuminate\Support\Collection;
 class TradingHubGenerator
 {
     private int $minGatesForHub;
+
     private float $salvageYardProbability;
+
     private float $plansProbability;
 
     private float $hubSpawnProbability;
+
     private int $minHubDistance;
 
     public function __construct(
@@ -84,6 +87,7 @@ class TradingHubGenerator
             return (mt_rand() / mt_getrandmax()) < $this->hubSpawnProbability;
         })->map(function ($poi) {
             $uniqueGateCount = $poi->outgoingGates->count();
+
             return [
                 'poi' => $poi,
                 'gate_count' => $uniqueGateCount,
@@ -119,7 +123,7 @@ class TradingHubGenerator
                 }
             }
 
-            if (!$tooClose) {
+            if (! $tooClose) {
                 $selected->push($candidate);
             }
         }
@@ -181,6 +185,7 @@ class TradingHubGenerator
         } elseif ($gateCount >= 3) {
             return 'major';
         }
+
         return 'standard';
     }
 
@@ -198,7 +203,7 @@ class TradingHubGenerator
             'Commercial Nexus',
         ];
 
-        return $poi->name . ' ' . $suffixes[array_rand($suffixes)];
+        return $poi->name.' '.$suffixes[array_rand($suffixes)];
     }
 
     /**
@@ -252,7 +257,7 @@ class TradingHubGenerator
             $nearestDistance = $proximityData['nearest_distance'];
 
             // Decide if this hub stocks this mineral based on proximity
-            if (!ProximityPricingService::shouldStockMineral($hub, $mineral, $nearestDistance)) {
+            if (! ProximityPricingService::shouldStockMineral($hub, $mineral, $nearestDistance)) {
                 continue;
             }
 
@@ -290,7 +295,7 @@ class TradingHubGenerator
         $selectedPlans = collect();
 
         // Determine plan count by hub tier
-        $planCount = match($hub->type) {
+        $planCount = match ($hub->type) {
             'premium' => random_int(10, 15),
             'major' => random_int(6, 10),
             'standard' => random_int(3, 6),
@@ -306,7 +311,7 @@ class TradingHubGenerator
         for ($i = 0; $i < $planCount && $allPlans->isNotEmpty(); $i++) {
             $rarity = $this->weightedRandom($weights);
             $available = $allPlans->where('rarity', $rarity)
-                                  ->whereNotIn('id', $selectedPlans->pluck('id'));
+                ->whereNotIn('id', $selectedPlans->pluck('id'));
 
             if ($available->isEmpty()) {
                 $available = $allPlans->whereNotIn('id', $selectedPlans->pluck('id'));
@@ -355,13 +360,13 @@ class TradingHubGenerator
      */
     private function determineInitialQuantity(TradingHub $hub, Mineral $mineral, ?float $nearestDistance): int
     {
-        $baseQuantity = match($hub->type) {
+        $baseQuantity = match ($hub->type) {
             'premium' => 10000,
             'major' => 5000,
             'standard' => 2000,
         };
 
-        $rarityMultiplier = match($mineral->rarity->value) {
+        $rarityMultiplier = match ($mineral->rarity->value) {
             'abundant' => 3.0,
             'common' => 2.0,
             'uncommon' => 1.0,
@@ -392,7 +397,7 @@ class TradingHubGenerator
         $supply = random_int(30, 70);
 
         // Rarer items tend to have higher demand, lower supply
-        $rarityAdjustment = match($mineral->rarity->value) {
+        $rarityAdjustment = match ($mineral->rarity->value) {
             'abundant' => ['demand' => -10, 'supply' => 20],
             'common' => ['demand' => 0, 'supply' => 10],
             'uncommon' => ['demand' => 5, 'supply' => 0],

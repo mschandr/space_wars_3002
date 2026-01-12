@@ -94,8 +94,13 @@ class Sector extends Model
             ? $stats['pirate_count'] / $stats['star_count']
             : 0;
 
-        if ($pirateRatio >= 0.3) return 'high';
-        if ($pirateRatio >= 0.1) return 'medium';
+        if ($pirateRatio >= 0.3) {
+            return 'high';
+        }
+        if ($pirateRatio >= 0.1) {
+            return 'medium';
+        }
+
         return 'low';
     }
 

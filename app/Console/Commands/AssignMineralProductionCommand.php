@@ -19,11 +19,12 @@ class AssignMineralProductionCommand extends Command
         $galaxyIdentifier = $this->argument('galaxy');
 
         // If no galaxy specified, prompt for one
-        if (!$galaxyIdentifier) {
+        if (! $galaxyIdentifier) {
             $galaxies = Galaxy::all();
 
             if ($galaxies->isEmpty()) {
                 $this->error('No galaxies found. Create a galaxy first.');
+
                 return Command::FAILURE;
             }
 
@@ -40,8 +41,9 @@ class AssignMineralProductionCommand extends Command
                 : Galaxy::where('name', $galaxyIdentifier)->first();
         }
 
-        if (!$galaxy) {
+        if (! $galaxy) {
             $this->error("Galaxy not found: {$galaxyIdentifier}");
+
             return Command::FAILURE;
         }
 
@@ -52,6 +54,7 @@ class AssignMineralProductionCommand extends Command
 
         if ($totalPois === 0) {
             $this->error("Galaxy '{$galaxy->name}' has no POIs.");
+
             return Command::FAILURE;
         }
 
@@ -65,9 +68,10 @@ class AssignMineralProductionCommand extends Command
 
         foreach ($pois as $poi) {
             // Skip if already assigned and not reassigning
-            if (!$reassign && isset($poi->attributes['produces'])) {
+            if (! $reassign && isset($poi->attributes['produces'])) {
                 $skipped++;
                 $progressBar->advance();
+
                 continue;
             }
 
@@ -84,7 +88,7 @@ class AssignMineralProductionCommand extends Command
 
             // Track statistics
             $typeKey = $poi->type->value;
-            if (!isset($productionByType[$typeKey])) {
+            if (! isset($productionByType[$typeKey])) {
                 $productionByType[$typeKey] = [
                     'count' => 0,
                     'minerals' => [],
@@ -102,7 +106,7 @@ class AssignMineralProductionCommand extends Command
         $progressBar->finish();
         $this->newLine(2);
 
-        $this->info("✅ Mineral production assignment complete!");
+        $this->info('✅ Mineral production assignment complete!');
         $this->table(
             ['Metric', 'Value'],
             [
@@ -123,7 +127,7 @@ class AssignMineralProductionCommand extends Command
                 $type,
                 $data['count'],
                 count($uniqueMinerals),
-                implode(', ', array_slice($uniqueMinerals, 0, 5)) . (count($uniqueMinerals) > 5 ? '...' : ''),
+                implode(', ', array_slice($uniqueMinerals, 0, 5)).(count($uniqueMinerals) > 5 ? '...' : ''),
             ];
         }
 

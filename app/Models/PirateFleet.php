@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PirateFleet extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'uuid',
         'captain_id',

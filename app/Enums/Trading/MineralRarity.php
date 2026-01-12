@@ -15,7 +15,7 @@ enum MineralRarity: string
 
     public function label(): string
     {
-        return match($this) {
+        return match ($this) {
             self::ABUNDANT => 'Abundant',
             self::COMMON => 'Common',
             self::UNCOMMON => 'Uncommon',
@@ -29,7 +29,7 @@ enum MineralRarity: string
 
     public function valueMultiplier(): float
     {
-        return match($this) {
+        return match ($this) {
             self::ABUNDANT => 0.5,
             self::COMMON => 1.0,
             self::UNCOMMON => 2.5,

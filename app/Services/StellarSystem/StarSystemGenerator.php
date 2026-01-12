@@ -221,7 +221,6 @@ class StarSystemGenerator
      * Weighted random selection helper
      *
      * @param  array<mixed, int>  $weights  [value => weight]
-     * @return mixed
      *
      * @throws AssertionFailedException
      */
