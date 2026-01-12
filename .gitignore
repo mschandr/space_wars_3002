@@ -20,3 +20,5 @@ yarn-error.log
 /.vscode
 /public/vendor/*
 ssl/*
+.claude/*
+CLAUDE.md

@@ -37,7 +37,7 @@ class TradingHubGenerateCommand extends Command
             })->toArray();
 
             $galaxyId = $this->choice('Select a galaxy', $choices);
-            $galaxy = Galaxy::find($galaxyId);
+            $galaxy   = Galaxy::find($galaxyId);
         } else {
             // Try to find by ID first, then by name
             $galaxy = is_numeric($galaxyIdentifier)
@@ -88,10 +88,10 @@ class TradingHubGenerateCommand extends Command
 
         // Create generator with options
         $generator = new TradingHubGenerator(
-            minGatesForHub: (int) $this->option('min-gates'),
-            salvageYardProbability: (float) $this->option('salvage-probability'),
-            hubSpawnProbability: (float) $this->option('hub-probability'),
-            minHubDistance: (int) $this->option('min-spacing')
+            minGatesForHub: (int)$this->option('min-gates'),
+            salvageYardProbability: (float)$this->option('salvage-probability'),
+            hubSpawnProbability: (float)$this->option('hub-probability'),
+            minHubDistance: (int)$this->option('min-spacing')
         );
 
         // Generate trading hubs
@@ -108,7 +108,7 @@ class TradingHubGenerateCommand extends Command
             return Command::SUCCESS;
         }
 
-        $hubsByType = $hubs->groupBy('type');
+        $hubsByType      = $hubs->groupBy('type');
         $hubsWithSalvage = $hubs->where('has_salvage_yard', true)->count();
 
         $this->newLine();
@@ -138,7 +138,7 @@ class TradingHubGenerateCommand extends Command
         $this->info('Trading Hubs Created:');
         $hubTable = [];
         foreach ($hubs as $hub) {
-            $poi = $hub->pointOfInterest;
+            $poi        = $hub->pointOfInterest;
             $hubTable[] = [
                 $hub->name,
                 $hub->type,

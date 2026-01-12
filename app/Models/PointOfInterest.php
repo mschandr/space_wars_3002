@@ -39,12 +39,14 @@ class PointOfInterest extends Model
         'name',
         'attributes',
         'is_hidden',
+        'is_inhabited',
         'version',
     ];
 
     protected $casts = [
         'attributes' => 'array',
         'is_hidden' => 'boolean',
+        'is_inhabited' => 'boolean',
         'status' => PointOfInterestStatus::class,
         'type' => PointOfInterestType::class,
     ];
@@ -172,6 +174,44 @@ class PointOfInterest extends Model
     public function tradingHub()
     {
         return $this->hasOne(TradingHub::class, 'poi_id');
+    }
+
+    /**
+     * Stellar Cartographer shop at this POI (if any)
+     */
+    public function stellarCartographer()
+    {
+        return $this->hasOne(StellarCartographer::class, 'poi_id');
+    }
+
+    /**
+     *--------------------------------------------------------------------------
+     * Query Scopes
+     *--------------------------------------------------------------------------
+     */
+
+    /**
+     * Scope to filter inhabited systems
+     */
+    public function scopeInhabited($query)
+    {
+        return $query->where('is_inhabited', true);
+    }
+
+    /**
+     * Scope to filter uninhabited systems
+     */
+    public function scopeUninhabited($query)
+    {
+        return $query->where('is_inhabited', false);
+    }
+
+    /**
+     * Scope to filter by star systems only
+     */
+    public function scopeStars($query)
+    {
+        return $query->where('type', PointOfInterestType::STAR);
     }
 
     /**

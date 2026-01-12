@@ -21,10 +21,10 @@ class TradingHubGenerator
     private int $minHubDistance;
 
     public function __construct(
-        int $minGatesForHub = 3,           // Increased from 2 to 3
+        int $minGatesForHub = 1,           // Minimum gates for inhabited systems
         float $salvageYardProbability = 0.3,
         float $plansProbability = 0.05,
-        float $hubSpawnProbability = 0.25, // Only 25% of eligible locations get hubs
+        float $hubSpawnProbability = 0.65, // 65% of inhabited systems get trading hubs (50-80% range)
         int $minHubDistance = 100           // Minimum distance between hubs
     ) {
         $this->minGatesForHub = $minGatesForHub;
@@ -57,14 +57,16 @@ class TradingHubGenerator
 
     /**
      * Identify POIs that qualify as trading hub locations
-     * (locations where multiple warp gates intersect)
+     * (inhabited star systems with warp gate connectivity)
      *
      * Uses probability and spacing to keep universe mostly empty for colonization
      */
     private function identifyHubLocations(Galaxy $galaxy): Collection
     {
+        // Only consider INHABITED star systems
         $pois = $galaxy->pointsOfInterest()
             ->where('type', PointOfInterestType::STAR)
+            ->where('is_inhabited', true)  // ONLY inhabited systems get trading hubs
             ->with(['outgoingGates', 'incomingGates'])
             ->get();
 
@@ -72,15 +74,14 @@ class TradingHubGenerator
         $candidates = $pois->filter(function ($poi) {
             $uniqueGateCount = $poi->outgoingGates->count();
 
-            // Must have minimum gates
+            // Must have minimum gates for connectivity
             if ($uniqueGateCount < $this->minGatesForHub) {
                 return false;
             }
 
-            // Probability check - only spawn hubs at X% of eligible locations
-            // Higher gate count = higher probability (major trade routes)
-            $probability = min(1.0, $this->hubSpawnProbability * ($uniqueGateCount / $this->minGatesForHub));
-            return (mt_rand() / mt_getrandmax()) < $probability;
+            // Probability check - spawn hubs at X% of inhabited systems
+            // Use straight probability (no scaling by gate count)
+            return (mt_rand() / mt_getrandmax()) < $this->hubSpawnProbability;
         })->map(function ($poi) {
             $uniqueGateCount = $poi->outgoingGates->count();
             return [

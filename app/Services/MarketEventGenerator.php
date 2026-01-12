@@ -11,6 +11,22 @@ use Illuminate\Support\Str;
 class MarketEventGenerator
 {
     /**
+     * Generate multiple events at once (for testing or initial population)
+     */
+    public function generateMultipleEvents(int $count, float $probability = 1.0): int
+    {
+        $generated = 0;
+
+        for ($i = 0; $i < $count; $i++) {
+            if ($this->generateRandomEvent($probability) !== null) {
+                $generated++;
+            }
+        }
+
+        return $generated;
+    }
+
+    /**
      * Generate a random market event
      *
      * @param float $probability Probability of generating an event (0.0-1.0)
@@ -40,19 +56,19 @@ class MarketEventGenerator
 
         // Duration: 30 minutes to 4 hours
         $durationMinutes = mt_rand(30, 240);
-        $startedAt = now();
-        $expiresAt = now()->addMinutes($durationMinutes);
+        $startedAt       = now();
+        $expiresAt       = now()->addMinutes($durationMinutes);
 
         return MarketEvent::create([
-            'uuid' => Str::uuid(),
-            'mineral_id' => $mineralId,
-            'trading_hub_id' => $tradingHubId,
-            'event_type' => $eventType,
+            'uuid'             => Str::uuid(),
+            'mineral_id'       => $mineralId,
+            'trading_hub_id'   => $tradingHubId,
+            'event_type'       => $eventType,
             'price_multiplier' => $multiplier,
-            'description' => $description,
-            'started_at' => $startedAt,
-            'expires_at' => $expiresAt,
-            'is_active' => true,
+            'description'      => $description,
+            'started_at'       => $startedAt,
+            'expires_at'       => $expiresAt,
+            'is_active'        => true,
         ]);
     }
 
@@ -79,33 +95,17 @@ class MarketEventGenerator
     {
         $mineralName = $mineralId ? (Mineral::find($mineralId)?->name ?? 'Unknown') : 'various minerals';
 
-        return match($eventType) {
-            MarketEventType::SUPPLY_SHORTAGE => "⚠️  BREAKING: Supply shortage of {$mineralName} reported across multiple sectors!",
-            MarketEventType::DEMAND_SPIKE => "📈 MARKET ALERT: Massive demand surge for {$mineralName} from industrial consortiums!",
-            MarketEventType::TRADE_EMBARGO => "🚨 EMBARGO: Government restrictions imposed on {$mineralName} trade!",
-            MarketEventType::MARKET_FLOODING => "📉 CRASH: Market flooded with {$mineralName} as reserves dumped!",
-            MarketEventType::DISCOVERY => "🎉 DISCOVERY: New rich deposits of {$mineralName} found in outer sectors!",
-            MarketEventType::SPECULATION_BOOM => "💰 SPECULATION: Traders hoarding {$mineralName} expecting price surge!",
-            MarketEventType::MINING_ACCIDENT => "💥 DISASTER: Mining accident severely limits {$mineralName} production!",
+        return match ($eventType) {
+            MarketEventType::SUPPLY_SHORTAGE   => "⚠️  BREAKING: Supply shortage of {$mineralName} reported across multiple sectors!",
+            MarketEventType::DEMAND_SPIKE      => "📈 MARKET ALERT: Massive demand surge for {$mineralName} from industrial consortiums!",
+            MarketEventType::TRADE_EMBARGO     => "🚨 EMBARGO: Government restrictions imposed on {$mineralName} trade!",
+            MarketEventType::MARKET_FLOODING   => "📉 CRASH: Market flooded with {$mineralName} as reserves dumped!",
+            MarketEventType::DISCOVERY         => "🎉 DISCOVERY: New rich deposits of {$mineralName} found in outer sectors!",
+            MarketEventType::SPECULATION_BOOM  => "💰 SPECULATION: Traders hoarding {$mineralName} expecting price surge!",
+            MarketEventType::MINING_ACCIDENT   => "💥 DISASTER: Mining accident severely limits {$mineralName} production!",
             MarketEventType::TECH_BREAKTHROUGH => "🔬 BREAKTHROUGH: New technology requires massive quantities of {$mineralName}!",
-            MarketEventType::PIRATE_RAID => "☠️  PIRATE ATTACK: Raiders disrupt {$mineralName} supply lanes!",
-            MarketEventType::CORPORATE_BUYOUT => "🏢 BUYOUT: Mega-corp monopolizing {$mineralName} supplies!",
+            MarketEventType::PIRATE_RAID       => "☠️  PIRATE ATTACK: Raiders disrupt {$mineralName} supply lanes!",
+            MarketEventType::CORPORATE_BUYOUT  => "🏢 BUYOUT: Mega-corp monopolizing {$mineralName} supplies!",
         };
-    }
-
-    /**
-     * Generate multiple events at once (for testing or initial population)
-     */
-    public function generateMultipleEvents(int $count, float $probability = 1.0): int
-    {
-        $generated = 0;
-
-        for ($i = 0; $i < $count; $i++) {
-            if ($this->generateRandomEvent($probability) !== null) {
-                $generated++;
-            }
-        }
-
-        return $generated;
     }
 }

@@ -38,7 +38,7 @@ class GalaxyGenerateGates extends Command
             })->toArray();
 
             $galaxyId = $this->choice('Select a galaxy', $choices);
-            $galaxy = Galaxy::find($galaxyId);
+            $galaxy   = Galaxy::find($galaxyId);
         } else {
             // Try to find by ID first, then by name
             $galaxy = is_numeric($galaxyIdentifier)
@@ -80,9 +80,9 @@ class GalaxyGenerateGates extends Command
 
             // Use incremental generator
             $generator = new IncrementalWarpGateGenerator(
-                adjacencyThreshold: (float) $this->option('adjacency'),
-                hiddenGatePercentage: (float) $this->option('hidden-percentage'),
-                maxGatesPerSystem: (int) $this->option('max-gates'),
+                adjacencyThreshold: (float)$this->option('adjacency'),
+                hiddenGatePercentage: (float)$this->option('hidden-percentage'),
+                maxGatesPerSystem: (int)$this->option('max-gates'),
                 command: $this
             );
 
@@ -93,7 +93,7 @@ class GalaxyGenerateGates extends Command
             $this->info("✅ Successfully generated warp gate network!");
             $this->newLine();
 
-            $totalGates = $galaxy->warpGates()->count();
+            $totalGates  = $galaxy->warpGates()->count();
             $hiddenGates = $galaxy->warpGates()->where('is_hidden', true)->count();
             $activeGates = $totalGates - $hiddenGates;
 
@@ -115,15 +115,15 @@ class GalaxyGenerateGates extends Command
             $this->info("Star systems: {$starCount}");
 
             $generator = new WarpGateGenerator(
-                adjacencyThreshold: (float) $this->option('adjacency'),
-                hiddenGatePercentage: (float) $this->option('hidden-percentage'),
-                maxGatesPerSystem: (int) $this->option('max-gates')
+                adjacencyThreshold: (float)$this->option('adjacency'),
+                hiddenGatePercentage: (float)$this->option('hidden-percentage'),
+                maxGatesPerSystem: (int)$this->option('max-gates')
             );
 
             $gates = $generator->generateGates($galaxy);
 
             // Display summary
-            $totalGates = $gates->count();
+            $totalGates  = $gates->count();
             $hiddenGates = $gates->where('is_hidden', true)->count();
             $activeGates = $totalGates - $hiddenGates;
             $avgDistance = round($gates->avg('distance'), 2);

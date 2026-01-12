@@ -16,6 +16,7 @@ class Player extends Model
     protected $fillable = [
         'uuid',
         'user_id',
+        'galaxy_id',
         'call_sign',
         'credits',
         'experience',
@@ -46,6 +47,11 @@ class Player extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function galaxy(): BelongsTo
+    {
+        return $this->belongsTo(Galaxy::class);
+    }
+
     public function currentLocation(): BelongsTo
     {
         return $this->belongsTo(PointOfInterest::class, 'current_poi_id');
@@ -66,6 +72,18 @@ class Player extends Model
         return $this->belongsToMany(Plan::class, 'player_plans')
                     ->withTimestamps()
                     ->withPivot('acquired_at');
+    }
+
+    public function starCharts(): BelongsToMany
+    {
+        return $this->belongsToMany(PointOfInterest::class, 'player_star_charts', 'player_id', 'revealed_poi_id')
+                    ->withPivot('purchased_from_poi_id', 'price_paid', 'purchased_at')
+                    ->withTimestamps();
+    }
+
+    public function hasChartFor(PointOfInterest $poi): bool
+    {
+        return $this->starCharts()->where('revealed_poi_id', $poi->id)->exists();
     }
 
     public function addCredits(float $amount): void

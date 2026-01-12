@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
 use App\Services\MirrorUniverseService;
 use Illuminate\Console\Command;
@@ -11,6 +12,7 @@ class GalaxyCreateMirror extends Command
     protected $signature = 'galaxy:create-mirror
                             {galaxy : The ID or name of the prime galaxy}
                             {--poi= : Specific POI ID for gate location (optional)}
+                            {--grid-size: 10 : Grid size (10 = 10x10 sectors)}
                             {--regenerate : Regenerate mirror if it already exists}
                             {--no-gates : Skip creating warp gate network}
                             {--no-hubs : Skip creating trading hubs}
@@ -31,13 +33,11 @@ class GalaxyCreateMirror extends Command
 
         if (! $primeGalaxy) {
             $this->error("❌ Galaxy not found: {$galaxyIdentifier}");
-
             return Command::FAILURE;
         }
 
         if ($primeGalaxy->isMirrorUniverse()) {
             $this->error('❌ Cannot create a mirror of a mirror universe!');
-
             return Command::FAILURE;
         }
 
@@ -66,7 +66,7 @@ class GalaxyCreateMirror extends Command
         // Step 2: Generate POIs (identical structure due to same seed)
         $this->info('Step 2: Generating points of interest...');
         $starCount = $primeGalaxy->pointsOfInterest()
-            ->where('type', \App\Enums\PointsOfInterest\PointOfInterestType::STAR)
+            ->where('type', PointOfInterestType::STAR)
             ->count();
 
         $this->call('galaxy:expand', [
@@ -86,6 +86,11 @@ class GalaxyCreateMirror extends Command
         if (! $this->option('no-gates')) {
             $this->info('Step 4: Generating warp gate network...');
             $this->call('galaxy:generate-gates', [
+                '--adjacency' => 1.5,
+                '--hidden-percentage' => 0.05,
+                '--max-gates' => 8,
+                '--regenerate' => true,
+                '--incremental' => true,
                 'galaxy' => $mirrorGalaxy->id,
             ]);
             $this->newLine();

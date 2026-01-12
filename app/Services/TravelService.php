@@ -2,8 +2,11 @@
 
 namespace App\Services;
 
+use App\Enums\PointsOfInterest\PointOfInterestStatus;
+use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Player;
 use App\Models\PlayerShip;
+use App\Models\PointOfInterest;
 use App\Models\WarpGate;
 
 /**
@@ -21,8 +24,8 @@ class TravelService
      * - Efficiency: 1 + ((warp_drive - 1) * 0.2) - 20% reduction per warp level
      * - Final cost: max(1, ceil(baseCost / efficiency))
      *
-     * @param float $distance The distance to travel
-     * @param PlayerShip $ship The ship performing the travel
+     * @param  float  $distance  The distance to travel
+     * @param  PlayerShip  $ship  The ship performing the travel
      * @return int The fuel cost
      */
     public function calculateFuelCost(float $distance, PlayerShip $ship): int
@@ -44,7 +47,7 @@ class TravelService
      * - 5 XP per unit distance
      * - Minimum 10 XP
      *
-     * @param float $distance The distance traveled
+     * @param  float  $distance  The distance traveled
      * @return int The XP earned
      */
     public function calculateTravelXP(float $distance): int
@@ -55,15 +58,15 @@ class TravelService
     /**
      * Execute travel through a warp gate
      *
-     * @param Player $player The player traveling
-     * @param WarpGate $gate The warp gate to travel through
+     * @param  Player  $player  The player traveling
+     * @param  WarpGate  $gate  The warp gate to travel through
      * @return array Result with success status, message, XP earned, and level info
      */
     public function executeTravel(Player $player, WarpGate $gate): array
     {
         $ship = $player->activeShip;
 
-        if (!$ship) {
+        if (! $ship) {
             return [
                 'success' => false,
                 'message' => 'No active ship',
@@ -78,7 +81,7 @@ class TravelService
             $mirrorService = app(MirrorUniverseService::class);
             $canTraverse = $mirrorService->canTraverseMirrorGate($player, $gate);
 
-            if (!$canTraverse['can_traverse']) {
+            if (! $canTraverse['can_traverse']) {
                 return [
                     'success' => false,
                     'message' => $canTraverse['reason'],
@@ -153,5 +156,222 @@ class TravelService
             'mirror_gate' => $mirrorGate,
             'universe' => $player->isInMirrorUniverse() ? 'mirror' : 'prime',
         ];
+    }
+
+    /**
+     * Calculate maximum jump distance based on warp drive level
+     *
+     * @param  PlayerShip  $ship  The ship
+     * @return float Maximum jump distance in coordinates
+     */
+    public function getMaxJumpDistance(PlayerShip $ship): float
+    {
+        $baseDistance = config('game_config.direct_travel.base_max_distance', 5.0);
+        $distancePerLevel = config('game_config.direct_travel.distance_per_warp_level', 5.0);
+        $warpLevel = $ship->warp_drive ?? 1;
+
+        return $baseDistance + ($distancePerLevel * ($warpLevel - 1));
+    }
+
+    /**
+     * Calculate fuel cost for direct jump (with penalty)
+     *
+     * @param  float  $distance  Distance to jump
+     * @param  PlayerShip  $ship  The ship
+     * @return int Fuel cost
+     */
+    public function calculateDirectJumpFuelCost(float $distance, PlayerShip $ship): int
+    {
+        $baseCost = $this->calculateFuelCost($distance, $ship);
+        $penalty = config('game_config.direct_travel.fuel_penalty_multiplier', 2.5);
+
+        return (int) ceil($baseCost * $penalty);
+    }
+
+    /**
+     * Check if a direct jump is possible
+     *
+     * @param  Player  $player  The player
+     * @param  int  $targetX  Target X coordinate
+     * @param  int  $targetY  Target Y coordinate
+     * @return array Validation result
+     */
+    public function canDirectJump(Player $player, int $targetX, int $targetY): array
+    {
+        if (! config('game_config.direct_travel.enabled', true)) {
+            return [
+                'can_jump' => false,
+                'reason' => 'Direct coordinate travel is disabled',
+            ];
+        }
+
+        $ship = $player->activeShip;
+
+        if (! $ship) {
+            return [
+                'can_jump' => false,
+                'reason' => 'No active ship',
+            ];
+        }
+
+        $currentPoi = $player->currentLocation;
+
+        if (! $currentPoi) {
+            return [
+                'can_jump' => false,
+                'reason' => 'Current location not found',
+            ];
+        }
+
+        // Calculate distance
+        $distance = sqrt(
+            pow($targetX - $currentPoi->x, 2) +
+            pow($targetY - $currentPoi->y, 2)
+        );
+
+        // Check max jump distance
+        $maxDistance = $this->getMaxJumpDistance($ship);
+        if ($distance > $maxDistance) {
+            return [
+                'can_jump' => false,
+                'reason' => 'Distance exceeds maximum jump range',
+                'distance' => round($distance, 2),
+                'max_distance' => $maxDistance,
+                'warp_level' => $ship->warp_drive ?? 1,
+            ];
+        }
+
+        // Check galaxy bounds
+        $galaxy = $currentPoi->galaxy;
+        if ($targetX < 0 || $targetX > $galaxy->width ||
+            $targetY < 0 || $targetY > $galaxy->height) {
+            return [
+                'can_jump' => false,
+                'reason' => 'Coordinates outside galaxy bounds',
+                'galaxy_bounds' => [
+                    'width' => $galaxy->width,
+                    'height' => $galaxy->height,
+                ],
+            ];
+        }
+
+        // Calculate fuel cost
+        $fuelCost = $this->calculateDirectJumpFuelCost($distance, $ship);
+        if ($ship->current_fuel < $fuelCost) {
+            return [
+                'can_jump' => false,
+                'reason' => 'Insufficient fuel',
+                'required_fuel' => $fuelCost,
+                'current_fuel' => $ship->current_fuel,
+                'distance' => round($distance, 2),
+            ];
+        }
+
+        return [
+            'can_jump' => true,
+            'distance' => round($distance, 2),
+            'fuel_cost' => $fuelCost,
+        ];
+    }
+
+    /**
+     * Execute a direct coordinate jump
+     *
+     * @param  Player  $player  The player
+     * @param  int  $targetX  Target X coordinate
+     * @param  int  $targetY  Target Y coordinate
+     * @return array Result with success status, message, XP earned, and level info
+     */
+    public function executeDirectJump(Player $player, int $targetX, int $targetY): array
+    {
+        $check = $this->canDirectJump($player, $targetX, $targetY);
+
+        if (! $check['can_jump']) {
+            return [
+                'success' => false,
+                'message' => $check['reason'],
+                'details' => $check,
+                'xp_earned' => 0,
+                'old_level' => $player->level,
+                'new_level' => $player->level,
+            ];
+        }
+
+        $ship = $player->activeShip;
+        $currentPoi = $player->currentLocation;
+        $distance = $check['distance'];
+        $fuelCost = $check['fuel_cost'];
+
+        // Consume fuel
+        $ship->consumeFuel($fuelCost);
+
+        // Find or create POI at target coordinates
+        $targetPoi = $this->findOrCreateEmptySpace(
+            $currentPoi->galaxy_id,
+            $targetX,
+            $targetY
+        );
+
+        // Update player location
+        $player->current_poi_id = $targetPoi->id;
+        $player->save();
+
+        // Award reduced XP
+        $baseXp = $this->calculateTravelXP($distance);
+        $xpMultiplier = config('game_config.direct_travel.xp_multiplier', 0.75);
+        $xpEarned = (int) ($baseXp * $xpMultiplier);
+
+        $oldLevel = $player->level;
+        $player->addExperience($xpEarned);
+        $newLevel = $player->level;
+
+        return [
+            'success' => true,
+            'message' => 'Direct jump successful',
+            'destination' => $targetPoi->name,
+            'destination_coords' => [$targetX, $targetY],
+            'distance' => $distance,
+            'fuel_cost' => $fuelCost,
+            'fuel_remaining' => $ship->current_fuel,
+            'xp_earned' => $xpEarned,
+            'old_level' => $oldLevel,
+            'new_level' => $newLevel,
+            'leveled_up' => $newLevel > $oldLevel,
+            'jump_type' => 'direct',
+        ];
+    }
+
+    /**
+     * Find POI at coordinates or create empty space marker
+     *
+     * @param  int  $galaxyId  Galaxy ID
+     * @param  int  $x  X coordinate
+     * @param  int  $y  Y coordinate
+     * @return PointOfInterest The POI at those coordinates
+     */
+    private function findOrCreateEmptySpace(int $galaxyId, int $x, int $y): PointOfInterest
+    {
+        // Check if POI exists at these coordinates
+        $existing = PointOfInterest::where('galaxy_id', $galaxyId)
+            ->where('x', $x)
+            ->where('y', $y)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        // Create "Empty Space" POI
+        return PointOfInterest::create([
+            'galaxy_id' => $galaxyId,
+            'type' => PointOfInterestType::EMPTY_SPACE,
+            'status' => PointOfInterestStatus::ACTIVE,
+            'x' => $x,
+            'y' => $y,
+            'name' => "Empty Space ({$x}, {$y})",
+            'is_inhabited' => false,
+            'is_hidden' => false,
+            'attributes' => [],
+        ]);
     }
 }

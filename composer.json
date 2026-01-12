@@ -13,15 +13,9 @@
         "laravel/framework": "^12.25",
         "laravel/tinker": "^2.10.1",
         "mschandr/weighted-random": "^3.0.0",
-        "php-tui/php-tui": "^0.2.1",
-        "symfony/yaml": "^7.3.2",
-        "terminalui/framework": "@dev"
+        "symfony/yaml": "^7.3.2"
     },
     "repositories": {
-        "terminalui": {
-            "type": "path",
-            "url": "../terminalui-framework"
-        },
         "0": {
             "type": "vcs",
             "url": "https://github.com/mschandr/weighted-random.git"

@@ -107,6 +107,10 @@ class PlayerInterfaceCommand extends Command
                 $char === 't' => $this->showTradingInterface(),
                 $char === 'w' => $this->showTravelInterface(),
                 $char === 'b' => $this->showShipShop(),
+                $char === 'v' => $this->showStarMap(),
+                $char === 'j' => $this->showCoordinateJump(),
+                $char === 'n' => $this->showScanResults(),
+                $char === 'h' => $this->findNearestTradingHub(),
                 default => null,
             };
         }
@@ -479,6 +483,20 @@ class PlayerInterfaceCommand extends Command
                 $output .= $this->formatBoxLine('Class: ' . $star->attributes['stellar_class']);
             }
 
+            // Show inhabited status
+            $inhabitedStatus = $star->is_inhabited
+                ? $this->colorize('INHABITED', 'trade')
+                : $this->colorize('UNINHABITED', 'dim');
+            $output .= $this->formatBoxLine('Status: ' . $inhabitedStatus);
+
+            // Show warp gate count
+            $gateCount = $star->outgoingGates()->where('is_hidden', false)->count();
+            if ($gateCount > 0) {
+                $output .= $this->formatBoxLine('Warp Gates: ' . $this->colorize($gateCount, 'highlight'));
+            } else {
+                $output .= $this->formatBoxLine('Warp Gates: ' . $this->colorize('None (Isolated)', 'dim'));
+            }
+
             $output .= $this->colorize('╟' . str_repeat('─', 58) . '╢', 'border') . "\n";
 
             // Show planets
@@ -670,6 +688,24 @@ class PlayerInterfaceCommand extends Command
 
         $this->line($line4_col1 . $line4_col1_padding . $line4_col2);
 
+        // Fifth row - Navigation & Map
+        $line5_col1 = $this->colorize('  [v]', 'label') . ' - View star map (Sensors)';
+        $line5_col1_plain = preg_replace('/\033\[[0-9;]*m/', '', $line5_col1);
+        $line5_col1_padding = str_repeat(' ', max(0, $col1Width - mb_strlen($line5_col1_plain)));
+
+        $line5_col2 = $this->colorize('  [j]', 'label') . ' - Jump to coordinates';
+        $line5_col2_plain = preg_replace('/\033\[[0-9;]*m/', '', $line5_col2);
+        $line5_col2_padding = str_repeat(' ', max(0, $col2Width - mb_strlen($line5_col2_plain)));
+
+        $line5_col3 = $this->colorize('  [n]', 'label') . ' - Scan local area';
+
+        $this->line($line5_col1 . $line5_col1_padding . $line5_col2 . $line5_col2_padding . $line5_col3);
+
+        // Sixth row - Find nearest trading hub
+        $line6_col1 = $this->colorize('  [h]', 'label') . ' - Find nearest trading hub';
+
+        $this->line($line6_col1);
+
         $this->newLine();
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
     }
@@ -801,12 +837,19 @@ class PlayerInterfaceCommand extends Command
                     $status
                 );
 
-                // Show destination type
+                // Show destination type and status
                 $typeInfo = '      Type: ' . $destination->type->name;
                 if ($destination->type === PointOfInterestType::STAR) {
                     $tradingHub = $destination->tradingHub;
                     if ($tradingHub && $tradingHub->is_active) {
                         $typeInfo .= $this->colorize(' [Trading Hub]', 'trade');
+                    }
+
+                    // Show inhabited status
+                    if ($destination->is_inhabited) {
+                        $typeInfo .= $this->colorize(' [Inhabited]', 'trade');
+                    } else {
+                        $typeInfo .= $this->colorize(' [Uninhabited]', 'dim');
                     }
                 }
                 $this->line($this->colorize($typeInfo, 'dim'));
@@ -1073,5 +1116,563 @@ class PlayerInterfaceCommand extends Command
         $this->renderInterface();
         $this->interactiveLoop();
         return 0;
+    }
+
+    private function showStarMap(): void
+    {
+        system('stty sane');
+        $this->clearScreen();
+
+        $galaxy = $this->player->currentLocation->galaxy;
+        $playerLocation = $this->player->currentLocation->type === PointOfInterestType::STAR
+            ? $this->player->currentLocation
+            : $this->player->currentLocation->getRootStar();
+
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line($this->colorize('  STAR MAP - LOCAL SYSTEMS', 'header'));
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->newLine();
+
+        // Get visible stars (within sensor range)
+        $sensorRange = ($this->player->activeShip->sensors ?? 1) * 100; // Base 100 units per sensor level
+        $scanRadius = $sensorRange;
+
+        $this->line($this->colorize('  Current Position: ', 'label') . $playerLocation->name);
+        $this->line($this->colorize('  Coordinates: ', 'label') . "({$playerLocation->x}, {$playerLocation->y})");
+        $this->line($this->colorize('  Sensor Range: ', 'label') . $this->colorize($scanRadius . ' units', 'highlight'));
+        $this->newLine();
+
+        // Find nearby stars
+        $nearbyStars = $galaxy->pointsOfInterest()
+            ->where('type', PointOfInterestType::STAR)
+            ->get()
+            ->map(function ($star) use ($playerLocation) {
+                $distance = sqrt(
+                    pow($star->x - $playerLocation->x, 2) +
+                    pow($star->y - $playerLocation->y, 2)
+                );
+                return [
+                    'star' => $star,
+                    'distance' => $distance,
+                ];
+            })
+            ->filter(fn($item) => $item['distance'] <= $scanRadius)
+            ->sortBy('distance')
+            ->take(20); // Show top 20 nearest systems
+
+        if ($nearbyStars->isEmpty()) {
+            $this->line($this->colorize('  No systems detected within sensor range.', 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Upgrade your sensors to scan further.', 'dim'));
+        } else {
+            $this->line($this->colorize('  NEARBY STAR SYSTEMS:', 'header'));
+            $this->newLine();
+
+            // Header
+            $this->line(sprintf(
+                '  %-30s %-18s %-10s %-12s %-8s %s',
+                'System Name',
+                'Coordinates',
+                'Distance',
+                'Status',
+                'Gates',
+                'Services'
+            ));
+            $this->line($this->colorize('  ' . str_repeat('─', 115), 'border'));
+
+            foreach ($nearbyStars as $item) {
+                $star = $item['star'];
+                $distance = round($item['distance'], 1);
+                $isCurrent = $star->id === $playerLocation->id;
+
+                $status = $star->is_inhabited
+                    ? $this->colorize('Inhabited', 'trade')
+                    : $this->colorize('Uninhabited', 'dim');
+
+                $gateCount = $star->outgoingGates()->where('is_hidden', false)->count();
+                $gatesDisplay = $gateCount > 0
+                    ? $this->colorize($gateCount, 'highlight')
+                    : $this->colorize('0', 'dim');
+
+                // Check for trading hub
+                $services = '';
+                $tradingHub = $star->tradingHub;
+                if ($tradingHub && $tradingHub->is_active) {
+                    $services = $this->colorize('[Trade]', 'trade');
+                }
+
+                $currentMarker = $isCurrent ? $this->colorize(' ◄', 'highlight') : '';
+
+                $this->line(sprintf(
+                    '  %-30s %-18s %-10s %-12s %-8s %s%s',
+                    substr($star->name, 0, 28) . $currentMarker,
+                    "({$star->x}, {$star->y})",
+                    $distance,
+                    $status,
+                    $gatesDisplay,
+                    $services,
+                    ''
+                ));
+            }
+        }
+
+        $this->newLine();
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line($this->colorize('  Press any key to return...', 'dim'));
+
+        system('stty -icanon -echo');
+        fgetc(STDIN);
+
+        $this->refreshInterface();
+    }
+
+    private function showCoordinateJump(): void
+    {
+        system('stty sane');
+        $this->clearScreen();
+
+        $location = $this->player->currentLocation;
+        $star = $location->type === PointOfInterestType::STAR
+            ? $location
+            : $location->getRootStar();
+
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line($this->colorize('  COORDINATE JUMP', 'header'));
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->newLine();
+
+        $this->line($this->colorize('  Current Position: ', 'label') . $star->name);
+        $this->line($this->colorize('  Coordinates: ', 'label') . "({$star->x}, {$star->y})");
+        $this->newLine();
+
+        // Get target coordinates
+        $this->line($this->colorize('  Enter target coordinates:', 'header'));
+        $this->line($this->colorize('  X coordinate: ', 'label'));
+        $targetX = (int) trim(fgets(STDIN));
+
+        $this->line($this->colorize('  Y coordinate: ', 'label'));
+        $targetY = (int) trim(fgets(STDIN));
+
+        $this->newLine();
+
+        // Find star at those coordinates (within 5 unit tolerance)
+        $galaxy = $star->galaxy;
+        $tolerance = 5;
+
+        $targetStar = $galaxy->pointsOfInterest()
+            ->where('type', PointOfInterestType::STAR)
+            ->get()
+            ->first(function ($poi) use ($targetX, $targetY, $tolerance) {
+                $distance = sqrt(
+                    pow($poi->x - $targetX, 2) +
+                    pow($poi->y - $targetY, 2)
+                );
+                return $distance <= $tolerance;
+            });
+
+        if (!$targetStar) {
+            $this->error('  No star system found at coordinates (' . $targetX . ', ' . $targetY . ')');
+            $this->newLine();
+            $this->line($this->colorize('  Searching within 5 unit radius...', 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to return...', 'dim'));
+            fgetc(STDIN);
+            $this->refreshInterface();
+            return;
+        }
+
+        // Calculate distance and fuel cost
+        $distance = sqrt(
+            pow($targetStar->x - $star->x, 2) +
+            pow($targetStar->y - $star->y, 2)
+        );
+
+        $ship = $this->player->activeShip;
+        $fuelCost = $this->calculateFuelCost($distance, $ship);
+
+        $this->line($this->colorize('  Target Found: ', 'label') . $this->colorize($targetStar->name, 'highlight'));
+        $this->line($this->colorize('  Exact Coordinates: ', 'label') . "({$targetStar->x}, {$targetStar->y})");
+        $this->line($this->colorize('  Distance: ', 'label') . round($distance, 1) . ' units');
+        $this->line($this->colorize('  Fuel Cost: ', 'label') . $this->colorize($fuelCost, 'trade'));
+        $this->line($this->colorize('  Current Fuel: ', 'label') . $ship->current_fuel);
+        $this->newLine();
+
+        // Show status
+        $statusInfo = $targetStar->is_inhabited
+            ? $this->colorize('Inhabited System', 'trade')
+            : $this->colorize('Uninhabited System', 'dim');
+        $this->line($this->colorize('  Status: ', 'label') . $statusInfo);
+
+        $gateCount = $targetStar->outgoingGates()->where('is_hidden', false)->count();
+        $this->line($this->colorize('  Warp Gates: ', 'label') . $gateCount);
+        $this->newLine();
+
+        if ($ship->current_fuel < $fuelCost) {
+            $this->error('  INSUFFICIENT FUEL!');
+            $this->newLine();
+            $this->line($this->colorize('  You need ' . $fuelCost . ' fuel but only have ' . $ship->current_fuel, 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to return...', 'dim'));
+            fgetc(STDIN);
+            $this->refreshInterface();
+            return;
+        }
+
+        $this->line($this->colorize('  Proceed with jump? [y/n]: ', 'label'));
+        $confirm = strtolower(trim(fgets(STDIN)));
+
+        if ($confirm !== 'y' && $confirm !== 'yes') {
+            $this->line($this->colorize('  Jump cancelled.', 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to return...', 'dim'));
+            fgetc(STDIN);
+            $this->refreshInterface();
+            return;
+        }
+
+        // Execute jump
+        if (!$ship->consumeFuel($fuelCost)) {
+            $this->error('  ERROR: Failed to consume fuel!');
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to return...', 'dim'));
+            fgetc(STDIN);
+            $this->refreshInterface();
+            return;
+        }
+
+        // Update player location
+        $this->player->current_poi_id = $targetStar->id;
+
+        // Track last trading hub
+        if ($targetStar->tradingHub && $targetStar->tradingHub->is_active) {
+            $this->player->last_trading_hub_poi_id = $targetStar->id;
+        }
+
+        $this->player->save();
+
+        // Award XP
+        $xpEarned = (int) max(10, $distance * 5);
+        $oldLevel = $this->player->level;
+        $this->player->addExperience($xpEarned);
+        $newLevel = $this->player->level;
+
+        // Reload location
+        $this->player->load('currentLocation.children', 'currentLocation.parent');
+
+        $this->newLine();
+        $this->line($this->colorize('  ✓ JUMP SUCCESSFUL!', 'highlight'));
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->newLine();
+        $this->line('  Arrived at: ' . $this->colorize($targetStar->name, 'highlight'));
+        $this->line('  Fuel remaining: ' . $this->colorize($ship->current_fuel, 'trade'));
+        $this->line('  XP Earned: ' . $this->colorize('+' . $xpEarned . ' XP', 'highlight'));
+
+        if ($newLevel > $oldLevel) {
+            $this->line('  ' . $this->colorize('🎉 LEVEL UP! You are now level ' . $newLevel . '!', 'trade'));
+        }
+
+        $this->newLine();
+        $this->line($this->colorize('  Press any key to continue...', 'dim'));
+        fgetc(STDIN);
+
+        $this->refreshInterface();
+    }
+
+    private function showScanResults(): void
+    {
+        system('stty sane');
+        $this->clearScreen();
+
+        $galaxy = $this->player->currentLocation->galaxy;
+        $playerLocation = $this->player->currentLocation->type === PointOfInterestType::STAR
+            ? $this->player->currentLocation
+            : $this->player->currentLocation->getRootStar();
+
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line($this->colorize('  LOCAL SPACE SCAN - DETAILED REPORT', 'header'));
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->newLine();
+
+        // Get sensor range
+        $sensorRange = ($this->player->activeShip->sensors ?? 1) * 100;
+        $this->line($this->colorize('  Current Position: ', 'label') . $playerLocation->name);
+        $this->line($this->colorize('  Coordinates: ', 'label') . "({$playerLocation->x}, {$playerLocation->y})");
+        $this->line($this->colorize('  Sensor Range: ', 'label') . $this->colorize($sensorRange . ' units', 'highlight'));
+        $this->newLine();
+
+        // Find all POIs in range (not just stars)
+        $nearbyPois = $galaxy->pointsOfInterest()
+            ->get()
+            ->map(function ($poi) use ($playerLocation) {
+                $distance = sqrt(
+                    pow($poi->x - $playerLocation->x, 2) +
+                    pow($poi->y - $playerLocation->y, 2)
+                );
+                return [
+                    'poi' => $poi,
+                    'distance' => $distance,
+                ];
+            })
+            ->filter(fn($item) => $item['distance'] <= $sensorRange && $item['distance'] > 0)
+            ->sortBy('distance')
+            ->take(30);
+
+        if ($nearbyPois->isEmpty()) {
+            $this->line($this->colorize('  No objects detected within sensor range.', 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Upgrade your sensors to scan further.', 'dim'));
+        } else {
+            $this->line($this->colorize('  DETECTED OBJECTS (' . $nearbyPois->count() . '):', 'header'));
+            $this->newLine();
+
+            // Group by type
+            $byType = $nearbyPois->groupBy(fn($item) => $item['poi']->type->name);
+
+            foreach ($byType as $typeName => $items) {
+                $this->line($this->colorize("  {$typeName}s:", 'trade'));
+                foreach ($items->take(10) as $item) {
+                    $poi = $item['poi'];
+                    $distance = round($item['distance'], 1);
+
+                    $details = "    • {$poi->name} - {$distance} units";
+
+                    // Add extra info based on type
+                    if ($poi->type === PointOfInterestType::STAR) {
+                        $status = $poi->is_inhabited ? '[Inhabited]' : '[Uninhabited]';
+                        $gates = $poi->outgoingGates()->where('is_hidden', false)->count();
+                        $hub = $poi->tradingHub && $poi->tradingHub->is_active ? ' [Trading Hub]' : '';
+                        $details .= " {$status} Gates:{$gates}{$hub}";
+                    }
+
+                    $this->line($this->colorize($details, 'dim'));
+                }
+
+                if ($items->count() > 10) {
+                    $this->line($this->colorize("    ... and " . ($items->count() - 10) . " more", 'dim'));
+                }
+                $this->newLine();
+            }
+        }
+
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line($this->colorize('  Press any key to return...', 'dim'));
+
+        system('stty -icanon -echo');
+        fgetc(STDIN);
+
+        $this->refreshInterface();
+    }
+
+    private function findNearestTradingHub(): void
+    {
+        system('stty sane');
+        $this->clearScreen();
+
+        $galaxy = $this->player->currentLocation->galaxy;
+        $playerLocation = $this->player->currentLocation->type === PointOfInterestType::STAR
+            ? $this->player->currentLocation
+            : $this->player->currentLocation->getRootStar();
+
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line($this->colorize('  FIND NEAREST TRADING HUB', 'header'));
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->newLine();
+
+        $this->line($this->colorize('  Scanning for trading hubs...', 'dim'));
+        $this->newLine();
+
+        // Find all active trading hubs
+        $tradingHubs = $galaxy->pointsOfInterest()
+            ->where('type', PointOfInterestType::STAR)
+            ->get()
+            ->filter(function ($star) {
+                return $star->tradingHub && $star->tradingHub->is_active;
+            })
+            ->map(function ($star) use ($playerLocation) {
+                $distance = sqrt(
+                    pow($star->x - $playerLocation->x, 2) +
+                    pow($star->y - $playerLocation->y, 2)
+                );
+                return [
+                    'star' => $star,
+                    'distance' => $distance,
+                    'tradingHub' => $star->tradingHub,
+                ];
+            })
+            ->sortBy('distance')
+            ->take(10);
+
+        if ($tradingHubs->isEmpty()) {
+            $this->error('  No trading hubs found in galaxy!');
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to return...', 'dim'));
+            fgetc(STDIN);
+            $this->refreshInterface();
+            return;
+        }
+
+        $this->line($this->colorize('  NEAREST TRADING HUBS:', 'header'));
+        $this->newLine();
+
+        // Display top 10 nearest trading hubs
+        $this->line(sprintf(
+            '  %-4s %-35s %-18s %-12s %s',
+            '#',
+            'System Name',
+            'Coordinates',
+            'Distance',
+            'Status'
+        ));
+        $this->line($this->colorize('  ' . str_repeat('─', 115), 'border'));
+
+        foreach ($tradingHubs as $index => $item) {
+            $number = $index + 1;
+            $star = $item['star'];
+            $distance = round($item['distance'], 1);
+
+            $ship = $this->player->activeShip;
+            $fuelCost = $this->calculateFuelCost($distance, $ship);
+            $canAfford = $ship->current_fuel >= $fuelCost;
+
+            $statusText = $canAfford
+                ? $this->colorize('Can Reach', 'highlight')
+                : $this->colorize('Low Fuel', 'dim');
+
+            $inhabited = $star->is_inhabited
+                ? $this->colorize('[Inhabited]', 'trade')
+                : $this->colorize('[Uninhabited]', 'dim');
+
+            $this->line(sprintf(
+                '  %-4s %-35s %-18s %-12s %s',
+                "[{$number}]",
+                substr($star->name, 0, 33),
+                "({$star->x}, {$star->y})",
+                $distance . ' units',
+                $statusText
+            ));
+            $this->line($this->colorize("        Fuel cost: {$fuelCost} | {$inhabited}", 'dim'));
+        }
+
+        $this->newLine();
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line('  ' . $this->colorize('[1-9]', 'label') . ' Jump to hub  |  ' .
+                   $this->colorize('[q]', 'label') . ' Cancel');
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+
+        // Get input
+        system('stty -icanon -echo');
+        $char = fgetc(STDIN);
+
+        if ($char === 'q' || $char === "\033") {
+            $this->refreshInterface();
+            return;
+        }
+
+        if (is_numeric($char) && $char >= '1' && $char <= '9') {
+            $selectedIndex = (int)$char - 1;
+            if ($selectedIndex < $tradingHubs->count()) {
+                $selectedHub = $tradingHubs[$selectedIndex];
+                $this->executeDirectJump($selectedHub['star']);
+            }
+        }
+
+        $this->refreshInterface();
+    }
+
+    private function executeDirectJump($targetStar): void
+    {
+        $playerLocation = $this->player->currentLocation->type === PointOfInterestType::STAR
+            ? $this->player->currentLocation
+            : $this->player->currentLocation->getRootStar();
+
+        $distance = sqrt(
+            pow($targetStar->x - $playerLocation->x, 2) +
+            pow($targetStar->y - $playerLocation->y, 2)
+        );
+
+        $ship = $this->player->activeShip;
+        $fuelCost = $this->calculateFuelCost($distance, $ship);
+
+        system('stty sane');
+        $this->clearScreen();
+
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line($this->colorize('  CONFIRM JUMP', 'header'));
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->newLine();
+
+        $this->line($this->colorize('  Destination: ', 'label') . $this->colorize($targetStar->name, 'highlight'));
+        $this->line($this->colorize('  Distance: ', 'label') . round($distance, 1) . ' units');
+        $this->line($this->colorize('  Fuel Cost: ', 'label') . $this->colorize($fuelCost, 'trade'));
+        $this->newLine();
+        $this->line($this->colorize('  Current Fuel: ', 'label') . $ship->current_fuel);
+        $this->line($this->colorize('  Fuel After Jump: ', 'label') .
+                   $this->colorize($ship->current_fuel - $fuelCost, 'highlight'));
+        $this->newLine();
+
+        if ($ship->current_fuel < $fuelCost) {
+            $this->error('  INSUFFICIENT FUEL!');
+            $this->newLine();
+            $this->line($this->colorize('  You need ' . $fuelCost . ' fuel but only have ' . $ship->current_fuel, 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to return...', 'dim'));
+            fgetc(STDIN);
+            return;
+        }
+
+        $this->line($this->colorize('  Proceed with jump? [y/n]: ', 'label'));
+        $confirm = strtolower(trim(fgets(STDIN)));
+
+        if ($confirm !== 'y' && $confirm !== 'yes') {
+            $this->line($this->colorize('  Jump cancelled.', 'dim'));
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to return...', 'dim'));
+            fgetc(STDIN);
+            return;
+        }
+
+        // Execute jump
+        if (!$ship->consumeFuel($fuelCost)) {
+            $this->error('  ERROR: Failed to consume fuel!');
+            $this->newLine();
+            $this->line($this->colorize('  Press any key to return...', 'dim'));
+            fgetc(STDIN);
+            return;
+        }
+
+        // Update player location
+        $this->player->current_poi_id = $targetStar->id;
+
+        // Track last trading hub
+        if ($targetStar->tradingHub && $targetStar->tradingHub->is_active) {
+            $this->player->last_trading_hub_poi_id = $targetStar->id;
+        }
+
+        $this->player->save();
+
+        // Award XP
+        $xpEarned = (int) max(10, $distance * 5);
+        $oldLevel = $this->player->level;
+        $this->player->addExperience($xpEarned);
+        $newLevel = $this->player->level;
+
+        // Reload location
+        $this->player->load('currentLocation.children', 'currentLocation.parent');
+
+        $this->newLine();
+        $this->line($this->colorize('  ✓ JUMP SUCCESSFUL!', 'highlight'));
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->newLine();
+        $this->line('  Arrived at: ' . $this->colorize($targetStar->name, 'highlight'));
+        $this->line('  Fuel remaining: ' . $this->colorize($ship->current_fuel, 'trade'));
+        $this->line('  XP Earned: ' . $this->colorize('+' . $xpEarned . ' XP', 'highlight'));
+
+        if ($newLevel > $oldLevel) {
+            $this->line('  ' . $this->colorize('🎉 LEVEL UP! You are now level ' . $newLevel . '!', 'trade'));
+        }
+
+        $this->newLine();
+        $this->line($this->colorize('  Press any key to continue...', 'dim'));
+        fgetc(STDIN);
     }
 }

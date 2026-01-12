@@ -85,16 +85,25 @@ class MineralTradingHandler
             if ($hubInventories->isEmpty()) {
                 $this->line($this->colorize('  No minerals available for purchase', 'dim'));
             } else {
+                // Header row
+                $headerLine = sprintf('  %4s  %-30s %15s %12s', '', 'Mineral', 'Price', 'Stock');
+                $this->line($this->colorize($headerLine, 'dim'));
+                $this->line($this->colorize('  ' . str_repeat('─', 65), 'dim'));
+
                 $displayInventories = $hubInventories->take(9);
                 foreach ($displayInventories as $index => $inventory) {
                     $number = $index + 1;
                     $mineral = $inventory->mineral;
-                    $this->line(
-                        $this->colorize("  [b{$number}] ", 'label') .
-                        $this->colorize($mineral->name, 'trade') .
-                        $this->colorize(' - Stock: ' . number_format($inventory->quantity), 'dim') .
-                        $this->colorize(' - Price: ' . number_format($inventory->sell_price, 2) . ' cr/unit', 'highlight')
+
+                    // Format with proper column alignment
+                    $dataLine = sprintf(
+                        '  %4s  %-30s %15s %12s',
+                        "[b{$number}]",
+                        $mineral->name,
+                        number_format($inventory->sell_price, 2),
+                        number_format($inventory->quantity, 0)
                     );
+                    $this->line($dataLine);
                 }
             }
             $this->newLine();
@@ -106,6 +115,11 @@ class MineralTradingHandler
             if ($playerCargo->isEmpty()) {
                 $this->line($this->colorize('  No minerals in cargo', 'dim'));
             } else {
+                // Header row
+                $headerLine = sprintf('  %4s  %-30s %15s %12s', '', 'Mineral', 'Price', 'Quantity');
+                $this->line($this->colorize($headerLine, 'dim'));
+                $this->line($this->colorize('  ' . str_repeat('─', 65), 'dim'));
+
                 $displayCargo = $playerCargo->take(9);
                 foreach ($displayCargo as $index => $cargo) {
                     $number = $index + 1;
@@ -115,12 +129,15 @@ class MineralTradingHandler
                     $hubInventory = $hubInventories->where('mineral_id', $mineral->id)->first();
                     $buyPrice = $hubInventory ? $hubInventory->buy_price : $mineral->getMarketValue() * 0.85;
 
-                    $this->line(
-                        $this->colorize("  [s{$number}] ", 'label') .
-                        $this->colorize($mineral->name, 'trade') .
-                        $this->colorize(' - Quantity: ' . number_format($cargo->quantity), 'dim') .
-                        $this->colorize(' - Price: ' . number_format($buyPrice, 2) . ' cr/unit', 'highlight')
+                    // Format with proper column alignment
+                    $dataLine = sprintf(
+                        '  %4s  %-30s %15s %12s',
+                        "[s{$number}]",
+                        $mineral->name,
+                        number_format($buyPrice, 2),
+                        number_format($cargo->quantity, 0)
                     );
+                    $this->line($dataLine);
                 }
             }
 

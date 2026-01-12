@@ -25,12 +25,15 @@ class WarpGateGenerator
     }
 
     /**
-     * Generate warp gates for a galaxy's star systems
+     * Generate warp gates for inhabited star systems only
+     * Uninhabited systems remain isolated to encourage exploration and colonization
      */
     public function generateGates(Galaxy $galaxy): Collection
     {
+        // Only generate gates for INHABITED star systems
         $stars = $galaxy->pointsOfInterest()
             ->where('type', PointOfInterestType::STAR)
+            ->where('is_inhabited', true)  // Only inhabited systems get warp gates
             ->get();
 
         if ($stars->count() < 2) {
