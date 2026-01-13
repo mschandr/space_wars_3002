@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Galaxy;
 use App\Models\Player;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -24,6 +25,7 @@ class PlayerFactory extends Factory
         return [
             'uuid' => Str::uuid(),
             'user_id' => User::factory(),
+            'galaxy_id' => Galaxy::factory(),
             'call_sign' => fake()->unique()->userName(),
             'credits' => 1000.00,
             'experience' => 0,

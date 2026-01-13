@@ -124,7 +124,7 @@ class StarChartService
         $price = $this->calculateChartPrice($centerSystem, $player, $shop);
 
         // Check if player already has all charts
-        if ($price === 0) {
+        if ($price === 0.0) {
             return [
                 'success' => false,
                 'message' => 'You already have charts for all systems in this region',

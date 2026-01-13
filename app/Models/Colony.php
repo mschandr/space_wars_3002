@@ -27,10 +27,13 @@ class Colony extends Model
         'quantium_storage',
         'credits_per_cycle',
         'development_level',
+        'defense_rating',
+        'garrison_strength',
         'habitability_rating',
         'status',
         'established_at',
         'last_growth_at',
+        'last_attacked_at',
     ];
 
     protected $casts = [
@@ -44,9 +47,12 @@ class Colony extends Model
         'quantium_storage' => 'integer',
         'credits_per_cycle' => 'integer',
         'development_level' => 'integer',
+        'defense_rating' => 'integer',
+        'garrison_strength' => 'integer',
         'habitability_rating' => 'decimal:2',
         'established_at' => 'datetime',
         'last_growth_at' => 'datetime',
+        'last_attacked_at' => 'datetime',
     ];
 
     /**

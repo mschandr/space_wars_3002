@@ -14,8 +14,8 @@ class PlayerDeathService
      * 1. Record what was lost
      * 2. Delete ship (cascades to cargo)
      * 3. Detach all upgrade plans
-     * 4. Respawn at last trading hub (or fallback location)
-     * 5. Keep credits and XP
+     * 4. Respawn at trading hub with shipyard (or fallback location)
+     * 5. Keep credits and XP (with minimum credits guarantee)
      *
      * @return array Death summary
      */
@@ -27,7 +27,10 @@ class PlayerDeathService
         // Step 2 & 3: Delete ship and plans
         $this->destroyShipAndPlans($player, $playerShip);
 
-        // Step 4: Determine respawn location
+        // Step 4: Ensure minimum credits (enough to buy a basic ship)
+        $creditsGranted = $this->ensureMinimumCredits($player);
+
+        // Step 5: Determine respawn location (prioritize shipyards)
         $respawnLocation = $this->determineRespawnLocation($player);
 
         // Update player location
@@ -40,7 +43,8 @@ class PlayerDeathService
             'losses' => $losses,
             'respawn_location' => $respawnLocation,
             'credits_retained' => $player->credits,
-            'xp_retained' => $player->xp ?? 0,
+            'credits_granted' => $creditsGranted,
+            'xp_retained' => $player->experience ?? 0,
         ];
     }
 
@@ -82,40 +86,80 @@ class PlayerDeathService
     }
 
     /**
+     * Ensure player has minimum credits to buy a basic ship
+     * Grants credits if needed (minimum: 5000 credits for starter ship)
+     *
+     * @return int Credits granted (0 if player already had enough)
+     */
+    private function ensureMinimumCredits(Player $player): int
+    {
+        $minimumCredits = 5000; // Enough to buy a basic scout/starter ship
+
+        if ($player->credits < $minimumCredits) {
+            $creditsGranted = $minimumCredits - $player->credits;
+            $player->credits = $minimumCredits;
+            $player->save();
+
+            return $creditsGranted;
+        }
+
+        return 0;
+    }
+
+    /**
      * Determine where player respawns
      *
      * Priority:
-     * 1. Last trading hub visited (last_trading_hub_poi_id)
-     * 2. Any active trading hub in current galaxy
-     * 3. Any POI in current galaxy
+     * 1. Last trading hub visited WITH ships available (last_trading_hub_poi_id)
+     * 2. Any trading hub WITH ships available in current galaxy
+     * 3. Any active trading hub in current galaxy (even without ships)
+     * 4. Any POI in current galaxy
      */
     private function determineRespawnLocation(Player $player): ?PointOfInterest
     {
-        // Try last trading hub
+        // Try last trading hub if it has ships available
         if ($player->last_trading_hub_poi_id) {
             $lastHub = PointOfInterest::with('tradingHub')
                 ->find($player->last_trading_hub_poi_id);
 
             if ($lastHub && $lastHub->tradingHub && $lastHub->tradingHub->is_active) {
-                return $lastHub;
+                $hasShips = $this->tradingHubHasShips($lastHub->tradingHub);
+                if ($hasShips) {
+                    return $lastHub;
+                }
             }
         }
 
-        // Try any trading hub in current galaxy
+        // Try any trading hub WITH ships available in current galaxy
         $currentLocation = $player->currentLocation;
         if ($currentLocation) {
             $galaxy = $currentLocation->galaxy;
 
-            // Find nearest trading hub
-            $nearestHub = PointOfInterest::whereHas('tradingHub', function ($query) {
+            // Find trading hub with ships
+            $hubs = PointOfInterest::whereHas('tradingHub', function ($query) {
+                $query->where('is_active', true);
+            })
+                ->with('tradingHub')
+                ->where('galaxy_id', $galaxy->id)
+                ->where('is_hidden', false)
+                ->get();
+
+            foreach ($hubs as $hub) {
+                if ($this->tradingHubHasShips($hub->tradingHub)) {
+                    return $hub;
+                }
+            }
+
+            // Fallback: any trading hub (even without ships)
+            $anyHub = PointOfInterest::whereHas('tradingHub', function ($query) {
                 $query->where('is_active', true);
             })
                 ->where('galaxy_id', $galaxy->id)
                 ->where('is_hidden', false)
                 ->first();
 
-            if ($nearestHub) {
-                return $nearestHub;
+            if ($anyHub) {
+                return $anyHub;
             }
 
             // Last resort: any visible POI in galaxy
@@ -124,12 +168,41 @@ class PlayerDeathService
                 ->first();
         }
 
-        // Ultimate fallback: any trading hub anywhere
+        // Ultimate fallback: any trading hub with ships anywhere
+        $allHubs = PointOfInterest::whereHas('tradingHub', function ($query) {
+            $query->where('is_active', true);
+        })
+            ->with('tradingHub')
+            ->where('is_hidden', false)
+            ->get();
+
+        foreach ($allHubs as $hub) {
+            if ($this->tradingHubHasShips($hub->tradingHub)) {
+                return $hub;
+            }
+        }
+
+        // Absolute fallback: any trading hub anywhere
         return PointOfInterest::whereHas('tradingHub', function ($query) {
             $query->where('is_active', true);
         })
             ->where('is_hidden', false)
             ->first();
+    }
+
+    /**
+     * Check if a trading hub has ships available for purchase
+     */
+    private function tradingHubHasShips($tradingHub): bool
+    {
+        if (!$tradingHub) {
+            return false;
+        }
+
+        return \DB::table('trading_hub_ships')
+            ->where('trading_hub_id', $tradingHub->id)
+            ->where('quantity', '>', 0)
+            ->exists();
     }
 
     /**
@@ -139,6 +212,7 @@ class PlayerDeathService
     {
         $losses = $deathResult['losses'];
         $respawn = $deathResult['respawn_location'];
+        $creditsGranted = $deathResult['credits_granted'] ?? 0;
 
         $messages = [];
         $messages[] = '═══════════════════════════════════════════════';
@@ -155,11 +229,22 @@ class PlayerDeathService
         $messages[] = 'RETAINED:';
         $messages[] = '  Credits: $'.number_format($deathResult['credits_retained']);
         $messages[] = "  Experience: {$deathResult['xp_retained']} XP";
+
+        if ($creditsGranted > 0) {
+            $messages[] = '';
+            $messages[] = 'EMERGENCY FUNDS:';
+            $messages[] = '  Granted: $'.number_format($creditsGranted).' (minimum credits for starter ship)';
+        }
+
         $messages[] = '';
 
         if ($respawn) {
             $messages[] = "Your escape pod drifts to {$respawn->name}...";
-            $messages[] = "You'll need to purchase a new ship to continue your journey.";
+            if ($respawn->tradingHub && $this->tradingHubHasShips($respawn->tradingHub)) {
+                $messages[] = "This trading hub has ships available - you can purchase a new ship here.";
+            } else {
+                $messages[] = "You'll need to find a trading hub with ships to continue your journey.";
+            }
         } else {
             $messages[] = 'Your escape pod is drifting in space...';
             $messages[] = 'ERROR: No safe haven found!';

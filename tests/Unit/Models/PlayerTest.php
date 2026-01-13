@@ -358,17 +358,20 @@ class PlayerTest extends TestCase
     }
 
     /** @test */
-    public function test_player_call_sign_must_be_unique()
+    public function test_player_call_sign_must_be_unique_per_galaxy()
     {
         $callSign = 'TestPilot123';
+        $galaxy = \App\Models\Galaxy::factory()->create();
 
         Player::factory()->create([
+            'galaxy_id' => $galaxy->id,
             'call_sign' => $callSign,
         ]);
 
         $this->expectException(\Illuminate\Database\QueryException::class);
 
         Player::factory()->create([
+            'galaxy_id' => $galaxy->id,
             'call_sign' => $callSign,
         ]);
     }

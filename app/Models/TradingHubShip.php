@@ -10,6 +10,7 @@ class TradingHubShip extends Model
     protected $fillable = [
         'trading_hub_id',
         'ship_id',
+        'galaxy_id',
         'quantity',
         'current_price',
         'demand_level',

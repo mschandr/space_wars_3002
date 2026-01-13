@@ -23,6 +23,7 @@ class Player extends Model
         'experience',
         'level',
         'current_poi_id',
+        'last_trading_hub_poi_id',
         'status',
     ];
 
@@ -66,6 +67,11 @@ class Player extends Model
     public function activeShip()
     {
         return $this->hasOne(PlayerShip::class)->where('is_active', true);
+    }
+
+    public function colonies(): HasMany
+    {
+        return $this->hasMany(Colony::class);
     }
 
     public function plans(): BelongsToMany

@@ -79,7 +79,10 @@ class SalvageService
         $availableSpace = $playerShip->cargo_hold - $playerShip->current_cargo;
 
         // Transfer minerals (require cargo space)
-        foreach ($selectedMinerals as $mineralId => $quantity) {
+        foreach ($selectedMinerals as $mineral) {
+            $mineralId = $mineral['mineral_id'];
+            $quantity = $mineral['quantity'];
+
             if ($cargoSpaceUsed + $quantity > $availableSpace) {
                 $quantity = $availableSpace - $cargoSpaceUsed;
                 if ($quantity <= 0) {
@@ -136,12 +139,12 @@ class SalvageService
     /**
      * Calculate total cargo space needed for minerals
      *
-     * @param  array  $selectedMinerals  Array of ['mineral_id' => quantity]
+     * @param  array  $selectedMinerals  Array of ['mineral_id' => id, 'quantity' => qty]
      * @return int Total space needed
      */
     public function calculateSpaceNeeded(array $selectedMinerals): int
     {
-        return array_sum($selectedMinerals);
+        return array_sum(array_column($selectedMinerals, 'quantity'));
     }
 
     /**

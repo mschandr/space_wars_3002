@@ -72,8 +72,8 @@ class PirateFleetGenerator
         $shipType = $this->selectShipType($tier);
 
         if (! $shipType) {
-            // Fallback to Viper if no ship found
-            $shipType = Ship::where('name', 'Viper-class Fighter')->first();
+            // Fallback to Viper if no ship found, or any ship if Viper doesn't exist
+            $shipType = Ship::where('name', 'Viper-class Fighter')->first() ?? Ship::first();
         }
 
         // Get stat multiplier for this tier

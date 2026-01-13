@@ -112,4 +112,14 @@ class BaseApiController extends Controller
             404
         );
     }
+
+    /**
+     * Authorize that the player belongs to the authenticated user
+     */
+    protected function authorizePlayer($player, $user): void
+    {
+        if ($player->user_id !== $user->id) {
+            abort(403, 'Unauthorized access to this player');
+        }
+    }
 }

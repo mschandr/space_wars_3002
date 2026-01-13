@@ -45,6 +45,7 @@ class PointOfInterest extends Model
 
     protected $casts = [
         'attributes' => 'array',
+        'mineral_deposits' => 'array',
         'is_hidden' => 'boolean',
         'is_inhabited' => 'boolean',
         'status' => PointOfInterestStatus::class,

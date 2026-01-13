@@ -14,6 +14,32 @@ class ShipResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Check if this is a Ship blueprint or PlayerShip instance
+        $isBlueprint = $this->resource instanceof \App\Models\Ship;
+
+        if ($isBlueprint) {
+            // Ship blueprint data
+            return [
+                'id' => $this->id,
+                'uuid' => $this->uuid,
+                'name' => $this->name,
+                'class' => $this->class,
+                'description' => $this->description,
+                'base_price' => $this->base_price,
+                'cargo_capacity' => $this->cargo_capacity,
+                'speed' => $this->speed,
+                'hull_strength' => $this->hull_strength,
+                'shield_strength' => $this->shield_strength,
+                'weapon_slots' => $this->weapon_slots,
+                'utility_slots' => $this->utility_slots,
+                'rarity' => $this->rarity,
+                'requirements' => $this->requirements,
+                'attributes' => $this->attributes,
+                'is_available' => $this->is_available,
+            ];
+        }
+
+        // PlayerShip data
         return [
             'id' => $this->id,
             'uuid' => $this->uuid,
