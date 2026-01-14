@@ -2,8 +2,15 @@
 
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\ColonyCombatController;
+use App\Http\Controllers\Api\GalaxyController;
+use App\Http\Controllers\Api\LeaderboardController;
+use App\Http\Controllers\Api\MarketEventController;
+use App\Http\Controllers\Api\MirrorUniverseController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PirateFactionController;
 use App\Http\Controllers\Api\PvPCombatController;
 use App\Http\Controllers\Api\TeamCombatController;
+use App\Http\Controllers\Api\VictoryController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,6 +37,41 @@ Route::prefix('auth')->group(function () {
         Route::get('me', [AuthController::class, 'me']);
     });
 });
+
+// Galaxy information routes (public)
+Route::prefix('galaxies')->group(function () {
+    Route::get('/', [GalaxyController::class, 'index']);
+    Route::get('{uuid}', [GalaxyController::class, 'show']);
+    Route::get('{uuid}/statistics', [GalaxyController::class, 'statistics']);
+    Route::get('{uuid}/map', [GalaxyController::class, 'map']);
+});
+
+Route::get('sectors/{uuid}', [GalaxyController::class, 'showSector']);
+
+// Leaderboard routes (public)
+Route::prefix('galaxies/{galaxyUuid}/leaderboards')->group(function () {
+    Route::get('overall', [LeaderboardController::class, 'overall']);
+    Route::get('combat', [LeaderboardController::class, 'combat']);
+    Route::get('economic', [LeaderboardController::class, 'economic']);
+    Route::get('colonial', [LeaderboardController::class, 'colonial']);
+});
+
+// Victory conditions routes (public)
+Route::prefix('galaxies/{galaxyUuid}')->group(function () {
+    Route::get('victory-conditions', [VictoryController::class, 'conditions']);
+    Route::get('victory-leaders', [VictoryController::class, 'victoryLeaders']);
+});
+
+// Market events routes (public)
+Route::get('galaxies/{galaxyUuid}/market-events', [MarketEventController::class, 'galaxyEvents']);
+Route::get('market-events/{eventUuid}', [MarketEventController::class, 'show']);
+
+// Pirate factions routes (public)
+Route::prefix('galaxies/{galaxyUuid}/pirate-factions')->group(function () {
+    Route::get('/', [PirateFactionController::class, 'index']);
+});
+Route::get('pirate-factions/{factionUuid}', [PirateFactionController::class, 'show']);
+Route::get('pirate-factions/{factionUuid}/captains', [PirateFactionController::class, 'factionCaptains']);
 
 // Protected routes requiring authentication
 Route::middleware('auth:sanctum')->group(function () {
@@ -177,4 +219,30 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('poi/{uuid}/mining-opportunities', [\App\Http\Controllers\Api\MiningController::class, 'getMiningOpportunities']);
     Route::post('colonies/{uuid}/mining/start', [\App\Http\Controllers\Api\MiningController::class, 'startAutomatedMining']);
     Route::post('ships/{uuid}/mining/extract', [\App\Http\Controllers\Api\MiningController::class, 'extractResources']);
+
+    // Player statistics & rankings routes
+    Route::get('players/{uuid}/ranking', [LeaderboardController::class, 'playerRanking']);
+    Route::get('players/{uuid}/statistics', [LeaderboardController::class, 'playerStatistics']);
+    Route::get('players/{uuid}/victory-progress', [VictoryController::class, 'playerProgress']);
+
+    // Pirate faction reputation routes
+    Route::get('players/{uuid}/pirate-reputation', [PirateFactionController::class, 'playerReputation']);
+
+    // Market events routes (protected)
+    Route::get('trading-hubs/{uuid}/active-events', [MarketEventController::class, 'hubEvents']);
+
+    // Notification routes
+    Route::prefix('players/{uuid}/notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::get('unread', [NotificationController::class, 'unreadCount']);
+        Route::post('{notificationId}/read', [NotificationController::class, 'markAsRead']);
+        Route::delete('{notificationId}', [NotificationController::class, 'destroy']);
+        Route::post('mark-all-read', [NotificationController::class, 'markAllAsRead']);
+        Route::post('clear-read', [NotificationController::class, 'clearRead']);
+    });
+
+    // Mirror Universe routes
+    Route::get('players/{uuid}/mirror-access', [MirrorUniverseController::class, 'checkAccess']);
+    Route::post('players/{uuid}/mirror/enter', [MirrorUniverseController::class, 'enter']);
+    Route::get('galaxies/{uuid}/mirror-gate', [MirrorUniverseController::class, 'getMirrorGate']);
 });

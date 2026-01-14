@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Galaxy;
 use App\Models\PirateFaction;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -22,6 +23,7 @@ class PirateFactionFactory extends Factory
     {
         return [
             'uuid' => Str::uuid(),
+            'galaxy_id' => Galaxy::factory(),
             'name' => fake()->unique()->company().' Pirates', // Make it unique
             'description' => fake()->sentence(),
             'attributes' => null,

@@ -1,0 +1,1071 @@
+{
+	"info": {
+		"_postman_id": "space-wars-3002-api",
+		"name": "Space Wars 3002 API",
+		"description": "Complete API collection for Space Wars 3002 - A space trading and conquest game\n\nAuthentication: Most endpoints require Bearer token authentication using Laravel Sanctum.\n\nBase URL: {{baseUrl}} (default: http://localhost:8000)\n\nDocumentation: See API_DOCUMENTATION.md for detailed information.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://space-wars-3002.local",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "galaxyUuid",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "playerUuid",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Galaxy",
+			"item": [
+				{
+					"name": "List All Galaxies",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies"]
+						},
+						"description": "Get a list of all available galaxies with player counts"
+					}
+				},
+				{
+					"name": "Get Galaxy Details",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}"]
+						},
+						"description": "Get detailed information about a specific galaxy"
+					}
+				},
+				{
+					"name": "Get Galaxy Statistics",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/statistics",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "statistics"]
+						},
+						"description": "Get comprehensive statistics for a galaxy including economy, players, combat, etc."
+					}
+				},
+				{
+					"name": "Get Galaxy Map",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/map",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "map"]
+						},
+						"description": "Get map data for rendering galaxy visualization"
+					}
+				},
+				{
+					"name": "Get Sector Information",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sectors/:sectorUuid",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "sectors", ":sectorUuid"],
+							"variable": [
+								{
+									"key": "sectorUuid",
+									"value": ""
+								}
+							]
+						},
+						"description": "Get detailed information about a specific sector"
+					}
+				}
+			],
+			"description": "Galaxy management and information endpoints"
+		},
+		{
+			"name": "Player",
+			"item": [
+				{
+					"name": "List Players",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players"]
+						},
+						"description": "List all players for authenticated user"
+					}
+				},
+				{
+					"name": "Create Player",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"galaxy_id\": \"{{galaxyUuid}}\",\n  \"call_sign\": \"SpaceTrader\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/players",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players"]
+						},
+						"description": "Create a new player character in a galaxy"
+					}
+				},
+				{
+					"name": "Get Player Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}"]
+						},
+						"description": "Get detailed information about a player"
+					}
+				},
+				{
+					"name": "Get Player Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/status",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "status"]
+						},
+						"description": "Get player status including fuel, location, and quick stats"
+					}
+				}
+			],
+			"description": "Player management endpoints"
+		},
+		{
+			"name": "Leaderboards",
+			"item": [
+				{
+					"name": "Overall Leaderboard",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/leaderboards/overall?limit=100",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "leaderboards", "overall"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "100"
+								}
+							]
+						},
+						"description": "Get overall leaderboard ranked by level, XP, and credits"
+					}
+				},
+				{
+					"name": "Combat Leaderboard",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/leaderboards/combat?limit=100",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "leaderboards", "combat"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "100"
+								}
+							]
+						},
+						"description": "Get combat leaderboard ranked by PvP wins and pirate kills"
+					}
+				},
+				{
+					"name": "Economic Leaderboard",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/leaderboards/economic?limit=100",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "leaderboards", "economic"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "100"
+								}
+							]
+						},
+						"description": "Get economic leaderboard ranked by net worth"
+					}
+				},
+				{
+					"name": "Colonial Leaderboard",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/leaderboards/colonial?limit=100",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "leaderboards", "colonial"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "100"
+								}
+							]
+						},
+						"description": "Get colonial leaderboard ranked by colonies and population"
+					}
+				},
+				{
+					"name": "Get Player Ranking",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/ranking",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "ranking"]
+						},
+						"description": "Get a player's rankings across all leaderboards"
+					}
+				},
+				{
+					"name": "Get Player Statistics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/statistics",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "statistics"]
+						},
+						"description": "Get detailed player statistics including combat, economic, and exploration data"
+					}
+				}
+			],
+			"description": "Leaderboard and ranking endpoints"
+		},
+		{
+			"name": "Victory",
+			"item": [
+				{
+					"name": "Get Victory Conditions",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/victory-conditions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "victory-conditions"]
+						},
+						"description": "Get all victory conditions for a galaxy"
+					}
+				},
+				{
+					"name": "Get Player Victory Progress",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/victory-progress",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "victory-progress"]
+						},
+						"description": "Get player's progress toward all victory conditions"
+					}
+				},
+				{
+					"name": "Get Victory Leaders",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/victory-leaders",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "victory-leaders"]
+						},
+						"description": "Get top 5 players closest to victory for each path"
+					}
+				}
+			],
+			"description": "Victory condition and progress endpoints"
+		},
+		{
+			"name": "Market Events",
+			"item": [
+				{
+					"name": "List Galaxy Market Events",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/market-events?event_type=boom&mineral=gold",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "market-events"],
+							"query": [
+								{
+									"key": "event_type",
+									"value": "boom",
+									"description": "Optional: boom, bust, shortage, surplus"
+								},
+								{
+									"key": "mineral",
+									"value": "gold",
+									"description": "Optional: filter by mineral name or symbol"
+								}
+							]
+						},
+						"description": "List active market events in a galaxy"
+					}
+				},
+				{
+					"name": "Get Market Event Details",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/market-events/:eventUuid",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "market-events", ":eventUuid"],
+							"variable": [
+								{
+									"key": "eventUuid",
+									"value": ""
+								}
+							]
+						},
+						"description": "Get detailed information about a specific market event"
+					}
+				},
+				{
+					"name": "Get Trading Hub Events",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/trading-hubs/:hubUuid/market-events",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trading-hubs", ":hubUuid", "market-events"],
+							"variable": [
+								{
+									"key": "hubUuid",
+									"value": ""
+								}
+							]
+						},
+						"description": "Get active market events affecting a specific trading hub"
+					}
+				}
+			],
+			"description": "Market event endpoints"
+		},
+		{
+			"name": "Pirate Factions",
+			"item": [
+				{
+					"name": "List Pirate Factions",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/pirate-factions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "pirate-factions"]
+						},
+						"description": "List all pirate factions in a galaxy"
+					}
+				},
+				{
+					"name": "Get Pirate Faction Details",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/pirate-factions/:factionUuid",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "pirate-factions", ":factionUuid"],
+							"variable": [
+								{
+									"key": "factionUuid",
+									"value": ""
+								}
+							]
+						},
+						"description": "Get detailed information about a pirate faction"
+					}
+				},
+				{
+					"name": "Get Player Pirate Reputation",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/pirate-reputation",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "pirate-reputation"]
+						},
+						"description": "Get player's reputation with all pirate factions"
+					}
+				},
+				{
+					"name": "List Faction Captains",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/pirate-factions/:factionUuid/captains",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "pirate-factions", ":factionUuid", "captains"],
+							"variable": [
+								{
+									"key": "factionUuid",
+									"value": ""
+								}
+							]
+						},
+						"description": "List all captains in a pirate faction"
+					}
+				}
+			],
+			"description": "Pirate faction endpoints"
+		},
+		{
+			"name": "Notifications",
+			"item": [
+				{
+					"name": "List Player Notifications",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/notifications?read=false&type=combat&limit=50",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "notifications"],
+							"query": [
+								{
+									"key": "read",
+									"value": "false",
+									"description": "Optional: filter by read status"
+								},
+								{
+									"key": "type",
+									"value": "combat",
+									"description": "Optional: filter by notification type"
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Optional: limit results (default 50)"
+								}
+							]
+						},
+						"description": "Get player's notifications with optional filters"
+					}
+				},
+				{
+					"name": "Get Unread Count",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/notifications/unread-count",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "notifications", "unread-count"]
+						},
+						"description": "Get count of unread notifications by type"
+					}
+				},
+				{
+					"name": "Mark Notification as Read",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/notifications/:notificationId/read",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "notifications", ":notificationId", "read"],
+							"variable": [
+								{
+									"key": "notificationId",
+									"value": ""
+								}
+							]
+						},
+						"description": "Mark a specific notification as read"
+					}
+				},
+				{
+					"name": "Delete Notification",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/notifications/:notificationId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "notifications", ":notificationId"],
+							"variable": [
+								{
+									"key": "notificationId",
+									"value": ""
+								}
+							]
+						},
+						"description": "Delete a specific notification"
+					}
+				},
+				{
+					"name": "Mark All as Read",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/notifications/mark-all-read",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "notifications", "mark-all-read"]
+						},
+						"description": "Mark all notifications as read"
+					}
+				},
+				{
+					"name": "Clear Read Notifications",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/notifications/clear-read",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "notifications", "clear-read"]
+						},
+						"description": "Delete all read notifications"
+					}
+				}
+			],
+			"description": "Player notification endpoints"
+		},
+		{
+			"name": "Mirror Universe",
+			"item": [
+				{
+					"name": "Check Mirror Universe Access",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/mirror-universe/access",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "mirror-universe", "access"]
+						},
+						"description": "Check if player can access mirror universe (sensor level, cooldown)"
+					}
+				},
+				{
+					"name": "Get Mirror Gate Location",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/galaxies/{{galaxyUuid}}/mirror-gate",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "galaxies", "{{galaxyUuid}}", "mirror-gate"]
+						},
+						"description": "Get the location of the mirror universe gate in a galaxy"
+					}
+				},
+				{
+					"name": "Enter Mirror Universe",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/mirror-universe/enter",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "mirror-universe", "enter"]
+						},
+						"description": "Attempt to enter the mirror universe through the gate"
+					}
+				}
+			],
+			"description": "Mirror universe access endpoints"
+		},
+		{
+			"name": "Travel",
+			"item": [
+				{
+					"name": "Travel via Warp Gate",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"warp_gate_id\": \"gate-uuid-here\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/travel/warp",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "travel", "warp"]
+						},
+						"description": "Travel through a warp gate"
+					}
+				},
+				{
+					"name": "Calculate Travel Cost",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"destination_poi_id\": \"poi-uuid-here\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/travel/calculate",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "travel", "calculate"]
+						},
+						"description": "Calculate travel cost to a destination"
+					}
+				}
+			],
+			"description": "Travel and navigation endpoints"
+		},
+		{
+			"name": "Trading",
+			"item": [
+				{
+					"name": "Buy Mineral",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mineral_id\": \"mineral-uuid\",\n  \"quantity\": 100\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/trading/buy",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "trading", "buy"]
+						},
+						"description": "Buy minerals at current trading hub"
+					}
+				},
+				{
+					"name": "Sell Mineral",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mineral_id\": \"mineral-uuid\",\n  \"quantity\": 100\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/trading/sell",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "trading", "sell"]
+						},
+						"description": "Sell minerals at current trading hub"
+					}
+				},
+				{
+					"name": "Get Trading Hub Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/trading-hubs/:hubUuid",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "trading-hubs", ":hubUuid"],
+							"variable": [
+								{
+									"key": "hubUuid",
+									"value": ""
+								}
+							]
+						},
+						"description": "Get trading hub information and inventory"
+					}
+				}
+			],
+			"description": "Trading endpoints"
+		},
+		{
+			"name": "Ships",
+			"item": [
+				{
+					"name": "Get Player Ships",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/ships",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "ships"]
+						},
+						"description": "Get all ships owned by player"
+					}
+				},
+				{
+					"name": "Get Ship Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/ships/:shipId/status",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "ships", ":shipId", "status"],
+							"variable": [
+								{
+									"key": "shipId",
+									"value": ""
+								}
+							]
+						},
+						"description": "Get detailed status of a specific ship"
+					}
+				},
+				{
+					"name": "Switch Active Ship",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ship_id\": \"ship-uuid\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/ships/switch",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "ships", "switch"]
+						},
+						"description": "Switch to a different owned ship"
+					}
+				},
+				{
+					"name": "Upgrade Ship Component",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"component\": \"weapons\",\n  \"level\": 5\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/ships/:shipId/upgrade",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "ships", ":shipId", "upgrade"],
+							"variable": [
+								{
+									"key": "shipId",
+									"value": ""
+								}
+							]
+						},
+						"description": "Upgrade a ship component (weapons, hull, warp_drive, cargo, sensors, shields)"
+					}
+				},
+				{
+					"name": "Repair Ship",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/ships/:shipId/repair",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "ships", ":shipId", "repair"],
+							"variable": [
+								{
+									"key": "shipId",
+									"value": ""
+								}
+							]
+						},
+						"description": "Repair ship hull damage"
+					}
+				}
+			],
+			"description": "Ship management endpoints"
+		},
+		{
+			"name": "Colonies",
+			"item": [
+				{
+					"name": "Get Player Colonies",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/colonies",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "colonies"]
+						},
+						"description": "Get all colonies owned by player"
+					}
+				},
+				{
+					"name": "Get Colony Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/colonies/:colonyUuid",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "colonies", ":colonyUuid"],
+							"variable": [
+								{
+									"key": "colonyUuid",
+									"value": ""
+								}
+							]
+						},
+						"description": "Get detailed information about a colony"
+					}
+				},
+				{
+					"name": "Construct Colony Building",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"building_type\": \"mining_facility\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/colonies/:colonyUuid/buildings",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "colonies", ":colonyUuid", "buildings"],
+							"variable": [
+								{
+									"key": "colonyUuid",
+									"value": ""
+								}
+							]
+						},
+						"description": "Construct a new building in the colony"
+					}
+				},
+				{
+					"name": "Upgrade Colony Building",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/colonies/:colonyUuid/buildings/:buildingId/upgrade",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "colonies", ":colonyUuid", "buildings", ":buildingId", "upgrade"],
+							"variable": [
+								{
+									"key": "colonyUuid",
+									"value": ""
+								},
+								{
+									"key": "buildingId",
+									"value": ""
+								}
+							]
+						},
+						"description": "Upgrade a colony building to the next level"
+					}
+				}
+			],
+			"description": "Colony management endpoints"
+		},
+		{
+			"name": "Combat",
+			"item": [
+				{
+					"name": "Attack Pirate",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"pirate_fleet_id\": \"fleet-uuid\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/combat/attack-pirate",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "combat", "attack-pirate"]
+						},
+						"description": "Attack a pirate fleet"
+					}
+				},
+				{
+					"name": "Create PvP Challenge",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"target_player_id\": \"player-uuid\",\n  \"wager\": 10000\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/players/{{playerUuid}}/combat/challenge",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "players", "{{playerUuid}}", "combat", "challenge"]
+						},
+						"description": "Create a PvP challenge"
+					}
+				},
+				{
+					"name": "Accept PvP Challenge",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/pvp-challenges/:challengeId/accept",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "pvp-challenges", ":challengeId", "accept"],
+							"variable": [
+								{
+									"key": "challengeId",
+									"value": ""
+								}
+							]
+						},
+						"description": "Accept a PvP challenge"
+					}
+				}
+			],
+			"description": "Combat endpoints"
+		}
+	]
+}

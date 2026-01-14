@@ -59,6 +59,12 @@ class Player extends Model
         return $this->belongsTo(PointOfInterest::class, 'current_poi_id');
     }
 
+    // Alias for currentLocation
+    public function currentPoi(): BelongsTo
+    {
+        return $this->currentLocation();
+    }
+
     public function ships(): HasMany
     {
         return $this->hasMany(PlayerShip::class);
@@ -72,6 +78,11 @@ class Player extends Model
     public function colonies(): HasMany
     {
         return $this->hasMany(Colony::class);
+    }
+
+    public function combatParticipations(): HasMany
+    {
+        return $this->hasMany(CombatParticipant::class);
     }
 
     public function plans(): BelongsToMany

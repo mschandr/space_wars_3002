@@ -12,6 +12,7 @@ use App\Traits\HasUuidAndVersion;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Galaxy extends Model
 {
@@ -107,6 +108,16 @@ class Galaxy extends Model
     public function sectors(): HasMany
     {
         return $this->hasMany(Sector::class);
+    }
+
+    public function players(): HasMany
+    {
+        return $this->hasMany(Player::class);
+    }
+
+    public function tradingHubs(): HasManyThrough
+    {
+        return $this->hasManyThrough(TradingHub::class, PointOfInterest::class, 'galaxy_id', 'poi_id');
     }
 
     /**
