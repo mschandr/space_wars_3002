@@ -23,7 +23,7 @@ class PirateFaction extends Model
 
     protected $casts = [
         'attributes' => 'array',
-        'is_active' => 'boolean',
+        'is_active'  => 'boolean',
     ];
 
     // Relationships

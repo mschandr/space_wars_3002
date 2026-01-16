@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Str;
 
 class Player extends Model
@@ -22,8 +23,13 @@ class Player extends Model
         'credits',
         'experience',
         'level',
+        'ships_destroyed',
+        'combats_won',
+        'combats_lost',
+        'total_trade_volume',
         'current_poi_id',
         'last_trading_hub_poi_id',
+        'last_mirror_travel_at',
         'status',
     ];
 
@@ -31,6 +37,11 @@ class Player extends Model
         'credits' => 'decimal:2',
         'experience' => 'integer',
         'level' => 'integer',
+        'ships_destroyed' => 'integer',
+        'combats_won' => 'integer',
+        'combats_lost' => 'integer',
+        'total_trade_volume' => 'decimal:2',
+        'last_mirror_travel_at' => 'datetime',
     ];
 
     protected static function boot()
@@ -83,6 +94,19 @@ class Player extends Model
     public function combatParticipations(): HasMany
     {
         return $this->hasMany(CombatParticipant::class);
+    }
+
+    public function cargos(): HasMany
+    {
+        // Get cargo from all player ships (primarily the active ship)
+        return $this->hasManyThrough(
+            PlayerCargo::class,
+            PlayerShip::class,
+            'player_id',      // Foreign key on player_ships table
+            'player_ship_id', // Foreign key on player_cargos table
+            'id',             // Local key on players table
+            'id'              // Local key on player_ships table
+        );
     }
 
     public function plans(): BelongsToMany

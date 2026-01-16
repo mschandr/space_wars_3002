@@ -67,7 +67,7 @@ class PirateFactionTest extends TestCase
     {
         // Create captains for the faction
         PirateCaptain::factory()->count(3)->create([
-            'pirate_faction_id' => $this->faction->id,
+            'faction_id' => $this->faction->id,
         ]);
 
         $response = $this->getJson("/api/pirate-factions/{$this->faction->uuid}");
@@ -101,7 +101,7 @@ class PirateFactionTest extends TestCase
     {
         // Create 10 captains
         PirateCaptain::factory()->count(10)->create([
-            'pirate_faction_id' => $this->faction->id,
+            'faction_id' => $this->faction->id,
         ]);
 
         $response = $this->getJson("/api/pirate-factions/{$this->faction->uuid}");
@@ -161,7 +161,7 @@ class PirateFactionTest extends TestCase
     public function test_it_can_list_faction_captains()
     {
         PirateCaptain::factory()->count(5)->create([
-            'pirate_faction_id' => $this->faction->id,
+            'faction_id' => $this->faction->id,
         ]);
 
         $response = $this->getJson("/api/pirate-factions/{$this->faction->uuid}/captains");

@@ -228,7 +228,7 @@ class VictoryTest extends TestCase
         ]);
 
         // Player2 should be first in merchant leaders
-        $response->assertJsonPath('data.victory_leaders.merchant_empire.0.uuid', $player2->uuid);
+        $response->assertJsonPath('data.victory_leaders.merchant_empire.0.uuid', (string) $player2->uuid);
     }
 
     public function test_it_shows_top_5_leaders_per_category()

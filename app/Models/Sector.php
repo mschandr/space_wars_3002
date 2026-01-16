@@ -22,6 +22,7 @@ class Sector extends Model
         'y_min',
         'y_max',
         'attributes',
+        'danger_level',
     ];
 
     protected $casts = [
@@ -32,6 +33,7 @@ class Sector extends Model
         'x_max' => 'float',
         'y_min' => 'float',
         'y_max' => 'float',
+        'danger_level' => 'integer',
     ];
 
     /**

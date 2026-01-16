@@ -31,11 +31,10 @@ class MirrorUniverseTest extends TestCase
         $poi1 = PointOfInterest::factory()->create(['galaxy_id' => $this->galaxy->id]);
         $poi2 = PointOfInterest::factory()->create(['galaxy_id' => $this->galaxy->id]);
 
-        $this->mirrorGate = WarpGate::factory()->create([
+        $this->mirrorGate = WarpGate::factory()->mirrorEntry()->create([
             'galaxy_id' => $this->galaxy->id,
-            'from_poi_id' => $poi1->id,
-            'to_poi_id' => $poi2->id,
-            'is_mirror_gate' => true,
+            'source_poi_id' => $poi1->id,
+            'destination_poi_id' => $poi2->id,
         ]);
 
         $this->user = User::factory()->create();

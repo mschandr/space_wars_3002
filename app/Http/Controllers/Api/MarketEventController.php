@@ -17,9 +17,11 @@ class MarketEventController extends BaseApiController
     {
         $galaxy = Galaxy::where('uuid', $galaxyUuid)->firstOrFail();
 
-        $query = MarketEvent::where('galaxy_id', $galaxy->id)
-            ->where('is_active', true)
-            ->with(['mineral', 'tradingHub.poi']);
+        $query = MarketEvent::where('is_active', true)
+            ->whereHas('tradingHub.pointOfInterest', function ($q) use ($galaxy) {
+                $q->where('galaxy_id', $galaxy->id);
+            })
+            ->with(['mineral', 'tradingHub.pointOfInterest']);
 
         // Filter by event type if specified
         if ($request->has('event_type')) {
@@ -44,13 +46,13 @@ class MarketEventController extends BaseApiController
                     'name' => $event->mineral->name,
                     'symbol' => $event->mineral->symbol,
                 ],
-                'price_modifier' => $event->price_modifier,
+                'price_multiplier' => $event->price_multiplier,
                 'trading_hub' => $event->tradingHub ? [
                     'uuid' => $event->tradingHub->uuid,
-                    'name' => $event->tradingHub->poi->name ?? 'Unknown',
+                    'name' => $event->tradingHub->pointOfInterest->name ?? 'Unknown',
                     'location' => [
-                        'x' => $event->tradingHub->poi->x ?? null,
-                        'y' => $event->tradingHub->poi->y ?? null,
+                        'x' => $event->tradingHub->pointOfInterest->x ?? null,
+                        'y' => $event->tradingHub->pointOfInterest->y ?? null,
                     ],
                 ] : null,
                 'description' => $event->description,
@@ -76,15 +78,15 @@ class MarketEventController extends BaseApiController
     public function show(string $eventUuid): JsonResponse
     {
         $event = MarketEvent::where('uuid', $eventUuid)
-            ->with(['mineral', 'tradingHub.poi', 'galaxy'])
+            ->with(['mineral', 'tradingHub.pointOfInterest.galaxy'])
             ->firstOrFail();
 
         $eventData = [
             'uuid' => $event->uuid,
             'event_type' => $event->event_type,
             'galaxy' => [
-                'uuid' => $event->galaxy->uuid,
-                'name' => $event->galaxy->name,
+                'uuid' => $event->tradingHub?->poi?->galaxy?->uuid,
+                'name' => $event->tradingHub?->poi?->galaxy?->name,
             ],
             'mineral' => [
                 'uuid' => $event->mineral->uuid,
@@ -92,14 +94,14 @@ class MarketEventController extends BaseApiController
                 'symbol' => $event->mineral->symbol,
                 'base_price' => $event->mineral->base_price,
             ],
-            'price_modifier' => $event->price_modifier,
-            'modified_price' => round($event->mineral->base_price * $event->price_modifier, 2),
+            'price_multiplier' => $event->price_multiplier,
+            'modified_price' => round($event->mineral->base_price * $event->price_multiplier, 2),
             'trading_hub' => $event->tradingHub ? [
                 'uuid' => $event->tradingHub->uuid,
-                'name' => $event->tradingHub->poi->name ?? 'Unknown',
+                'name' => $event->tradingHub->pointOfInterest->name ?? 'Unknown',
                 'location' => [
-                    'x' => $event->tradingHub->poi->x ?? null,
-                    'y' => $event->tradingHub->poi->y ?? null,
+                    'x' => $event->tradingHub->pointOfInterest->x ?? null,
+                    'y' => $event->tradingHub->pointOfInterest->y ?? null,
                 ],
             ] : null,
             'description' => $event->description,
@@ -138,9 +140,9 @@ class MarketEventController extends BaseApiController
                     'symbol' => $event->mineral->symbol,
                     'base_price' => $event->mineral->base_price,
                 ],
-                'price_modifier' => $event->price_modifier,
-                'modified_price' => round($event->mineral->base_price * $event->price_modifier, 2),
-                'price_change_percent' => round(($event->price_modifier - 1) * 100, 1),
+                'price_multiplier' => $event->price_multiplier,
+                'modified_price' => round($event->mineral->base_price * $event->price_multiplier, 2),
+                'price_change_percent' => round(($event->price_multiplier - 1) * 100, 1),
                 'description' => $event->description,
                 'expires_at' => $event->expires_at?->toIso8601String(),
                 'time_remaining_seconds' => $event->expires_at ? max(0, now()->diffInSeconds($event->expires_at, false)) : null,

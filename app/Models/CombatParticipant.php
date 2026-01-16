@@ -22,6 +22,7 @@ class CombatParticipant extends Model
         'damage_dealt',
         'damage_taken',
         'survived',
+        'result',
         'xp_earned',
         'credits_earned',
         'loot_received',

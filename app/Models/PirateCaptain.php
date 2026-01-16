@@ -37,6 +37,12 @@ class PirateCaptain extends Model
         return $this->hasMany(PirateFleet::class, 'captain_id');
     }
 
+    // Alias for fleet (plural form)
+    public function fleets(): HasMany
+    {
+        return $this->fleet();
+    }
+
     public function activeFleet(): HasMany
     {
         return $this->fleet()->where('status', 'active');

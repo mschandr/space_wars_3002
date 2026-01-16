@@ -19,10 +19,10 @@ class TradingHubShip extends Model
     ];
 
     protected $casts = [
-        'quantity' => 'integer',
-        'current_price' => 'decimal:2',
-        'demand_level' => 'integer',
-        'supply_level' => 'integer',
+        'quantity'          => 'integer',
+        'current_price'     => 'decimal:2',
+        'demand_level'      => 'integer',
+        'supply_level'      => 'integer',
         'last_price_update' => 'datetime',
     ];
 
@@ -53,7 +53,7 @@ class TradingHubShip extends Model
         $demandMultiplier = 1 + (($this->demand_level - 50) / 100);
         $supplyMultiplier = 1 - (($this->supply_level - 50) / 100);
 
-        $this->current_price = $basePrice * $demandMultiplier * $supplyMultiplier;
+        $this->current_price     = $basePrice * $demandMultiplier * $supplyMultiplier;
         $this->last_price_update = now();
         $this->save();
     }

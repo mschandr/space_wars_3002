@@ -149,7 +149,7 @@ class PirateFactionController extends BaseApiController
     {
         $faction = PirateFaction::where('uuid', $factionUuid)->firstOrFail();
 
-        $captains = PirateCaptain::where('pirate_faction_id', $faction->id)
+        $captains = PirateCaptain::where('faction_id', $faction->id)
             ->withCount('fleets')
             ->get();
 

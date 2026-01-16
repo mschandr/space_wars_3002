@@ -236,13 +236,17 @@ class ShipTypesSeeder extends Seeder
                 'is_available' => true,
             ],
         ];
+    }
 
+    public function generateShips(Galaxy $galaxy): void
+    {
         foreach ($ships as $shipData) {
             // Use updateOrCreate to prevent duplicates
             Ship::updateOrCreate(
                 [
-                    'name' => $shipData['name'],
-                    'class' => $shipData['class'],
+                    'name'      => $shipData['name'],
+                    'class'     => $shipData['class'],
+                    'galaxy_id' => $galaxy->id
                 ],
                 $shipData
             );

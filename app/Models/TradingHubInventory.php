@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\MarketEventService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,12 +24,12 @@ class TradingHubInventory extends Model
     ];
 
     protected $casts = [
-        'quantity' => 'integer',
-        'current_price' => 'decimal:2',
-        'buy_price' => 'decimal:2',
-        'sell_price' => 'decimal:2',
-        'demand_level' => 'integer',
-        'supply_level' => 'integer',
+        'quantity'          => 'integer',
+        'current_price'     => 'decimal:2',
+        'buy_price'         => 'decimal:2',
+        'sell_price'        => 'decimal:2',
+        'demand_level'      => 'integer',
+        'supply_level'      => 'integer',
         'last_price_update' => 'datetime',
     ];
 
@@ -49,6 +50,17 @@ class TradingHubInventory extends Model
     }
 
     /**
+     * Add stock to inventory
+     */
+    public function addStock(int $amount): void
+    {
+        $this->quantity     += $amount;
+        $this->supply_level = min(100, $this->supply_level + ($amount / 10));
+        $this->save();
+        $this->updatePricing();
+    }
+
+    /**
      * Update prices based on supply and demand
      */
     public function updatePricing(): void
@@ -64,8 +76,8 @@ class TradingHubInventory extends Model
         $this->current_price = $baseValue * $demandMultiplier * $supplyMultiplier;
 
         // Apply market event multipliers (Drug Wars style!)
-        $eventService = app(\App\Services\MarketEventService::class);
-        $eventMultiplier = $eventService->getCombinedMultiplier($this->mineral_id, $this->trading_hub_id);
+        $eventService        = app(MarketEventService::class);
+        $eventMultiplier     = $eventService->getCombinedMultiplier($this->mineral_id, $this->trading_hub_id);
         $this->current_price = $this->current_price * $eventMultiplier;
 
         // Apply mirror universe price boost (high-reward!)
@@ -76,16 +88,33 @@ class TradingHubInventory extends Model
 
         // Cap prices at a reasonable maximum (1 billion credits)
         // Prevents overflow and keeps economy balanced
-        $maxPrice = 1_000_000_000;
+        $maxPrice            = 1_000_000_000;
         $this->current_price = min($this->current_price, $maxPrice);
 
         // Hub buys at lower price, sells at higher price (spread)
-        $spread = 0.15; // 15% spread
-        $this->buy_price = $this->current_price * (1 - $spread);
+        $spread           = 0.15; // 15% spread
+        $this->buy_price  = $this->current_price * (1 - $spread);
         $this->sell_price = $this->current_price * (1 + $spread);
 
         $this->last_price_update = now();
         $this->save();
+    }
+
+    /**
+     * Remove stock from inventory
+     */
+    public function removeStock(int $amount): bool
+    {
+        if (!$this->hasStock($amount)) {
+            return false;
+        }
+
+        $this->quantity     -= $amount;
+        $this->demand_level = min(100, $this->demand_level + ($amount / 10));
+        $this->save();
+        $this->updatePricing();
+
+        return true;
     }
 
     /**
@@ -94,33 +123,5 @@ class TradingHubInventory extends Model
     public function hasStock(int $amount): bool
     {
         return $this->quantity >= $amount;
-    }
-
-    /**
-     * Add stock to inventory
-     */
-    public function addStock(int $amount): void
-    {
-        $this->quantity += $amount;
-        $this->supply_level = min(100, $this->supply_level + ($amount / 10));
-        $this->save();
-        $this->updatePricing();
-    }
-
-    /**
-     * Remove stock from inventory
-     */
-    public function removeStock(int $amount): bool
-    {
-        if (! $this->hasStock($amount)) {
-            return false;
-        }
-
-        $this->quantity -= $amount;
-        $this->demand_level = min(100, $this->demand_level + ($amount / 10));
-        $this->save();
-        $this->updatePricing();
-
-        return true;
     }
 }

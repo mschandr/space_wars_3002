@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\WarpGate\GateType;
 use App\Models\Galaxy;
 use App\Models\Player;
 use App\Models\WarpGate;
@@ -52,8 +53,8 @@ class MirrorUniverseController extends BaseApiController
 
         // Get mirror gate location
         $mirrorGate = WarpGate::where('galaxy_id', $player->galaxy_id)
-            ->where('is_mirror_gate', true)
-            ->with('fromPoi')
+            ->where('gate_type', GateType::MIRROR_ENTRY)
+            ->with('sourcePoi')
             ->first();
 
         return $this->success([
@@ -74,12 +75,12 @@ class MirrorUniverseController extends BaseApiController
             'mirror_gate' => $mirrorGate ? [
                 'uuid' => $mirrorGate->uuid,
                 'location' => [
-                    'poi_uuid' => $mirrorGate->fromPoi->uuid,
-                    'name' => $mirrorGate->fromPoi->name,
-                    'x' => $mirrorGate->fromPoi->x,
-                    'y' => $mirrorGate->fromPoi->y,
+                    'poi_uuid' => $mirrorGate->sourcePoi->uuid,
+                    'name' => $mirrorGate->sourcePoi->name,
+                    'x' => $mirrorGate->sourcePoi->x,
+                    'y' => $mirrorGate->sourcePoi->y,
                 ],
-                'is_at_gate' => $player->current_poi_id === $mirrorGate->from_poi_id,
+                'is_at_gate' => $player->current_poi_id === $mirrorGate->source_poi_id,
             ] : null,
             'mirror_modifiers' => $mirrorConfig,
         ], 'Mirror universe access information retrieved');
@@ -93,8 +94,8 @@ class MirrorUniverseController extends BaseApiController
         $galaxy = Galaxy::where('uuid', $galaxyUuid)->firstOrFail();
 
         $mirrorGate = WarpGate::where('galaxy_id', $galaxy->id)
-            ->where('is_mirror_gate', true)
-            ->with(['fromPoi', 'toPoi'])
+            ->where('gate_type', GateType::MIRROR_ENTRY)
+            ->with(['sourcePoi', 'destinationPoi'])
             ->first();
 
         if (! $mirrorGate) {
@@ -111,19 +112,19 @@ class MirrorUniverseController extends BaseApiController
             'mirror_gate' => [
                 'uuid' => $mirrorGate->uuid,
                 'location' => [
-                    'poi_uuid' => $mirrorGate->fromPoi->uuid,
-                    'name' => $mirrorGate->fromPoi->name,
+                    'poi_uuid' => $mirrorGate->sourcePoi->uuid,
+                    'name' => $mirrorGate->sourcePoi->name,
                     'coordinates' => [
-                        'x' => $mirrorGate->fromPoi->x,
-                        'y' => $mirrorGate->fromPoi->y,
+                        'x' => $mirrorGate->sourcePoi->x,
+                        'y' => $mirrorGate->sourcePoi->y,
                     ],
                 ],
-                'destination' => $mirrorGate->toPoi ? [
-                    'poi_uuid' => $mirrorGate->toPoi->uuid,
-                    'name' => $mirrorGate->toPoi->name,
+                'destination' => $mirrorGate->destinationPoi ? [
+                    'poi_uuid' => $mirrorGate->destinationPoi->uuid,
+                    'name' => $mirrorGate->destinationPoi->name,
                     'coordinates' => [
-                        'x' => $mirrorGate->toPoi->x,
-                        'y' => $mirrorGate->toPoi->y,
+                        'x' => $mirrorGate->destinationPoi->x,
+                        'y' => $mirrorGate->destinationPoi->y,
                     ],
                 ] : null,
             ],
@@ -183,11 +184,11 @@ class MirrorUniverseController extends BaseApiController
 
         // Find mirror gate
         $mirrorGate = WarpGate::where('galaxy_id', $player->galaxy_id)
-            ->where('is_mirror_gate', true)
+            ->where('gate_type', GateType::MIRROR_ENTRY)
             ->firstOrFail();
 
         // Check if player is at mirror gate
-        if ($player->current_poi_id !== $mirrorGate->from_poi_id) {
+        if ($player->current_poi_id !== $mirrorGate->source_poi_id) {
             return $this->error('You must be at the mirror gate to enter the mirror universe', 400);
         }
 

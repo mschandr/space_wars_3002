@@ -35,7 +35,6 @@ class MarketEventTest extends TestCase
     {
         // Create active events
         MarketEvent::factory()->count(3)->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $this->mineral->id,
             'trading_hub_id' => $this->tradingHub->id,
             'is_active' => true,
@@ -43,7 +42,6 @@ class MarketEventTest extends TestCase
 
         // Create inactive event (shouldn't appear)
         MarketEvent::factory()->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $this->mineral->id,
             'is_active' => false,
         ]);
@@ -78,24 +76,22 @@ class MarketEventTest extends TestCase
     public function test_it_can_filter_events_by_type()
     {
         MarketEvent::factory()->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $this->mineral->id,
-            'event_type' => 'shortage',
+            'event_type' => 'supply_shortage',
             'is_active' => true,
         ]);
 
         MarketEvent::factory()->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $this->mineral->id,
-            'event_type' => 'surplus',
+            'event_type' => 'market_flooding',
             'is_active' => true,
         ]);
 
-        $response = $this->getJson("/api/galaxies/{$this->galaxy->uuid}/market-events?event_type=shortage");
+        $response = $this->getJson("/api/galaxies/{$this->galaxy->uuid}/market-events?event_type=supply_shortage");
 
         $response->assertStatus(200);
         $response->assertJsonPath('data.total_active_events', 1);
-        $response->assertJsonPath('data.events.0.event_type', 'shortage');
+        $response->assertJsonPath('data.events.0.event_type', 'supply_shortage');
     }
 
     public function test_it_can_filter_events_by_mineral()
@@ -104,13 +100,11 @@ class MarketEventTest extends TestCase
         $silverMineral = Mineral::factory()->create(['symbol' => 'Ag', 'name' => 'Silver']);
 
         MarketEvent::factory()->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $goldMineral->id,
             'is_active' => true,
         ]);
 
         MarketEvent::factory()->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $silverMineral->id,
             'is_active' => true,
         ]);
@@ -125,11 +119,10 @@ class MarketEventTest extends TestCase
     public function test_it_can_get_market_event_details()
     {
         $event = MarketEvent::factory()->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $this->mineral->id,
             'trading_hub_id' => $this->tradingHub->id,
-            'event_type' => 'shortage',
-            'price_modifier' => 1.5,
+            'event_type' => 'supply_shortage',
+            'price_multiplier' => 1.5,
             'is_active' => true,
         ]);
 
@@ -138,7 +131,7 @@ class MarketEventTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonPath('success', true);
         $response->assertJsonPath('data.uuid', $event->uuid);
-        $response->assertJsonPath('data.event_type', 'shortage');
+        $response->assertJsonPath('data.event_type', 'supply_shortage');
         $response->assertJsonPath('data.price_modifier', 1.5);
         $response->assertJsonStructure([
             'success',
@@ -164,9 +157,8 @@ class MarketEventTest extends TestCase
         $this->mineral->update(['base_price' => 100]);
 
         $event = MarketEvent::factory()->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $this->mineral->id,
-            'price_modifier' => 2.0, // Double price
+            'price_multiplier' => 2.0, // Double price
             'is_active' => true,
         ]);
 
@@ -181,7 +173,6 @@ class MarketEventTest extends TestCase
         $user = User::factory()->create();
 
         MarketEvent::factory()->count(2)->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $this->mineral->id,
             'trading_hub_id' => $this->tradingHub->id,
             'is_active' => true,
@@ -194,7 +185,6 @@ class MarketEventTest extends TestCase
         ]);
 
         MarketEvent::factory()->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $this->mineral->id,
             'trading_hub_id' => $otherHub->id,
             'is_active' => true,
@@ -233,10 +223,9 @@ class MarketEventTest extends TestCase
         $user = User::factory()->create();
 
         $event = MarketEvent::factory()->create([
-            'galaxy_id' => $this->galaxy->id,
             'mineral_id' => $this->mineral->id,
             'trading_hub_id' => $this->tradingHub->id,
-            'price_modifier' => 1.25, // 25% increase
+            'price_multiplier' => 1.25, // 25% increase
             'is_active' => true,
         ]);
 
