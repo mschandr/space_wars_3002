@@ -1,0 +1,116 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Galaxy;
+use App\Models\PointOfInterest;
+use App\Models\PrecursorShip;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
+
+class PrecursorShipSeeder extends Seeder
+{
+    /**
+     * Seed one Precursor Ship per galaxy in INTERSTELLAR VOID
+     *
+     * Requirements:
+     * - Must be far from any star/POI (minimum 20 units away)
+     * - Placed in "dead space" between star systems
+     * - Random coordinates within galaxy bounds
+     */
+    public function run(): void
+    {
+        $galaxies = Galaxy::all();
+
+        foreach ($galaxies as $galaxy) {
+            $this->seedPrecursorShip($galaxy);
+        }
+
+        $this->command->info('✨ Precursor Ships hidden in the void...');
+    }
+
+    private function seedPrecursorShip(Galaxy $galaxy): void
+    {
+        // Get all POIs in this galaxy
+        $pois = PointOfInterest::where('galaxy_id', $galaxy->id)
+            ->select('x', 'y')
+            ->get();
+
+        $maxAttempts = 100;
+        $attempts = 0;
+        $minDistanceFromAnyPOI = 20; // Must be at least 20 units from any star
+
+        do {
+            // Generate random coordinates in interstellar space
+            $x = rand(50, 450); // Avoid edges
+            $y = rand(50, 450);
+
+            // Check distance from all POIs
+            $tooClose = false;
+            foreach ($pois as $poi) {
+                $distance = sqrt(
+                    pow($x - $poi->x, 2) + pow($y - $poi->y, 2)
+                );
+
+                if ($distance < $minDistanceFromAnyPOI) {
+                    $tooClose = true;
+                    break;
+                }
+            }
+
+            $attempts++;
+
+            if (!$tooClose) {
+                break; // Found a good spot
+            }
+
+        } while ($attempts < $maxAttempts);
+
+        if ($attempts >= $maxAttempts) {
+            // Fallback: Place in center of galaxy
+            $x = 250;
+            $y = 250;
+            $this->command->warn("Could not find isolated spot, placing Precursor Ship at center ({$x}, {$y})");
+        }
+
+        // Create the Precursor Ship
+        PrecursorShip::create([
+            'uuid' => Str::uuid(),
+            'galaxy_id' => $galaxy->id,
+            'x' => $x,
+            'y' => $y,
+            'is_discovered' => false,
+            'hull' => 1000000,
+            'max_hull' => 1000000,
+            'weapons' => 10000,
+            'sensors' => 100,
+            'speed' => 10000,
+            'warp_drive' => 100,
+            'cargo_capacity' => 1000000,
+            'current_cargo' => 0,
+            'fuel' => 999999999,
+            'max_fuel' => 999999999,
+            'precursor_name' => $this->generatePrecursorName(),
+        ]);
+
+        $this->command->info("🛸 Precursor Ship '{$this->generatePrecursorName()}' hidden at ({$x}, {$y}) in galaxy '{$galaxy->name}'");
+    }
+
+    /**
+     * Generate a thematic Precursor ship name
+     */
+    private function generatePrecursorName(): string
+    {
+        $prefixes = [
+            'Void', 'Star', 'Quantum', 'Stellar', 'Cosmic',
+            'Temporal', 'Eternal', 'Ancient', 'Celestial', 'Infinity',
+        ];
+
+        $suffixes = [
+            'Strider', 'Walker', 'Wanderer', 'Seeker', 'Herald',
+            'Architect', 'Engineer', 'Sentinel', 'Guardian', 'Harbinger',
+        ];
+
+        return $prefixes[array_rand($prefixes)] . ' ' . $suffixes[array_rand($suffixes)];
+    }
+}

@@ -31,16 +31,18 @@ class IncrementalWarpGateGenerator
     }
 
     /**
-     * Generate warp gates incrementally, processing one star at a time
+     * Generate warp gates incrementally for inhabited star systems only
+     * Uninhabited systems remain isolated to encourage exploration and colonization
      */
     public function generateGatesIncremental(Galaxy $galaxy): array
     {
         $this->gatesCreated = 0;
         $this->gatesSkipped = 0;
 
-        // Get total star count for progress tracking
+        // Get total INHABITED star count for progress tracking
         $totalStars = $galaxy->pointsOfInterest()
             ->where('type', PointOfInterestType::STAR)
+            ->where('is_inhabited', true)  // Only inhabited systems get warp gates
             ->count();
 
         if ($totalStars < 2) {
@@ -51,7 +53,7 @@ class IncrementalWarpGateGenerator
             ];
         }
 
-        $this->output("Processing {$totalStars} star systems...");
+        $this->output("Processing {$totalStars} inhabited star systems...");
         $this->output("Adjacency threshold: {$this->adjacencyThreshold}");
         $this->output("Max gates per system: {$this->maxGatesPerSystem}");
         $this->newLine();
@@ -62,6 +64,7 @@ class IncrementalWarpGateGenerator
 
         PointOfInterest::where('galaxy_id', $galaxy->id)
             ->where('type', PointOfInterestType::STAR)
+            ->where('is_inhabited', true)  // Only inhabited systems get warp gates
             ->orderBy('id')
             ->chunk($chunkSize, function ($starChunk) use (&$starsProcessed, $totalStars, $galaxy) {
                 foreach ($starChunk as $star) {
@@ -147,7 +150,8 @@ class IncrementalWarpGateGenerator
     }
 
     /**
-     * Find nearby stars using efficient spatial query
+     * Find nearby inhabited stars using efficient spatial query
+     * Only inhabited systems can be connected via warp gates
      */
     private function findNearbyStars(PointOfInterest $star, Galaxy $galaxy): array
     {
@@ -157,9 +161,10 @@ class IncrementalWarpGateGenerator
         $minY = $star->y - ($this->adjacencyThreshold * 10);
         $maxY = $star->y + ($this->adjacencyThreshold * 10);
 
-        // Query stars within bounding box
+        // Query INHABITED stars within bounding box
         $candidates = PointOfInterest::where('galaxy_id', $galaxy->id)
             ->where('type', PointOfInterestType::STAR)
+            ->where('is_inhabited', true)  // Only connect to inhabited systems
             ->where('id', '!=', $star->id)
             ->whereBetween('x', [$minX, $maxX])
             ->whereBetween('y', [$minY, $maxY])

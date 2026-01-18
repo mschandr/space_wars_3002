@@ -100,7 +100,8 @@ class TradingHubRenderer
 
         foreach ($displayInventories as $inv) {
             $mineral = $inv->mineral;
-            $marketValue = $mineral->getMarketValue();
+            // Use base_value for comparison (rarity is already in base_value)
+            $marketValue = $mineral->base_value;
             $priceRatio = $inv->sell_price / $marketValue;
 
             $priceColor = match(true) {
@@ -174,7 +175,8 @@ class TradingHubRenderer
     {
         $deals = $inventories->map(function ($inv) {
             $mineral = $inv->mineral;
-            $marketValue = $mineral->getMarketValue();
+            // Use base_value for comparison (rarity is already in base_value)
+            $marketValue = $mineral->base_value;
             $discount = (($marketValue - $inv->sell_price) / $marketValue) * 100;
 
             return [

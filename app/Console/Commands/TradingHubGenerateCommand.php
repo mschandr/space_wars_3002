@@ -11,8 +11,10 @@ class TradingHubGenerateCommand extends Command
 {
     protected $signature = 'trading:generate-hubs
                             {galaxy? : Galaxy ID or name}
-                            {--min-gates=2 : Minimum number of gates required for a hub}
+                            {--min-gates=3 : Minimum number of gates required for a hub}
                             {--salvage-probability=0.3 : Probability of hub having a salvage yard (0.0-1.0)}
+                            {--hub-probability=0.25 : Probability of spawning a hub at eligible locations (0.0-1.0)}
+                            {--min-spacing=100 : Minimum distance between trading hubs}
                             {--regenerate : Delete existing hubs and regenerate}';
 
     protected $description = 'Generate trading hubs at warp gate intersections in a galaxy';
@@ -35,7 +37,7 @@ class TradingHubGenerateCommand extends Command
             })->toArray();
 
             $galaxyId = $this->choice('Select a galaxy', $choices);
-            $galaxy = Galaxy::find($galaxyId);
+            $galaxy   = Galaxy::find($galaxyId);
         } else {
             // Try to find by ID first, then by name
             $galaxy = is_numeric($galaxyIdentifier)
@@ -86,8 +88,10 @@ class TradingHubGenerateCommand extends Command
 
         // Create generator with options
         $generator = new TradingHubGenerator(
-            minGatesForHub: (int) $this->option('min-gates'),
-            salvageYardProbability: (float) $this->option('salvage-probability')
+            minGatesForHub: (int)$this->option('min-gates'),
+            salvageYardProbability: (float)$this->option('salvage-probability'),
+            hubSpawnProbability: (float)$this->option('hub-probability'),
+            minHubDistance: (int)$this->option('min-spacing')
         );
 
         // Generate trading hubs
@@ -104,7 +108,7 @@ class TradingHubGenerateCommand extends Command
             return Command::SUCCESS;
         }
 
-        $hubsByType = $hubs->groupBy('type');
+        $hubsByType      = $hubs->groupBy('type');
         $hubsWithSalvage = $hubs->where('has_salvage_yard', true)->count();
 
         $this->newLine();
@@ -134,7 +138,7 @@ class TradingHubGenerateCommand extends Command
         $this->info('Trading Hubs Created:');
         $hubTable = [];
         foreach ($hubs as $hub) {
-            $poi = $hub->pointOfInterest;
+            $poi        = $hub->pointOfInterest;
             $hubTable[] = [
                 $hub->name,
                 $hub->type,

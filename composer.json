@@ -2,7 +2,10 @@
     "name": "laravel/laravel",
     "type": "project",
     "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "keywords": [
+        "laravel",
+        "framework"
+    ],
     "license": "MIT",
     "require": {
         "php": "^8.3",
@@ -10,15 +13,14 @@
         "laravel/framework": "^12.25",
         "laravel/tinker": "^2.10.1",
         "mschandr/weighted-random": "^3.0.0",
-        "php-tui/php-tui": "^0.2.1",
         "symfony/yaml": "^7.3.2"
     },
-     "repositories": [
-        {
+    "repositories": {
+        "0": {
             "type": "vcs",
-            "url":  "https://github.com/mschandr/weighted-random.git"
+            "url": "https://github.com/mschandr/weighted-random.git"
         }
-    ],
+    },
     "require-dev": {
         "fakerphp/faker": "^1.24.1",
         "laravel/pint": "^1.24",
