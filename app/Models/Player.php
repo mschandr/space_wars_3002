@@ -123,9 +123,53 @@ class Player extends Model
             ->withTimestamps();
     }
 
+    /**
+     * Request-scoped cache for charted POI IDs
+     * Prevents N+1 queries when checking multiple systems
+     */
+    protected ?array $chartedPoiIdsCache = null;
+
+    /**
+     * Get all charted POI IDs for this player (cached for request lifecycle)
+     * Use this for bulk checking instead of individual hasChartFor() calls
+     *
+     * @return array<int> Array of POI IDs the player has charts for
+     */
+    public function getChartedPoiIds(): array
+    {
+        if ($this->chartedPoiIdsCache === null) {
+            $this->chartedPoiIdsCache = $this->starCharts()
+                ->pluck('revealed_poi_id')
+                ->toArray();
+        }
+
+        return $this->chartedPoiIdsCache;
+    }
+
+    /**
+     * Check if player has chart for a POI by ID (in-memory lookup)
+     * More efficient than hasChartFor() when checking multiple systems
+     *
+     * @param  int  $poiId  The POI ID to check
+     * @return bool True if player has chart for this POI
+     */
+    public function hasChartForId(int $poiId): bool
+    {
+        return in_array($poiId, $this->getChartedPoiIds(), true);
+    }
+
+    /**
+     * Clear the charted POI cache (call after purchasing new charts)
+     */
+    public function clearChartedPoiCache(): void
+    {
+        $this->chartedPoiIdsCache = null;
+    }
+
     public function hasChartFor(PointOfInterest $poi): bool
     {
-        return $this->starCharts()->where('revealed_poi_id', $poi->id)->exists();
+        // Use optimized in-memory lookup
+        return $this->hasChartForId($poi->id);
     }
 
     public function addCredits(float $amount): void

@@ -15,6 +15,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use mschandr\WeightedRandom\Generator\WeightedRandomGenerator;
 
 class PointOfInterest extends Model
@@ -54,11 +56,23 @@ class PointOfInterest extends Model
 
     /**
      * Bulk create POIs for a galaxy from a list of points.
+     * OPTIMIZED: Uses batch insert instead of individual creates.
      *
      * @throws AssertionFailedException|\Random\RandomException
      */
     public static function createPointsForGalaxy(Galaxy $galaxy, array $points): void
     {
+        if (empty($points)) {
+            return;
+        }
+
+        $now = now();
+        $version = config('game_config.feature.stamp_version', true) && file_exists(base_path('VERSION'))
+            ? trim(file_get_contents(base_path('VERSION')))
+            : null;
+
+        // Pre-generate all POI data in memory
+        $batchData = [];
         foreach ($points as $point) {
             $type = self::setPOIType();
             $isHidden = self::setHiddenPOI();
@@ -72,16 +86,26 @@ class PointOfInterest extends Model
                 PointOfInterestType::ANOMALY->value => AnomalyNameProvider::generateAnomalyName(),
             };
 
-            self::create([
+            $batchData[] = [
+                'uuid' => (string) Str::uuid(),
                 'galaxy_id' => $galaxy->id,
                 'type' => $type,
-                'status' => PointOfInterestStatus::DRAFT,
+                'status' => PointOfInterestStatus::DRAFT->value,
                 'x' => $point[0],
                 'y' => $point[1],
                 'name' => $name,
-                'attributes' => [],
+                'attributes' => json_encode([]),
                 'is_hidden' => $isHidden,
-            ]);
+                'version' => $version,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        // Batch insert in chunks of 500 to avoid query size limits
+        $chunks = array_chunk($batchData, 500);
+        foreach ($chunks as $chunk) {
+            DB::table('points_of_interest')->insert($chunk);
         }
     }
 

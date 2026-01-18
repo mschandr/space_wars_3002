@@ -106,9 +106,12 @@ class NavigationController extends BaseApiController
             ->limit(50)
             ->get();
 
-        $systems = $nearbySystems->map(function ($system) use ($player) {
-            // Check if player has a star chart for this system
-            $hasChart = $player->hasChartFor($system);
+        // Pre-load all charted POI IDs once (prevents N+1 queries)
+        $chartedPoiIds = $player->getChartedPoiIds();
+
+        $systems = $nearbySystems->map(function ($system) use ($chartedPoiIds) {
+            // Check if player has a star chart for this system (in-memory lookup)
+            $hasChart = in_array($system->id, $chartedPoiIds, true);
             $typeLabel = is_object($system->type) ? $system->type->label() : $system->type;
 
             return [
@@ -180,10 +183,14 @@ class NavigationController extends BaseApiController
             ->limit(100)
             ->get();
 
+        // Pre-load all charted POI IDs once (prevents N+1 queries)
+        $chartedPoiIds = $player->getChartedPoiIds();
+
         // Group by type for easier navigation
-        $groupedByType = $nearbyPOIs->groupBy('type')->map(function ($group, $type) use ($player) {
-            return $group->map(function ($poi) use ($player) {
-                $hasChart = $player->hasChartFor($poi);
+        $groupedByType = $nearbyPOIs->groupBy('type')->map(function ($group, $type) use ($chartedPoiIds) {
+            return $group->map(function ($poi) use ($chartedPoiIds) {
+                // In-memory lookup instead of database query
+                $hasChart = in_array($poi->id, $chartedPoiIds, true);
 
                 $typeLabel = is_object($poi->type) ? $poi->type->label() : $poi->type;
 

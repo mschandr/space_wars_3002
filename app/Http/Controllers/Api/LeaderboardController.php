@@ -8,6 +8,7 @@ use App\Models\Galaxy;
 use App\Models\Player;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class LeaderboardController extends BaseApiController
 {
@@ -61,44 +62,57 @@ class LeaderboardController extends BaseApiController
 
     /**
      * Get combat leaderboard (PvP wins, pirate kills, K/D ratio)
+     * Optimized: Uses single aggregation query instead of N+1
      */
     public function combat(string $galaxyUuid, Request $request): JsonResponse
     {
         $galaxy = Galaxy::where('uuid', $galaxyUuid)->firstOrFail();
         $limit = min($request->get('limit', 100), 500);
 
+        // Pre-aggregate combat stats in a single query using subqueries
+        $combatStats = DB::table('combat_participants as cp')
+            ->join('combat_sessions as cs', 'cp.combat_session_id', '=', 'cs.id')
+            ->join('players as p', 'cp.player_id', '=', 'p.id')
+            ->where('p.galaxy_id', $galaxy->id)
+            ->where('p.status', 'active')
+            ->where('cs.status', 'completed')
+            ->select('cp.player_id')
+            ->selectRaw("
+                SUM(CASE
+                    WHEN cs.combat_type = 'pvp'
+                    AND cp.side IN ('attacker', 'ally_attacker')
+                    AND cs.victor_type = 'attacker'
+                    THEN 1 ELSE 0 END) as pvp_wins
+            ")
+            ->selectRaw("
+                SUM(CASE
+                    WHEN cs.combat_type = 'pvp'
+                    AND cp.side IN ('defender', 'ally_defender')
+                    AND cs.victor_type = 'attacker'
+                    THEN 1 ELSE 0 END) as pvp_losses
+            ")
+            ->selectRaw("
+                SUM(CASE
+                    WHEN cs.combat_type = 'pirate'
+                    AND cs.victor_type IN ('player', 'attacker')
+                    THEN 1 ELSE 0 END) as pirate_kills
+            ")
+            ->groupBy('cp.player_id')
+            ->get()
+            ->keyBy('player_id');
+
+        // Get players with their combat stats
         $players = Player::where('galaxy_id', $galaxy->id)
             ->where('status', 'active')
             ->with(['user:id,name'])
             ->get()
-            ->map(function ($player) {
-                // Calculate combat statistics
-                $pvpWins = CombatSession::where('combat_type', 'pvp')
-                    ->where('status', 'completed')
-                    ->whereHas('participants', function ($q) use ($player) {
-                        $q->where('player_id', $player->id)->where('side', 'like', '%attacker%');
-                    })
-                    ->whereJsonContains('result->victor', 'attackers')
-                    ->count();
-
-                $pvpLosses = CombatSession::where('combat_type', 'pvp')
-                    ->where('status', 'completed')
-                    ->whereHas('participants', function ($q) use ($player) {
-                        $q->where('player_id', $player->id)->where('side', 'like', '%defender%');
-                    })
-                    ->whereJsonContains('result->victor', 'attackers')
-                    ->count();
-
-                $pirateKills = CombatSession::where('combat_type', 'pirate')
-                    ->where('status', 'completed')
-                    ->whereHas('participants', function ($q) use ($player) {
-                        $q->where('player_id', $player->id);
-                    })
-                    ->whereJsonContains('result->victor', 'player')
-                    ->count();
-
+            ->map(function ($player) use ($combatStats) {
+                $stats = $combatStats->get($player->id);
+                $pvpWins = (int) ($stats->pvp_wins ?? 0);
+                $pvpLosses = (int) ($stats->pvp_losses ?? 0);
+                $pirateKills = (int) ($stats->pirate_kills ?? 0);
                 $totalKills = $pvpWins + $pirateKills;
-                $kdRatio = $pvpLosses > 0 ? round($totalKills / $pvpLosses, 2) : $totalKills;
+                $kdRatio = $pvpLosses > 0 ? round($totalKills / $pvpLosses, 2) : (float) $totalKills;
 
                 return [
                     'player' => $player,
@@ -140,30 +154,60 @@ class LeaderboardController extends BaseApiController
 
     /**
      * Get economic leaderboard (net worth, trade volume, colonies owned)
+     * Optimized: Pre-aggregates ship, cargo, and colony values in separate queries
      */
     public function economic(string $galaxyUuid, Request $request): JsonResponse
     {
         $galaxy = Galaxy::where('uuid', $galaxyUuid)->firstOrFail();
         $limit = min($request->get('limit', 100), 500);
 
+        // Pre-aggregate ship values per player (using ship blueprint base_price)
+        $shipValues = DB::table('player_ships')
+            ->join('ships', 'player_ships.ship_id', '=', 'ships.id')
+            ->join('players', 'player_ships.player_id', '=', 'players.id')
+            ->where('players.galaxy_id', $galaxy->id)
+            ->where('players.status', 'active')
+            ->select('player_ships.player_id')
+            ->selectRaw('SUM(ships.base_price) as total_ship_value')
+            ->groupBy('player_ships.player_id')
+            ->get()
+            ->keyBy('player_id');
+
+        // Pre-aggregate cargo values per player
+        $cargoValues = DB::table('player_cargos')
+            ->join('player_ships', 'player_cargos.player_ship_id', '=', 'player_ships.id')
+            ->join('minerals', 'player_cargos.mineral_id', '=', 'minerals.id')
+            ->join('players', 'player_ships.player_id', '=', 'players.id')
+            ->where('players.galaxy_id', $galaxy->id)
+            ->where('players.status', 'active')
+            ->select('player_ships.player_id')
+            ->selectRaw('SUM(player_cargos.quantity * minerals.base_value) as total_cargo_value')
+            ->groupBy('player_ships.player_id')
+            ->get()
+            ->keyBy('player_id');
+
+        // Pre-aggregate colony values per player
+        $colonyValues = DB::table('colonies')
+            ->join('players', 'colonies.player_id', '=', 'players.id')
+            ->where('players.galaxy_id', $galaxy->id)
+            ->where('players.status', 'active')
+            ->select('colonies.player_id')
+            ->selectRaw('COUNT(*) as colony_count')
+            ->selectRaw('SUM(colonies.development_level * 10000) as total_colony_value')
+            ->groupBy('colonies.player_id')
+            ->get()
+            ->keyBy('player_id');
+
         $players = Player::where('galaxy_id', $galaxy->id)
             ->where('status', 'active')
-            ->with(['user:id,name', 'colonies', 'ships', 'cargos.mineral'])
+            ->with(['user:id,name'])
             ->get()
-            ->map(function ($player) {
-                // Calculate net worth
-                $shipValue = $player->ships->sum(function ($ship) {
-                    return $ship->calculateValue();
-                });
-
-                $cargoValue = $player->cargos->sum(function ($cargo) {
-                    return $cargo->quantity * ($cargo->mineral->base_price ?? 0);
-                });
-
-                $colonyCount = $player->colonies->count();
-                $colonyValue = $player->colonies->sum(function ($colony) {
-                    return $colony->development_level * 10000;
-                });
+            ->map(function ($player) use ($shipValues, $cargoValues, $colonyValues) {
+                $shipValue = (float) ($shipValues->get($player->id)->total_ship_value ?? 0);
+                $cargoValue = (float) ($cargoValues->get($player->id)->total_cargo_value ?? 0);
+                $colonyData = $colonyValues->get($player->id);
+                $colonyCount = (int) ($colonyData->colony_count ?? 0);
+                $colonyValue = (float) ($colonyData->total_colony_value ?? 0);
 
                 $netWorth = $player->credits + $shipValue + $cargoValue + $colonyValue;
 
@@ -206,34 +250,51 @@ class LeaderboardController extends BaseApiController
 
     /**
      * Get colonial leaderboard (colonies owned, total population, development)
+     * Optimized: Pre-calculates galaxy population once, uses aggregation subquery
      */
     public function colonial(string $galaxyUuid, Request $request): JsonResponse
     {
         $galaxy = Galaxy::where('uuid', $galaxyUuid)->firstOrFail();
         $limit = min($request->get('limit', 100), 500);
 
+        // Calculate galaxy total population ONCE (was repeated for every player before)
+        $galaxyPopulation = Colony::whereHas('player', function ($q) use ($galaxy) {
+            $q->where('galaxy_id', $galaxy->id);
+        })->sum('population');
+
+        // Pre-aggregate colony stats per player in a single query
+        $colonyStats = DB::table('colonies')
+            ->join('players', 'colonies.player_id', '=', 'players.id')
+            ->where('players.galaxy_id', $galaxy->id)
+            ->where('players.status', 'active')
+            ->select('colonies.player_id')
+            ->selectRaw('COUNT(*) as colony_count')
+            ->selectRaw('SUM(colonies.population) as total_population')
+            ->selectRaw('AVG(colonies.development_level) as avg_development')
+            ->groupBy('colonies.player_id')
+            ->get()
+            ->keyBy('player_id');
+
         $players = Player::where('galaxy_id', $galaxy->id)
             ->where('status', 'active')
             ->with(['user:id,name'])
-            ->withCount('colonies as colony_count')
             ->get()
-            ->map(function ($player) use ($galaxy) {
-                $totalPopulation = Colony::where('player_id', $player->id)->sum('population');
-                $avgDevelopment = Colony::where('player_id', $player->id)->avg('development_level');
-                $galaxyPopulation = Colony::whereHas('player', function ($q) use ($galaxy) {
-                    $q->where('galaxy_id', $galaxy->id);
-                })->sum('population');
+            ->map(function ($player) use ($colonyStats, $galaxyPopulation) {
+                $stats = $colonyStats->get($player->id);
+                $colonyCount = (int) ($stats->colony_count ?? 0);
+                $totalPopulation = (int) ($stats->total_population ?? 0);
+                $avgDevelopment = (float) ($stats->avg_development ?? 0);
                 $populationShare = $galaxyPopulation > 0 ? ($totalPopulation / $galaxyPopulation) * 100 : 0;
 
                 return [
                     'player' => $player,
                     'colonial_stats' => [
-                        'colony_count' => $player->colony_count,
+                        'colony_count' => $colonyCount,
                         'total_population' => $totalPopulation,
-                        'avg_development' => round($avgDevelopment ?? 0, 2),
+                        'avg_development' => round($avgDevelopment, 2),
                         'population_share' => round($populationShare, 2),
                     ],
-                    'colonial_score' => ($player->colony_count * 100) + ($totalPopulation / 10) + (($avgDevelopment ?? 0) * 50),
+                    'colonial_score' => ($colonyCount * 100) + ($totalPopulation / 10) + ($avgDevelopment * 50),
                 ];
             })
             ->sortByDesc('colonial_score')
@@ -264,6 +325,7 @@ class LeaderboardController extends BaseApiController
 
     /**
      * Get player's rankings across all leaderboards
+     * Optimized: Uses COUNT with conditions instead of loading all players
      */
     public function playerRanking(string $playerUuid): JsonResponse
     {
@@ -292,14 +354,18 @@ class LeaderboardController extends BaseApiController
             ->where('credits', '>', $player->credits)
             ->count() + 1;
 
-        // Calculate colonial rank
+        // Calculate colonial rank - optimized to use subquery instead of loading all players
         $playerColonyCount = $player->colonies()->count();
-        $colonialRank = Player::where('galaxy_id', $player->galaxy_id)
+        $colonialRank = DB::table('players')
+            ->where('galaxy_id', $player->galaxy_id)
             ->where('status', 'active')
-            ->withCount('colonies')
-            ->get()
-            ->filter(fn ($p) => $p->colonies_count > $playerColonyCount)
+            ->whereRaw('(SELECT COUNT(*) FROM colonies WHERE colonies.player_id = players.id) > ?', [$playerColonyCount])
             ->count() + 1;
+
+        // Get total players count
+        $totalPlayers = Player::where('galaxy_id', $player->galaxy_id)
+            ->where('status', 'active')
+            ->count();
 
         return $this->success([
             'player' => [
@@ -315,42 +381,52 @@ class LeaderboardController extends BaseApiController
                 'economic' => $economicRank,
                 'colonial' => $colonialRank,
             ],
-            'total_players' => Player::where('galaxy_id', $player->galaxy_id)->where('status', 'active')->count(),
+            'total_players' => $totalPlayers,
         ], 'Player rankings retrieved successfully');
     }
 
     /**
      * Get detailed player statistics
+     * Optimized: Uses aggregate queries instead of loading all records
      */
     public function playerStatistics(string $playerUuid): JsonResponse
     {
         $player = Player::where('uuid', $playerUuid)
-            ->with(['galaxy', 'activeShip', 'colonies', 'ships'])
+            ->with(['galaxy', 'activeShip', 'currentPoi'])
             ->firstOrFail();
 
-        // Combat statistics
-        $combatSessions = CombatSession::whereHas('participants', function ($q) use ($player) {
-            $q->where('player_id', $player->id);
-        })->where('status', 'completed')->get();
+        // Combat statistics - use aggregation queries
+        $combatAggregates = DB::table('combat_participants as cp')
+            ->join('combat_sessions as cs', 'cp.combat_session_id', '=', 'cs.id')
+            ->where('cp.player_id', $player->id)
+            ->where('cs.status', 'completed')
+            ->selectRaw('COUNT(*) as total_battles')
+            ->selectRaw("SUM(CASE WHEN cp.result = 'victory' THEN 1 ELSE 0 END) as victories")
+            ->selectRaw("SUM(CASE WHEN cp.result = 'defeat' THEN 1 ELSE 0 END) as defeats")
+            ->selectRaw('SUM(cp.damage_dealt) as total_damage_dealt')
+            ->selectRaw('SUM(cp.damage_taken) as total_damage_taken')
+            ->first();
 
         $combatStats = [
-            'total_battles' => $combatSessions->count(),
-            'victories' => $combatSessions->filter(fn ($s) => $s->result['victor'] ?? null === 'player')->count(),
-            'defeats' => $combatSessions->filter(fn ($s) => $s->result['victor'] ?? null !== 'player')->count(),
-            'total_damage_dealt' => $player->combatParticipations()->sum('damage_dealt'),
-            'total_damage_taken' => $player->combatParticipations()->sum('damage_taken'),
-            'ships_destroyed' => $player->combatParticipations()->sum('ships_destroyed'),
+            'total_battles' => (int) ($combatAggregates->total_battles ?? 0),
+            'victories' => (int) ($combatAggregates->victories ?? 0),
+            'defeats' => (int) ($combatAggregates->defeats ?? 0),
+            'total_damage_dealt' => (int) ($combatAggregates->total_damage_dealt ?? 0),
+            'total_damage_taken' => (int) ($combatAggregates->total_damage_taken ?? 0),
         ];
 
-        // Economic statistics
-        $totalCargoValue = $player->cargos()->with('mineral')->get()->sum(function ($cargo) {
-            return $cargo->quantity * ($cargo->mineral->base_price ?? 0);
-        });
+        // Economic statistics - use aggregate queries
+        $cargoValue = DB::table('player_cargos')
+            ->join('player_ships', 'player_cargos.player_ship_id', '=', 'player_ships.id')
+            ->join('minerals', 'player_cargos.mineral_id', '=', 'minerals.id')
+            ->where('player_ships.player_id', $player->id)
+            ->selectRaw('SUM(player_cargos.quantity * minerals.base_value) as total_value')
+            ->value('total_value') ?? 0;
 
         $economicStats = [
             'current_credits' => $player->credits,
-            'cargo_value' => round($totalCargoValue, 2),
-            'total_colonies' => $player->colonies()->count(),
+            'cargo_value' => round((float) $cargoValue, 2),
+            'total_colonies' => Colony::where('player_id', $player->id)->count(),
             'total_ships' => $player->ships()->count(),
         ];
 

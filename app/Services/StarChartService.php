@@ -18,6 +18,7 @@ class StarChartService
     /**
      * Get chart coverage from a purchase location
      * Uses BFS to traverse warp gates up to maxHops distance
+     * Optimized: Pre-loads gates per BFS level to reduce N+1 queries
      *
      * @param  PointOfInterest  $purchaseLocation  Center of the chart
      * @param  int  $maxHops  Number of warp gate hops to traverse
@@ -35,29 +36,42 @@ class StarChartService
             $currentLevel = $queue;
             $queue = collect();
 
-            foreach ($currentLevel as $system) {
-                // Get non-hidden warp gates from this system
-                $gates = $system->outgoingGates()
-                    ->where('is_hidden', false)
-                    ->with('destinationPoi')
-                    ->get();
-
-                foreach ($gates as $gate) {
-                    $destination = $gate->destinationPoi;
-
-                    // Skip if already visited or hidden
-                    if ($visited->contains($destination->id) || $destination->is_hidden) {
-                        continue;
-                    }
-
-                    $visited->push($destination->id);
-                    $revealed->push($destination);
-                    $queue->push($destination);
-                }
+            if ($currentLevel->isEmpty()) {
+                break;
             }
 
-            if ($queue->isEmpty()) {
-                break;
+            // Batch load all gates for current level systems (prevents N+1)
+            $currentLevelIds = $currentLevel->pluck('id')->toArray();
+            $gates = DB::table('warp_gates')
+                ->whereIn('source_poi_id', $currentLevelIds)
+                ->where('is_hidden', false)
+                ->where('status', 'active')
+                ->get();
+
+            // Get all destination POI IDs that we need
+            $destinationIds = $gates->pluck('destination_poi_id')
+                ->filter(fn ($id) => ! $visited->contains($id))
+                ->unique()
+                ->toArray();
+
+            if (empty($destinationIds)) {
+                continue;
+            }
+
+            // Batch load all destination POIs
+            $destinations = PointOfInterest::whereIn('id', $destinationIds)
+                ->where('is_hidden', false)
+                ->get()
+                ->keyBy('id');
+
+            foreach ($destinations as $destination) {
+                if ($visited->contains($destination->id)) {
+                    continue;
+                }
+
+                $visited->push($destination->id);
+                $revealed->push($destination);
+                $queue->push($destination);
             }
         }
 
@@ -67,6 +81,7 @@ class StarChartService
     /**
      * Calculate chart price based on unknown systems
      * Uses exponential pricing: basePrice * (multiplier ^ unknownCount)
+     * Optimized: Uses cached charted POI IDs to prevent N+1 queries
      *
      * @param  PointOfInterest  $purchaseLocation  Center of the chart
      * @param  Player  $player  The player purchasing
@@ -80,10 +95,13 @@ class StarChartService
     ): float {
         $coverage = $this->getChartCoverage($purchaseLocation);
 
-        // Count unknown systems
+        // Get charted POI IDs once (cached, prevents N+1 queries)
+        $chartedPoiIds = $player->getChartedPoiIds();
+
+        // Count unknown systems using in-memory lookup
         $unknownCount = 0;
         foreach ($coverage as $poi) {
-            if (! $player->hasChartFor($poi)) {
+            if (! in_array($poi->id, $chartedPoiIds, true)) {
                 $unknownCount++;
             }
         }
@@ -109,6 +127,7 @@ class StarChartService
 
     /**
      * Purchase a chart and unlock systems for player
+     * Optimized: Uses cached charted POI IDs and batch inserts
      *
      * @param  Player  $player  The player
      * @param  StellarCartographer  $shop  The cartographer shop
@@ -146,13 +165,16 @@ class StarChartService
         // Deduct credits
         $player->deductCredits($price);
 
-        // Grant charts for all systems in coverage
-        $newSystemsCount = 0;
+        // Get charted POI IDs once (prevents N+1 queries)
+        $chartedPoiIds = $player->getChartedPoiIds();
+
+        // Prepare batch insert for new charts
         $purchaseTime = now();
+        $newCharts = [];
 
         foreach ($coverage as $poi) {
-            if (! $player->hasChartFor($poi)) {
-                DB::table('player_star_charts')->insert([
+            if (! in_array($poi->id, $chartedPoiIds, true)) {
+                $newCharts[] = [
                     'player_id' => $player->id,
                     'revealed_poi_id' => $poi->id,
                     'purchased_from_poi_id' => $shop->poi_id,
@@ -160,15 +182,22 @@ class StarChartService
                     'purchased_at' => $purchaseTime,
                     'created_at' => $purchaseTime,
                     'updated_at' => $purchaseTime,
-                ]);
-                $newSystemsCount++;
+                ];
             }
         }
+
+        // Batch insert all new charts at once
+        if (! empty($newCharts)) {
+            DB::table('player_star_charts')->insert($newCharts);
+        }
+
+        // Clear the chart cache so future checks reflect new charts
+        $player->clearChartedPoiCache();
 
         return [
             'success' => true,
             'message' => 'Star chart purchased successfully',
-            'systems_revealed' => $newSystemsCount,
+            'systems_revealed' => count($newCharts),
             'total_systems' => $coverage->count(),
             'price_paid' => $price,
             'credits_remaining' => $player->credits,
@@ -177,6 +206,7 @@ class StarChartService
 
     /**
      * Get available charts at a shop (excluding already purchased)
+     * Optimized: Uses cached charted POI IDs to prevent N+1 queries
      *
      * @param  StellarCartographer  $shop  The cartographer shop
      * @param  Player  $player  The player
@@ -190,16 +220,19 @@ class StarChartService
         // In the future, could offer multiple "packages" at different hop distances
         $coverage = $this->getChartCoverage($shopLocation);
 
-        // Filter to only systems the player doesn't have charts for
-        $unknownSystems = $coverage->filter(function ($poi) use ($player) {
-            return ! $player->hasChartFor($poi);
+        // Get charted POI IDs once (prevents N+1 queries)
+        $chartedPoiIds = $player->getChartedPoiIds();
+
+        // Filter to only systems the player doesn't have charts for (in-memory)
+        $unknownSystems = $coverage->filter(function ($poi) use ($chartedPoiIds) {
+            return ! in_array($poi->id, $chartedPoiIds, true);
         });
 
         if ($unknownSystems->isEmpty()) {
             return collect();
         }
 
-        // Create a chart option
+        // Create a chart option (price calculation will reuse the cached IDs)
         $price = $this->calculateChartPrice($shopLocation, $player, $shop);
 
         return collect([
@@ -216,6 +249,7 @@ class StarChartService
 
     /**
      * Get revealed information for a system
+     * Optimized: Uses cached charted POI IDs
      *
      * @param  PointOfInterest  $poi  The system
      * @param  Player  $player  The player
@@ -223,7 +257,8 @@ class StarChartService
      */
     public function getSystemInfo(PointOfInterest $poi, Player $player): ?array
     {
-        if (! $player->hasChartFor($poi)) {
+        // Use optimized in-memory lookup
+        if (! $player->hasChartForId($poi->id)) {
             return null;
         }
 

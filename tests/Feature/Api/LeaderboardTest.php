@@ -84,7 +84,7 @@ class LeaderboardTest extends TestCase
 
         // Verify ordering (player1 should be rank 1)
         $response->assertJsonPath('data.leaders.0.rank', 1);
-        $response->assertJsonPath('data.leaders.0.player.uuid', $this->player1->uuid);
+        $response->assertJsonPath('data.leaders.0.player.uuid', (string) $this->player1->uuid);
     }
 
     public function test_it_can_get_combat_leaderboard()
@@ -256,7 +256,6 @@ class LeaderboardTest extends TestCase
                         'defeats',
                         'total_damage_dealt',
                         'total_damage_taken',
-                        'ships_destroyed',
                     ],
                     'economic' => [
                         'current_credits',

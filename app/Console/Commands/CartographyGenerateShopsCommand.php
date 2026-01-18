@@ -55,12 +55,14 @@ class CartographyGenerateShopsCommand extends Command
         }
 
         // Get inhabited systems with trading hubs
+        // OPTIMIZED: Eager load stellarCartographer to avoid N+1 in the loop
         $tradingHubLocations = PointOfInterest::where('galaxy_id', $galaxyId)
             ->inhabited()
             ->where('is_hidden', false)
             ->whereHas('tradingHub', function ($query) {
                 $query->where('is_active', true);
             })
+            ->with('stellarCartographer')
             ->get();
 
         if ($tradingHubLocations->isEmpty()) {
