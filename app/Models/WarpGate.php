@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\WarpGate\GateType;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -10,6 +11,7 @@ use Illuminate\Support\Str;
 
 class WarpGate extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'uuid',
         'galaxy_id',
@@ -63,7 +65,7 @@ class WarpGate extends Model
         $source = $this->sourcePoi;
         $destination = $this->destinationPoi;
 
-        if (!$source || !$destination) {
+        if (! $source || ! $destination) {
             return 0.0;
         }
 
@@ -75,7 +77,7 @@ class WarpGate extends Model
 
     public function isAccessible(): bool
     {
-        return !$this->is_hidden && $this->status === 'active';
+        return ! $this->is_hidden && $this->status === 'active';
     }
 
     /**
@@ -96,7 +98,7 @@ class WarpGate extends Model
     public function canPlayerDetect(PlayerShip $ship): bool
     {
         // Visible gates are always detectable
-        if (!$this->is_hidden) {
+        if (! $this->is_hidden) {
             return true;
         }
 

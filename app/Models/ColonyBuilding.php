@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 class ColonyBuilding extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'uuid',
         'colony_id',
@@ -177,6 +178,7 @@ class ColonyBuilding extends Model
     public function getTypeDisplay(): string
     {
         $definitions = self::getBuildingDefinitions();
+
         return $definitions[$this->building_type]['name'] ?? ucfirst(str_replace('_', ' ', $this->building_type));
     }
 
@@ -185,7 +187,7 @@ class ColonyBuilding extends Model
      */
     public function getStatusDisplay(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'constructing' => '🏗️ Under Construction',
             'operational' => '✅ Operational',
             'damaged' => '⚠️ Damaged',
@@ -200,6 +202,7 @@ class ColonyBuilding extends Model
     public static function canBuildAtStage(string $buildingType, int $colonyStage): bool
     {
         $definitions = self::getBuildingDefinitions();
+
         return isset($definitions[$buildingType]) && $definitions[$buildingType]['required_stage'] <= $colonyStage;
     }
 
@@ -210,7 +213,7 @@ class ColonyBuilding extends Model
     {
         $definitions = self::getBuildingDefinitions();
 
-        if (!isset($definitions[$buildingType])) {
+        if (! isset($definitions[$buildingType])) {
             return ['credits' => 10000, 'minerals' => 5000, 'population' => 20];
         }
 
@@ -233,7 +236,7 @@ class ColonyBuilding extends Model
     {
         $definitions = self::getBuildingDefinitions();
 
-        if (!isset($definitions[$buildingType])) {
+        if (! isset($definitions[$buildingType])) {
             return [];
         }
 
@@ -261,7 +264,7 @@ class ColonyBuilding extends Model
     {
         $definitions = self::getBuildingDefinitions();
 
-        if (!isset($definitions[$buildingType])) {
+        if (! isset($definitions[$buildingType])) {
             return ['credits' => 0, 'quantium' => 0, 'food' => 0, 'minerals' => 0];
         }
 
@@ -285,7 +288,7 @@ class ColonyBuilding extends Model
     {
         $definitions = self::getBuildingDefinitions();
 
-        if (!isset($definitions[$buildingType]) || $definitions[$buildingType]['income'] === 0) {
+        if (! isset($definitions[$buildingType]) || $definitions[$buildingType]['income'] === 0) {
             return 0;
         }
 

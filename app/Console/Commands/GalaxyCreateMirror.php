@@ -27,17 +27,19 @@ class GalaxyCreateMirror extends Command
 
         // Find prime galaxy
         $galaxyIdentifier = $this->argument('galaxy');
-        $primeGalaxy = is_numeric($galaxyIdentifier)
+        $primeGalaxy      = is_numeric($galaxyIdentifier)
             ? Galaxy::find($galaxyIdentifier)
             : Galaxy::where('name', $galaxyIdentifier)->first();
 
-        if (! $primeGalaxy) {
+        if (!$primeGalaxy) {
             $this->error("❌ Galaxy not found: {$galaxyIdentifier}");
+
             return Command::FAILURE;
         }
 
         if ($primeGalaxy->isMirrorUniverse()) {
             $this->error('❌ Cannot create a mirror of a mirror universe!');
+
             return Command::FAILURE;
         }
 
@@ -49,7 +51,7 @@ class GalaxyCreateMirror extends Command
         $mirrorService = app(MirrorUniverseService::class);
 
         // Check if mirror already exists
-        if ($mirrorService->hasMirrorGalaxy($primeGalaxy) && ! $this->option('regenerate')) {
+        if ($mirrorService->hasMirrorGalaxy($primeGalaxy) && !$this->option('regenerate')) {
             $existing = $primeGalaxy->getPairedGalaxy();
             $this->warn("⚠️  Mirror universe already exists: {$existing->name} (ID: {$existing->id})");
             $this->warn('Use --regenerate to recreate it');
@@ -70,7 +72,7 @@ class GalaxyCreateMirror extends Command
             ->count();
 
         $this->call('galaxy:expand', [
-            'galaxy' => $mirrorGalaxy->id,
+            'galaxy'  => $mirrorGalaxy->id,
             '--stars' => $starCount,
         ]);
         $this->newLine();
@@ -83,21 +85,21 @@ class GalaxyCreateMirror extends Command
         $this->newLine();
 
         // Step 4: Generate warp gates
-        if (! $this->option('no-gates')) {
+        if (!$this->option('no-gates')) {
             $this->info('Step 4: Generating warp gate network...');
             $this->call('galaxy:generate-gates', [
-                '--adjacency' => 1.5,
+                '--adjacency'         => 1.5,
                 '--hidden-percentage' => 0.05,
-                '--max-gates' => 8,
-                '--regenerate' => true,
-                '--incremental' => true,
-                'galaxy' => $mirrorGalaxy->id,
+                '--max-gates'         => 8,
+                '--regenerate'        => true,
+                '--incremental'       => true,
+                'galaxy'              => $mirrorGalaxy->id,
             ]);
             $this->newLine();
         }
 
         // Step 5: Generate trading hubs
-        if (! $this->option('no-hubs')) {
+        if (!$this->option('no-hubs')) {
             $this->info('Step 5: Generating trading hubs...');
             $this->call('trading:generate-hubs', [
                 'galaxy' => $mirrorGalaxy->id,
@@ -106,7 +108,7 @@ class GalaxyCreateMirror extends Command
         }
 
         // Step 6: Distribute pirates
-        if (! $this->option('no-pirates')) {
+        if (!$this->option('no-pirates')) {
             $this->info('Step 6: Distributing pirates (with boosted difficulty)...');
             $this->call('galaxy:distribute-pirates', [
                 'galaxy' => $mirrorGalaxy->id,
@@ -121,14 +123,14 @@ class GalaxyCreateMirror extends Command
         $poiId = $this->option('poi');
         if ($poiId) {
             $primePoi = $primeGalaxy->pointsOfInterest()->find($poiId);
-            if (! $primePoi) {
+            if (!$primePoi) {
                 $this->error("❌ POI not found: {$poiId}");
 
                 return Command::FAILURE;
             }
         } else {
             $primePoi = $mirrorService->selectRandomGateLocation($primeGalaxy);
-            if (! $primePoi) {
+            if (!$primePoi) {
                 $this->error('❌ No suitable POI found for gate placement');
 
                 return Command::FAILURE;
@@ -138,7 +140,7 @@ class GalaxyCreateMirror extends Command
         $gates = $mirrorService->createMirrorGatePair($primeGalaxy, $mirrorGalaxy, $primePoi);
 
         $this->info("✅ Mirror portal created at: {$primePoi->name} ({$primePoi->x}, {$primePoi->y})");
-        $this->info("   Entry Gate ID: {$gates['entry_gate']->id} (HIDDEN - requires sensors level ".config('game_config.mirror_universe.required_sensor_level', 5).')');
+        $this->info("   Entry Gate ID: {$gates['entry_gate']->id} (HIDDEN - requires sensors level " . config('game_config.mirror_universe.required_sensor_level', 5) . ')');
         $this->info("   Return Gate ID: {$gates['return_gate']->id} (VISIBLE)");
         $this->newLine();
 
@@ -157,7 +159,7 @@ class GalaxyCreateMirror extends Command
         $this->info("  • Trading Prices: {$modifiers['price_boost']}x");
         $this->info("  • Pirate Difficulty: {$modifiers['pirate_difficulty_boost']}x");
         $this->newLine();
-        $this->info("Return Cooldown: ".config('game_config.mirror_universe.return_cooldown_hours', 24).' hours');
+        $this->info('Return Cooldown: ' . config('game_config.mirror_universe.return_cooldown_hours', 24) . ' hours');
         $this->newLine();
         $this->info('⚠️  The mirror universe awaits brave explorers... ⚠️');
 

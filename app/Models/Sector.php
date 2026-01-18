@@ -22,6 +22,7 @@ class Sector extends Model
         'y_min',
         'y_max',
         'attributes',
+        'danger_level',
     ];
 
     protected $casts = [
@@ -32,6 +33,7 @@ class Sector extends Model
         'x_max' => 'float',
         'y_min' => 'float',
         'y_max' => 'float',
+        'danger_level' => 'integer',
     ];
 
     /**
@@ -94,8 +96,13 @@ class Sector extends Model
             ? $stats['pirate_count'] / $stats['star_count']
             : 0;
 
-        if ($pirateRatio >= 0.3) return 'high';
-        if ($pirateRatio >= 0.1) return 'medium';
+        if ($pirateRatio >= 0.3) {
+            return 'high';
+        }
+        if ($pirateRatio >= 0.1) {
+            return 'medium';
+        }
+
         return 'low';
     }
 

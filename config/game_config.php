@@ -22,7 +22,7 @@ return [
         'spacing' => 0.75,       // spacing factor for generators
         'turn_limit' => 250,
         'engine' => 'mt19937',  // RNG engine: mt19937, pcg, xoshiro
-        'generator' => 'poisson',  // options: poisson, scatter, halton, vogel, stratified, latin, r2, uniform
+        'generator' => 'vogel',  // options: poisson, scatter, halton, vogel, stratified, latin, r2, uniform
         'is_public' => true,
         'inhabited_percentage' => 0.40,  // 40% of stars are inhabited (1/3 to 1/2 range: 33-50%)
         'inhabited_min_spacing' => 50,   // Minimum distance between inhabited systems

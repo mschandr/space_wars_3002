@@ -48,7 +48,7 @@ class TravelNotificationService
     {
         $star = $poi->star;
 
-        if (!$star) {
+        if (! $star) {
             return false;
         }
 
@@ -67,12 +67,13 @@ class TravelNotificationService
         // Check if current POI is mineable
         if (in_array($poi->planet_class, ['ice_giant', 'asteroid_field'])) {
             $deposits = $poi->mineral_deposits ?? [];
-            return !empty($deposits);
+
+            return ! empty($deposits);
         }
 
         // Check if system has mineable locations
         $star = $poi->star;
-        if (!$star) {
+        if (! $star) {
             return false;
         }
 
@@ -88,7 +89,7 @@ class TravelNotificationService
     private function getMiningOpportunityInfo(PointOfInterest $poi): array
     {
         $star = $poi->star;
-        if (!$star) {
+        if (! $star) {
             return [];
         }
 
@@ -127,18 +128,18 @@ class TravelNotificationService
                 ->where('habitability_score', '>', 0.3)
                 ->count();
 
-            $messages[] = "🌍 {$count} uninhabited " . ($count === 1 ? 'world' : 'worlds') . " detected";
+            $messages[] = "🌍 {$count} uninhabited ".($count === 1 ? 'world' : 'worlds').' detected';
         }
 
         // Mining opportunities
         $miningInfo = $this->getMiningOpportunityInfo($destination);
-        if (!empty($miningInfo)) {
+        if (! empty($miningInfo)) {
             $hasQuantium = collect($miningInfo)->contains('has_quantium', true);
             $mineralCount = count($miningInfo);
 
-            $msg = "⛏️ {$mineralCount} mining " . ($mineralCount === 1 ? 'location' : 'locations');
+            $msg = "⛏️ {$mineralCount} mining ".($mineralCount === 1 ? 'location' : 'locations');
             if ($hasQuantium) {
-                $msg .= " (Quantium detected!)";
+                $msg .= ' (Quantium detected!)';
             }
             $messages[] = $msg;
         }

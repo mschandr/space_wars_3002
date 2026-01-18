@@ -61,7 +61,7 @@ final class R2Sequence extends AbstractPointGenerator implements PointGeneratorI
                 }
             } else {
                 // No spacing constraint - just ensure uniqueness
-                $key = $x . ':' . $y;
+                $key = $x.':'.$y;
                 $found = false;
                 foreach ($pts as [$px, $py]) {
                     if ($px === $x && $py === $y) {
@@ -69,7 +69,7 @@ final class R2Sequence extends AbstractPointGenerator implements PointGeneratorI
                         break;
                     }
                 }
-                if (!$found) {
+                if (! $found) {
                     $pts[] = [$x, $y];
                 }
             }

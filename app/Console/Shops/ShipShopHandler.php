@@ -14,11 +14,12 @@ use Illuminate\Support\Str;
 
 class ShipShopHandler
 {
-    use ConsoleColorizer;
     use ConsoleBoxRenderer;
+    use ConsoleColorizer;
     use TerminalInputHandler;
 
     private Command $command;
+
     private int $termWidth;
 
     public function __construct(Command $command, int $termWidth = 120)
@@ -56,19 +57,19 @@ class ShipShopHandler
             $this->newLine();
 
             // Location and player info
-            $this->line($this->colorize('  Trading Hub: ', 'label') . $this->colorize($tradingHub->name, 'trade'));
+            $this->line($this->colorize('  Trading Hub: ', 'label').$this->colorize($tradingHub->name, 'trade'));
 
             if ($currentShip) {
-                $this->line($this->colorize('  Current Ship: ', 'label') . $currentShip->name .
-                           ' (' . $this->colorize($currentShip->ship->name, 'dim') . ')');
-                $this->line($this->colorize('  Trade-In Value: ', 'label') .
-                           $this->colorize(number_format($this->getTradeInValue($currentShip), 2), 'trade') . ' credits');
+                $this->line($this->colorize('  Current Ship: ', 'label').$currentShip->name.
+                           ' ('.$this->colorize($currentShip->ship->name, 'dim').')');
+                $this->line($this->colorize('  Trade-In Value: ', 'label').
+                           $this->colorize(number_format($this->getTradeInValue($currentShip), 2), 'trade').' credits');
             } else {
-                $this->line($this->colorize('  Current Ship: ', 'label') . $this->colorize('NONE', 'pirate'));
+                $this->line($this->colorize('  Current Ship: ', 'label').$this->colorize('NONE', 'pirate'));
                 $this->line($this->colorize('  ⚠ You must purchase a ship to continue!', 'pirate'));
             }
 
-            $this->line($this->colorize('  Credits Available: ', 'label') .
+            $this->line($this->colorize('  Credits Available: ', 'label').
                        $this->colorize(number_format($player->credits, 2), 'trade'));
             $this->newLine();
 
@@ -77,6 +78,7 @@ class ShipShopHandler
                 $this->newLine();
                 $this->line($this->colorize('  Press any key to return...', 'dim'));
                 $this->waitForAnyKey();
+
                 return;
             }
 
@@ -91,8 +93,8 @@ class ShipShopHandler
                 $netCost = $inventory->current_price - $tradeInValue;
                 $canAfford = $player->credits >= $netCost;
 
-                $line = '  ' . $this->colorize("[$number]", 'label') . ' ' .
-                        $this->colorize($ship->name, 'header') . ' ';
+                $line = '  '.$this->colorize("[$number]", 'label').' '.
+                        $this->colorize($ship->name, 'header').' ';
 
                 // Ship stats in compact format
                 $stats = sprintf(
@@ -107,35 +109,35 @@ class ShipShopHandler
                 $this->line($line);
 
                 // Second line with pricing
-                $priceLine = '      ' .
-                            $this->colorize('Price: ', 'dim') .
-                            $this->colorize(number_format($inventory->current_price, 2), 'trade') . ' credits';
+                $priceLine = '      '.
+                            $this->colorize('Price: ', 'dim').
+                            $this->colorize(number_format($inventory->current_price, 2), 'trade').' credits';
 
                 if ($currentShip) {
-                    $priceLine .= '  ' .
-                                $this->colorize('With Trade-In: ', 'dim') .
-                                $this->colorize(number_format($netCost, 2), $canAfford ? 'trade' : 'pirate') . ' credits';
+                    $priceLine .= '  '.
+                                $this->colorize('With Trade-In: ', 'dim').
+                                $this->colorize(number_format($netCost, 2), $canAfford ? 'trade' : 'pirate').' credits';
                 }
 
                 $priceLine .= '  ';
 
-                if (!$canAfford) {
+                if (! $canAfford) {
                     $priceLine .= $this->colorize('[INSUFFICIENT FUNDS]', 'pirate');
                 }
 
-                $priceLine .= '  ' . $this->colorize('Stock: ' . $inventory->quantity, 'dim');
+                $priceLine .= '  '.$this->colorize('Stock: '.$inventory->quantity, 'dim');
 
                 $this->line($priceLine);
 
                 // Special attributes
                 if ($ship->attributes['is_carrier'] ?? false) {
-                    $this->line('      ' . $this->colorize('✈ CARRIER: Can dock ' .
-                               ($ship->attributes['fighter_capacity'] ?? 0) . ' fighters', 'highlight'));
+                    $this->line('      '.$this->colorize('✈ CARRIER: Can dock '.
+                               ($ship->attributes['fighter_capacity'] ?? 0).' fighters', 'highlight'));
                 }
 
-                if (!empty($ship->requirements)) {
+                if (! empty($ship->requirements)) {
                     $reqText = $this->formatRequirements($ship->requirements, $player);
-                    $this->line('      ' . $reqText);
+                    $this->line('      '.$reqText);
                 }
 
                 $this->newLine();
@@ -143,12 +145,13 @@ class ShipShopHandler
 
             $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
             $this->newLine();
-            $this->line($this->colorize('  Select ship [1-' . $availableShips->count() . '] to purchase, or [q] to exit: ', 'label'));
+            $this->line($this->colorize('  Select ship [1-'.$availableShips->count().'] to purchase, or [q] to exit: ', 'label'));
 
             $input = trim(fgets(STDIN));
 
             if (strtolower($input) === 'q') {
                 $running = false;
+
                 continue;
             }
 
@@ -181,16 +184,16 @@ class ShipShopHandler
     {
         $parts = [];
         foreach ($requirements as $req => $value) {
-            $playerValue = match($req) {
+            $playerValue = match ($req) {
                 'level' => $player->level,
                 default => 0,
             };
 
             $color = $playerValue >= $value ? 'trade' : 'pirate';
-            $parts[] = $this->colorize(ucfirst($req) . ': ' . $value, $color);
+            $parts[] = $this->colorize(ucfirst($req).': '.$value, $color);
         }
 
-        return $this->colorize('Requires: ', 'dim') . implode(', ', $parts);
+        return $this->colorize('Requires: ', 'dim').implode(', ', $parts);
     }
 
     /**
@@ -207,67 +210,69 @@ class ShipShopHandler
         $netCost = $inventory->current_price - $tradeInValue;
 
         // Check requirements
-        if (!$ship->meetsRequirements(['level' => $player->level])) {
+        if (! $ship->meetsRequirements(['level' => $player->level])) {
             $this->newLine();
             $this->line($this->colorize('  ❌ You do not meet the requirements for this ship.', 'pirate'));
             $this->line($this->colorize('  Press any key to continue...', 'dim'));
             $this->waitForAnyKey();
+
             return;
         }
 
         // Check if player can afford
         if ($player->credits < $netCost) {
             $this->newLine();
-            $this->line($this->colorize('  ❌ Insufficient funds. You need ' .
-                       number_format($netCost - $player->credits, 2) . ' more credits.', 'pirate'));
+            $this->line($this->colorize('  ❌ Insufficient funds. You need '.
+                       number_format($netCost - $player->credits, 2).' more credits.', 'pirate'));
             $this->line($this->colorize('  Press any key to continue...', 'dim'));
             $this->waitForAnyKey();
+
             return;
         }
 
         // Confirmation
         $this->newLine();
-        $this->line($this->colorize('  ╔' . str_repeat('═', $this->termWidth - 4) . '╗', 'border'));
-        $this->line($this->colorize('  ║ PURCHASE CONFIRMATION', 'header') .
-                   str_repeat(' ', $this->termWidth - 28) .
+        $this->line($this->colorize('  ╔'.str_repeat('═', $this->termWidth - 4).'╗', 'border'));
+        $this->line($this->colorize('  ║ PURCHASE CONFIRMATION', 'header').
+                   str_repeat(' ', $this->termWidth - 28).
                    $this->colorize('║', 'border'));
-        $this->line($this->colorize('  ╠' . str_repeat('═', $this->termWidth - 4) . '╣', 'border'));
+        $this->line($this->colorize('  ╠'.str_repeat('═', $this->termWidth - 4).'╣', 'border'));
 
         if ($currentShip) {
-            $this->line($this->colorize('  ║ ', 'border') . 'Trading In: ' . $currentShip->name .
-                       str_repeat(' ', $this->termWidth - 20 - strlen($currentShip->name)) .
+            $this->line($this->colorize('  ║ ', 'border').'Trading In: '.$currentShip->name.
+                       str_repeat(' ', $this->termWidth - 20 - strlen($currentShip->name)).
                        $this->colorize('║', 'border'));
-            $this->line($this->colorize('  ║ ', 'border') . 'Trade-In Value: ' .
-                       $this->colorize(number_format($tradeInValue, 2), 'trade') . ' credits' .
-                       str_repeat(' ', $this->termWidth - 35 - strlen(number_format($tradeInValue, 2))) .
+            $this->line($this->colorize('  ║ ', 'border').'Trade-In Value: '.
+                       $this->colorize(number_format($tradeInValue, 2), 'trade').' credits'.
+                       str_repeat(' ', $this->termWidth - 35 - strlen(number_format($tradeInValue, 2))).
                        $this->colorize('║', 'border'));
-            $this->line($this->colorize('  ║ ', 'border') .
-                       str_repeat(' ', $this->termWidth - 4) .
+            $this->line($this->colorize('  ║ ', 'border').
+                       str_repeat(' ', $this->termWidth - 4).
                        $this->colorize('║', 'border'));
         } else {
-            $this->line($this->colorize('  ║ ', 'border') . 'New Purchase (No Trade-In)' .
-                       str_repeat(' ', $this->termWidth - 32) .
+            $this->line($this->colorize('  ║ ', 'border').'New Purchase (No Trade-In)'.
+                       str_repeat(' ', $this->termWidth - 32).
                        $this->colorize('║', 'border'));
-            $this->line($this->colorize('  ║ ', 'border') .
-                       str_repeat(' ', $this->termWidth - 4) .
+            $this->line($this->colorize('  ║ ', 'border').
+                       str_repeat(' ', $this->termWidth - 4).
                        $this->colorize('║', 'border'));
         }
 
-        $this->line($this->colorize('  ║ ', 'border') . 'Purchasing: ' . $ship->name .
-                   str_repeat(' ', $this->termWidth - 17 - strlen($ship->name)) .
+        $this->line($this->colorize('  ║ ', 'border').'Purchasing: '.$ship->name.
+                   str_repeat(' ', $this->termWidth - 17 - strlen($ship->name)).
                    $this->colorize('║', 'border'));
-        $this->line($this->colorize('  ║ ', 'border') . 'Ship Price: ' .
-                   $this->colorize(number_format($inventory->current_price, 2), 'trade') . ' credits' .
-                   str_repeat(' ', $this->termWidth - 31 - strlen(number_format($inventory->current_price, 2))) .
+        $this->line($this->colorize('  ║ ', 'border').'Ship Price: '.
+                   $this->colorize(number_format($inventory->current_price, 2), 'trade').' credits'.
+                   str_repeat(' ', $this->termWidth - 31 - strlen(number_format($inventory->current_price, 2))).
                    $this->colorize('║', 'border'));
-        $this->line($this->colorize('  ║ ', 'border') .
-                   str_repeat(' ', $this->termWidth - 4) .
+        $this->line($this->colorize('  ║ ', 'border').
+                   str_repeat(' ', $this->termWidth - 4).
                    $this->colorize('║', 'border'));
-        $this->line($this->colorize('  ║ ', 'border') . 'NET COST: ' .
-                   $this->colorize(number_format($netCost, 2), 'highlight') . ' credits' .
-                   str_repeat(' ', $this->termWidth - 29 - strlen(number_format($netCost, 2))) .
+        $this->line($this->colorize('  ║ ', 'border').'NET COST: '.
+                   $this->colorize(number_format($netCost, 2), 'highlight').' credits'.
+                   str_repeat(' ', $this->termWidth - 29 - strlen(number_format($netCost, 2))).
                    $this->colorize('║', 'border'));
-        $this->line($this->colorize('  ╚' . str_repeat('═', $this->termWidth - 4) . '╝', 'border'));
+        $this->line($this->colorize('  ╚'.str_repeat('═', $this->termWidth - 4).'╝', 'border'));
         $this->newLine();
         $this->line($this->colorize('  Confirm purchase? [y/n]: ', 'label'));
 
@@ -278,11 +283,12 @@ class ShipShopHandler
             $this->line($this->colorize('  Purchase cancelled.', 'dim'));
             $this->line($this->colorize('  Press any key to continue...', 'dim'));
             $this->waitForAnyKey();
+
             return;
         }
 
         // Process purchase
-        \DB::transaction(function () use ($player, $currentShip, $ship, $inventory, $netCost, $tradingHub) {
+        \DB::transaction(function () use ($player, $currentShip, $ship, $inventory, $netCost) {
             // Delete the ship being traded in (if player has one)
             if ($currentShip) {
                 $currentShip->cargo()->delete();
@@ -323,7 +329,7 @@ class ShipShopHandler
 
         $this->newLine();
         $this->line($this->colorize('  ✅ Ship purchased successfully!', 'trade'));
-        $this->line($this->colorize('  Your new ' . $ship->name . ' is ready for departure.', 'highlight'));
+        $this->line($this->colorize('  Your new '.$ship->name.' is ready for departure.', 'highlight'));
         $this->newLine();
         $this->line($this->colorize('  Press any key to continue...', 'dim'));
         $this->waitForAnyKey();

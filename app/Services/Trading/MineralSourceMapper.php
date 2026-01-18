@@ -3,7 +3,6 @@
 namespace App\Services\Trading;
 
 use App\Enums\PointsOfInterest\PointOfInterestType;
-use App\Enums\Trading\MineralRarity;
 use Illuminate\Support\Collection;
 
 class MineralSourceMapper
@@ -14,7 +13,7 @@ class MineralSourceMapper
      */
     public static function getMineralsForPoiType(PointOfInterestType $poiType): array
     {
-        return match($poiType) {
+        return match ($poiType) {
             // Stars - fusion materials and exotic energy particles
             PointOfInterestType::STAR => [
                 'T', 'CP', 'QF', 'SCF',
@@ -93,12 +92,12 @@ class MineralSourceMapper
     {
         $produces = self::getMineralsForPoiType($poiType);
 
-        if (!in_array($mineralSymbol, $produces)) {
+        if (! in_array($mineralSymbol, $produces)) {
             return 0.0; // Doesn't produce this mineral
         }
 
         // Base probability depends on POI type (how easy/reliable to mine)
-        return match($poiType) {
+        return match ($poiType) {
             // Reliable sources - easy to mine
             PointOfInterestType::ASTEROID,
             PointOfInterestType::ASTEROID_BELT,
@@ -155,7 +154,7 @@ class MineralSourceMapper
         }
 
         // Ensure at least one mineral is produced
-        if (empty($production) && !empty($availableMinerals)) {
+        if (empty($production) && ! empty($availableMinerals)) {
             $production[] = $availableMinerals[array_rand($availableMinerals)];
         }
 
@@ -169,6 +168,7 @@ class MineralSourceMapper
     {
         return $pois->filter(function ($poi) use ($mineralSymbol) {
             $produces = $poi->attributes['produces'] ?? [];
+
             return in_array($mineralSymbol, $produces);
         });
     }

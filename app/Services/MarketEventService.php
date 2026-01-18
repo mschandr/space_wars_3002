@@ -19,11 +19,11 @@ class MarketEventService
             ->where('expires_at', '>', now())
             ->where(function ($query) use ($mineralId) {
                 $query->whereNull('mineral_id')
-                      ->orWhere('mineral_id', $mineralId);
+                    ->orWhere('mineral_id', $mineralId);
             })
             ->where(function ($query) use ($tradingHubId) {
                 $query->whereNull('trading_hub_id')
-                      ->orWhere('trading_hub_id', $tradingHubId);
+                    ->orWhere('trading_hub_id', $tradingHubId);
             })
             ->get();
     }
@@ -55,6 +55,7 @@ class MarketEventService
     public function applyEventMultiplier(float $basePrice, ?int $mineralId, ?int $tradingHubId): float
     {
         $multiplier = $this->getCombinedMultiplier($mineralId, $tradingHubId);
+
         return round($basePrice * $multiplier, 2);
     }
 
@@ -76,7 +77,7 @@ class MarketEventService
             ->where('expires_at', '>', now())
             ->where(function ($query) use ($hub) {
                 $query->whereNull('trading_hub_id')
-                      ->orWhere('trading_hub_id', $hub->id);
+                    ->orWhere('trading_hub_id', $hub->id);
             })
             ->with('mineral')
             ->get();
@@ -99,12 +100,13 @@ class MarketEventService
     {
         $mineralName = $event->mineral ? $event->mineral->name : 'All Minerals';
         $hubName = $event->tradingHub ? $event->tradingHub->name : 'Galaxy-Wide';
-        $multiplierPercent = (int)(($event->price_multiplier - 1) * 100);
+        $multiplierPercent = (int) (($event->price_multiplier - 1) * 100);
 
         if ($event->event_type->isPriceIncrease()) {
             return "⚠️  {$event->event_type->getDisplayName()}: {$mineralName} prices UP {$multiplierPercent}% ({$hubName})";
         } else {
             $decreasePercent = abs($multiplierPercent);
+
             return "📉 {$event->event_type->getDisplayName()}: {$mineralName} prices DOWN {$decreasePercent}% ({$hubName})";
         }
     }

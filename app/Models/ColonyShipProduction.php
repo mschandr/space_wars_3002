@@ -101,7 +101,7 @@ class ColonyShipProduction extends Model
             'uuid' => Str::uuid(),
             'player_id' => $this->player_id,
             'ship_id' => $this->ship_id,
-            'name' => $this->ship->name . ' ' . rand(100, 999),
+            'name' => $this->ship->name.' '.rand(100, 999),
             'current_fuel' => $this->ship->attributes['max_fuel'] ?? 100,
             'max_fuel' => $this->ship->attributes['max_fuel'] ?? 100,
             'fuel_last_updated_at' => now(),
@@ -148,7 +148,7 @@ class ColonyShipProduction extends Model
      */
     public function getStatusDisplay(): string
     {
-        return match($this->status) {
+        return match ($this->status) {
             'queued' => '⏸️ Queued',
             'building' => '🏗️ Building',
             'completed' => '✅ Completed',

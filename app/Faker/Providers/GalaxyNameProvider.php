@@ -10,7 +10,7 @@ class GalaxyNameProvider extends Base
 {
     public static function generateGalaxyName(): string
     {
-        return trim(static::randomElement(GalaxyNames::$names) . " " .
+        return trim(static::randomElement(GalaxyNames::$names).' '.
             static::randomElement(GalaxyVerbs::$verbs));
     }
 }

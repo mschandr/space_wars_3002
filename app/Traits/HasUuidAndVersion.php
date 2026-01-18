@@ -31,6 +31,7 @@ trait HasUuidAndVersion
         if (empty($value)) {
             $this->attributes['uuid'] = (string) Str::uuid();
         }
+
         return $this->attributes['uuid'];
     }
 
@@ -44,6 +45,7 @@ trait HasUuidAndVersion
                 $this->attributes['version'] = trim(file_get_contents(base_path('VERSION')));
             }
         }
+
         return $this->attributes['version'] ?? null;
     }
 }

@@ -1,8 +1,8 @@
 <?php
 
 namespace App\Models;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 class TradingHub extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'uuid',
         'poi_id',
@@ -69,7 +70,7 @@ class TradingHub extends Model
     public function plans(): BelongsToMany
     {
         return $this->belongsToMany(Plan::class, 'trading_hub_plans')
-                    ->withTimestamps();
+            ->withTimestamps();
     }
 
     /**
@@ -98,6 +99,7 @@ class TradingHub extends Model
         } elseif ($this->gate_count >= 3) {
             return 'major';
         }
+
         return 'standard';
     }
 
@@ -122,7 +124,7 @@ class TradingHub extends Model
      */
     public function getTypeIcon(): string
     {
-        return match($this->type) {
+        return match ($this->type) {
             'premium' => '⭐',
             'major' => '●',
             'standard' => '○',

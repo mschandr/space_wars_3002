@@ -7,6 +7,7 @@ use App\Models\Galaxy;
 use App\Models\PointOfInterest;
 use App\Models\Sector;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class GalaxyGenerateSectors extends Command
@@ -27,12 +28,13 @@ class GalaxyGenerateSectors extends Command
             ? Galaxy::find($galaxyIdentifier)
             : Galaxy::where('name', 'like', "%{$galaxyIdentifier}%")->first();
 
-        if (!$galaxy) {
+        if (! $galaxy) {
             $this->error("Galaxy not found: {$galaxyIdentifier}");
+
             return Command::FAILURE;
         }
 
-        $gridSize = max(2, min(20, (int)$this->option('grid-size')));
+        $gridSize = max(2, min(20, (int) $this->option('grid-size')));
 
         $this->info("Generating sectors for galaxy: {$galaxy->name}");
         $this->info("Galaxy size: {$galaxy->width}x{$galaxy->height}");
@@ -64,6 +66,10 @@ class GalaxyGenerateSectors extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Generate sector grid using batch insert
+     * OPTIMIZED: Single batch insert instead of individual creates
+     */
     private function generateSectorGrid(Galaxy $galaxy, int $gridSize): array
     {
         $this->info("Creating {$gridSize}x{$gridSize} sector grid...");
@@ -71,13 +77,15 @@ class GalaxyGenerateSectors extends Command
         $sectorWidth = $galaxy->width / $gridSize;
         $sectorHeight = $galaxy->height / $gridSize;
 
-        $sectors = [];
         $sectorNames = $this->generateSectorNames($gridSize);
+        $now = now();
 
+        // Pre-generate all sector data for batch insert
+        $batchData = [];
         for ($y = 0; $y < $gridSize; $y++) {
             for ($x = 0; $x < $gridSize; $x++) {
-                $sector = Sector::create([
-                    'uuid' => Str::uuid(),
+                $batchData[] = [
+                    'uuid' => (string) Str::uuid(),
                     'galaxy_id' => $galaxy->id,
                     'name' => $sectorNames[$y][$x],
                     'grid_x' => $x,
@@ -86,47 +94,46 @@ class GalaxyGenerateSectors extends Command
                     'x_max' => ($x + 1) * $sectorWidth,
                     'y_min' => $y * $sectorHeight,
                     'y_max' => ($y + 1) * $sectorHeight,
-                ]);
-
-                $sectors[] = $sector;
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
             }
         }
 
-        $this->info("Created " . count($sectors) . " sectors");
+        // Single batch insert
+        DB::table('sectors')->insert($batchData);
+
+        // Load the created sectors for return
+        $sectors = Sector::where('galaxy_id', $galaxy->id)->get()->all();
+
+        $this->info('Created '.count($sectors).' sectors');
+
         return $sectors;
     }
 
+    /**
+     * Assign POIs to sectors using optimized SQL JOIN
+     * OPTIMIZED: Single UPDATE with JOIN instead of N individual updates
+     */
     private function assignPoisToSectors(Galaxy $galaxy, array $sectors): void
     {
         $this->newLine();
-        $this->info("Assigning POIs to sectors...");
+        $this->info('Assigning POIs to sectors...');
 
         $totalPois = $galaxy->pointsOfInterest()->count();
-        $assigned = 0;
-        $chunkSize = 500;
 
-        $progressBar = $this->output->createProgressBar($totalPois);
-        $progressBar->start();
+        // Use a single SQL UPDATE with JOIN for massive performance improvement
+        // This replaces O(n×m) PHP iterations with a single O(n) database operation
+        $assigned = DB::update("
+            UPDATE points_of_interest poi
+            INNER JOIN sectors s ON s.galaxy_id = poi.galaxy_id
+                AND poi.x >= s.x_min AND poi.x < s.x_max
+                AND poi.y >= s.y_min AND poi.y < s.y_max
+            SET poi.sector_id = s.id
+            WHERE poi.galaxy_id = ?
+        ", [$galaxy->id]);
 
-        PointOfInterest::where('galaxy_id', $galaxy->id)
-            ->chunk($chunkSize, function ($pois) use ($sectors, &$assigned, $progressBar) {
-                foreach ($pois as $poi) {
-                    // Find which sector contains this POI
-                    foreach ($sectors as $sector) {
-                        if ($sector->containsCoordinates($poi->x, $poi->y)) {
-                            $poi->sector_id = $sector->id;
-                            $poi->save();
-                            $assigned++;
-                            break;
-                        }
-                    }
-                    $progressBar->advance();
-                }
-            });
-
-        $progressBar->finish();
-        $this->newLine();
-        $this->info("Assigned {$assigned} POIs to sectors");
+        $this->info("Assigned {$assigned} POIs to sectors (of {$totalPois} total)");
     }
 
     private function generateSectorNames(int $gridSize): array
@@ -135,7 +142,7 @@ class GalaxyGenerateSectors extends Command
         $greekLetters = [
             'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta',
             'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu', 'Xi', 'Omicron', 'Pi',
-            'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega'
+            'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega',
         ];
 
         $names = [];
@@ -145,38 +152,38 @@ class GalaxyGenerateSectors extends Command
                 // Use Greek letters for rows, numbers for columns
                 $rowName = $greekLetters[$y % count($greekLetters)];
                 if ($y >= count($greekLetters)) {
-                    $rowName .= '-' . floor($y / count($greekLetters));
+                    $rowName .= '-'.floor($y / count($greekLetters));
                 }
-                $names[$y][$x] = "{$rowName}-" . ($x + 1);
+                $names[$y][$x] = "{$rowName}-".($x + 1);
             }
         }
 
         return $names;
     }
 
+    /**
+     * Show summary statistics
+     * OPTIMIZED: Single aggregate query instead of N+1 per-sector queries
+     */
     private function showSummary(Galaxy $galaxy, array $sectors): void
     {
         $this->newLine();
-        $this->info("✅ Sector generation complete!");
+        $this->info('✅ Sector generation complete!');
         $this->newLine();
 
-        // Calculate statistics
         $totalSectors = count($sectors);
-        $sectorsWithStars = 0;
-        $avgStarsPerSector = 0;
-        $totalStars = 0;
 
-        foreach ($sectors as $sector) {
-            $starCount = $sector->pointsOfInterest()
-                ->where('type', PointOfInterestType::STAR)
-                ->count();
+        // Use single aggregate query instead of N+1 pattern
+        $stats = DB::table('points_of_interest')
+            ->where('galaxy_id', $galaxy->id)
+            ->where('type', PointOfInterestType::STAR)
+            ->whereNotNull('sector_id')
+            ->selectRaw('COUNT(*) as total_stars')
+            ->selectRaw('COUNT(DISTINCT sector_id) as sectors_with_stars')
+            ->first();
 
-            if ($starCount > 0) {
-                $sectorsWithStars++;
-                $totalStars += $starCount;
-            }
-        }
-
+        $totalStars = (int) $stats->total_stars;
+        $sectorsWithStars = (int) $stats->sectors_with_stars;
         $avgStarsPerSector = $sectorsWithStars > 0 ? round($totalStars / $sectorsWithStars, 1) : 0;
 
         $this->table(

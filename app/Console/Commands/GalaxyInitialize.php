@@ -18,6 +18,9 @@ use App\Models\TradingHub;
 use App\Models\TradingHubShip;
 use App\Models\WarpLanePirate;
 use App\Services\MarketEventGenerator;
+use Database\Seeders\PirateFactionSeeder;
+use Database\Seeders\PrecursorShipSeeder;
+use Database\Seeders\ShipTypesSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
@@ -37,9 +40,10 @@ class GalaxyInitialize extends Command
                             {--density=scatter : Distribution method (scatter, poisson, cluster)}
                             {--grid-size=10 : Sector grid size (default 10x10)}
                             {--skip-gates : Skip warp gate generation}
-                            {--skip-pirates : Skip pirate distribution}
+                            {--skip-pirates : Skip pirate distribution (enabled by default)}
                             {--skip-inventory : Skip trading hub inventory population}
-                            {--skip-mirror : Skip mirror universe creation}
+                            {--skip-mirror : Skip mirror universe creation (enabled by default)}
+                            {--skip-precursors : Skip precursor ship spawning (enabled by default)}
                             {--mirror-poi= : Specific POI ID for mirror gate placement}';
 
     /**
@@ -61,35 +65,34 @@ class GalaxyInitialize extends Command
         $this->info('════════════════════════════════════════════════════════════════');
         $this->newLine();
 
-        $name = $this->argument('name') ?: $this->generateGalaxyName();
-        $width = (int) $this->option('width');
-        $height = (int) $this->option('height');
-        $starCount = (int) $this->option('stars');
-        $density = $this->option('density');
-        $gridSize = (int) $this->option('grid-size');
+        $name      = $this->argument('name') ?: $this->generateGalaxyName();
+        $width     = (int)$this->option('width');
+        $height    = (int)$this->option('height');
+        $starCount = (int)$this->option('stars');
+        $density   = $this->option('density');
+        $gridSize  = (int)$this->option('grid-size');
 
         // Display configuration
         $this->info('Configuration:');
-        $this->line("  Name: {$name}".($this->argument('name') ? '' : ' (auto-generated)'));
+        $this->line("  Name: {$name}" . ($this->argument('name') ? '' : ' (auto-generated)'));
         $this->line("  Dimensions: {$width}x{$height}");
         $this->line("  Stars: {$starCount}");
         $this->line("  Density: {$density}");
         $this->line("  Sector Grid: {$gridSize}x{$gridSize}");
         $this->newLine();
 
-        // Step 0: Verify/Seed Prerequisites
-        $this->step(0, 'Verifying Database Prerequisites');
-        $this->seedPrerequisites();
-
         // Step 1: Create Galaxy
-        $this->step(1, 'Creating Galaxy');
+        $this->step(0, 'Creating Galaxy');
         $this->galaxy = $this->createGalaxy($name, $width, $height, $density);
         $this->success("Galaxy created: {$this->galaxy->name} (ID: {$this->galaxy->id})");
+
+        $this->step(1, 'Verifying Database Prerequisites');
+        $this->seedPrerequisites();
 
         // Step 2: Generate Stars and POIs
         $this->step(2, "Generating {$starCount} Stars and Points of Interest");
         $this->callCommand('galaxy:expand', [
-            'galaxy' => $this->galaxy->id,
+            'galaxy'  => $this->galaxy->id,
             '--stars' => $starCount,
         ]);
 
@@ -102,21 +105,21 @@ class GalaxyInitialize extends Command
         // Step 4: Generate Sectors
         $this->step(4, "Generating Sector Grid ({$gridSize}x{$gridSize})");
         $this->callCommand('galaxy:generate-sectors', [
-            'galaxy' => $this->galaxy->id,
+            'galaxy'      => $this->galaxy->id,
             '--grid-size' => $gridSize,
         ]);
 
         // Step 5: Designate Inhabited Systems (33-50% of stars)
         $this->step(5, 'Designating Inhabited Star Systems');
         $inhabitedPercentage = config('game_config.galaxy.inhabited_percentage', 0.40);
-        $this->info('  Marking '.($inhabitedPercentage * 100).'% of star systems as inhabited...');
+        $this->info('  Marking ' . ($inhabitedPercentage * 100) . '% of star systems as inhabited...');
         $this->callCommand('galaxy:designate-inhabited', [
-            'galaxy' => $this->galaxy->id,
+            'galaxy'       => $this->galaxy->id,
             '--percentage' => $inhabitedPercentage,
         ]);
 
         // Step 6: Generate Warp Gates for Inhabited Systems Only (Always Incremental)
-        if (! $this->option('skip-gates')) {
+        if (!$this->option('skip-gates')) {
             $this->step(6, 'Generating Warp Gate Network for Inhabited Systems');
             $this->info('  Connecting inhabited systems via warp gates...');
             $this->info('  Uninhabited systems remain isolated for exploration...');
@@ -127,34 +130,35 @@ class GalaxyInitialize extends Command
             $this->info("  Auto-calculated adjacency threshold: {$adjacencyThreshold}");
 
             $this->callCommand('galaxy:generate-gates', [
-                'galaxy' => $this->galaxy->id,
+                'galaxy'        => $this->galaxy->id,
                 '--incremental' => true,
-                '--regenerate' => true,
-                '--adjacency' => $adjacencyThreshold,
+                '--regenerate'  => true,
+                '--adjacency'   => $adjacencyThreshold,
             ]);
         } else {
             $this->warn('⊘ Skipping warp gate generation');
         }
 
         // Step 7: Generate Trading Hubs at 50-80% of Inhabited Systems
-        if (! $this->option('skip-gates')) {
+        if (!$this->option('skip-gates')) {
             $this->step(7, 'Generating Trading Hubs at Inhabited Systems');
             $hubProbability = config('game_config.inhabited_systems.guaranteed_services.trading_hub', 0.65);
-            $this->info('  Spawning trading hubs at '.($hubProbability * 100).'% of inhabited systems...');
+            $this->info('  Spawning trading hubs at ' . ($hubProbability * 100) . '% of inhabited systems...');
             $this->callCommand('trading:generate-hubs', [
-                'galaxy' => $this->galaxy->id,
-                '--min-gates' => 1,
+                'galaxy'            => $this->galaxy->id,
+                '--min-gates'       => 1,
                 '--hub-probability' => $hubProbability,
-                '--min-spacing' => 100,
+                '--min-spacing'     => 100,
             ]);
         } else {
             $this->warn('⊘ Skipping trading hub generation (requires warp gates)');
         }
 
         // Step 8: Populate Trading Hub Inventory
-        if (! $this->option('skip-inventory')) {
+        if (!$this->option('skip-inventory')) {
             $this->step(8, 'Populating Trading Hub Inventory');
             $this->callCommand('trading-hub:populate-inventory', [
+                'galaxy'       => $this->galaxy->id,
                 '--regenerate' => true,
             ]);
         } else {
@@ -164,9 +168,9 @@ class GalaxyInitialize extends Command
         // Step 9: Generate Stellar Cartographer Shops
         $this->step(9, 'Establishing Stellar Cartographer Shops');
         $spawnRate = config('game_config.star_charts.spawn_rate', 0.3);
-        $this->info("  Spawning cartographers at ".($spawnRate * 100).'% of trading hubs...');
+        $this->info('  Spawning cartographers at ' . ($spawnRate * 100) . '% of trading hubs...');
         $this->callCommand('cartography:generate-shops', [
-            'galaxy' => $this->galaxy->id,
+            'galaxy'       => $this->galaxy->id,
             '--spawn-rate' => $spawnRate,
             '--regenerate' => true,
         ]);
@@ -175,29 +179,59 @@ class GalaxyInitialize extends Command
         $this->step(10, 'Generating Initial Market Events');
         $this->generateInitialMarketEvents();
 
-        // Step 11: Distribute Pirates
-        if (! $this->option('skip-pirates')) {
-            $this->step(11, 'Distributing Pirates to Warp Lanes');
+        // Step 11: Spawn Precursor Ship in Prime Galaxy (ENABLED BY DEFAULT - skip with --skip-precursors)
+        if (!$this->option('skip-precursors')) {
+            $this->step(11, '🛸 Spawning Precursor Ship in the Void 🛸');
+            $this->info('  Hiding ancient vessel in interstellar space...');
+
+            $seeder = app(PrecursorShipSeeder::class);
+            $seeder->setCommand($this);
+            $seeder->seedPrecursorShip($this->galaxy);
+
+            $this->info('✅ Precursor Ship hidden in the void');
+        } else {
+            $this->warn('⊘ Precursor ship spawning skipped');
+        }
+
+        // Step 12: Distribute Pirates (ENABLED BY DEFAULT - skip with --skip-pirates)
+        if (!$this->option('skip-pirates')) {
+            $this->step(12, 'Distributing Pirates to Warp Lanes');
             $this->callCommand('galaxy:distribute-pirates', [
                 'galaxy' => $this->galaxy->id,
             ]);
         } else {
-            $this->warn('⊘ Skipping pirate distribution');
+            $this->warn('⊘ Pirate distribution skipped');
         }
 
-        // Step 12: Create Mirror Universe
-        if (! $this->option('skip-mirror') && config('game_config.mirror_universe.enabled', true)) {
-            $this->step(12, '🌌 Creating Mirror Universe (High-Risk, High-Reward) 🌌');
+        // Step 13: Create Mirror Universe (ENABLED BY DEFAULT - skip with --skip-mirror)
+        if (!$this->option('skip-mirror') && config('game_config.mirror_universe.enabled', true)) {
+            $this->step(13, '🌌 Creating Mirror Universe (High-Risk, High-Reward) 🌌');
             $this->callCommand('galaxy:create-mirror', array_filter([
                 'galaxy' => $this->galaxy->id,
-                '--poi' => $this->option('mirror-poi'),
+                '--poi'  => $this->option('mirror-poi'),
 
             ]));
+
+            // Step 14: Spawn Precursor Ship in Mirror Universe
+            if (!$this->option('skip-precursors')) {
+                $mirrorGalaxy = $this->galaxy->getPairedGalaxy();
+
+                if ($mirrorGalaxy) {
+                    $this->newLine();
+                    $this->info('🛸 Spawning Precursor Ship in Mirror Universe 🛸');
+
+                    $seeder = app(PrecursorShipSeeder::class);
+                    $seeder->setCommand($this);
+                    $seeder->seedPrecursorShip($mirrorGalaxy);
+
+                    $this->info('✅ Mirror universe Precursor Ship hidden');
+                }
+            }
         } else {
-            if ($this->option('skip-mirror')) {
-                $this->warn('⊘ Skipping mirror universe creation');
-            } else {
+            if (!config('game_config.mirror_universe.enabled', true)) {
                 $this->warn('⊘ Mirror universe disabled in config');
+            } else {
+                $this->warn('⊘ Mirror universe skipped');
             }
         }
 
@@ -241,10 +275,10 @@ class GalaxyInitialize extends Command
         $pattern = rand(1, 4);
 
         return match ($pattern) {
-            1 => $prefixes[array_rand($prefixes)].' '.$descriptors[array_rand($descriptors)],
-            2 => $prefixes[array_rand($prefixes)].' '.$suffixes[array_rand($suffixes)],
-            3 => $prefixes[array_rand($prefixes)].' '.$descriptors[array_rand($descriptors)].' '.$suffixes[array_rand($suffixes)],
-            4 => 'The '.$prefixes[array_rand($prefixes)].' '.$descriptors[array_rand($descriptors)],
+            1 => $prefixes[array_rand($prefixes)] . ' ' . $descriptors[array_rand($descriptors)],
+            2 => $prefixes[array_rand($prefixes)] . ' ' . $suffixes[array_rand($suffixes)],
+            3 => $prefixes[array_rand($prefixes)] . ' ' . $descriptors[array_rand($descriptors)] . ' ' . $suffixes[array_rand($suffixes)],
+            4 => 'The ' . $prefixes[array_rand($prefixes)] . ' ' . $descriptors[array_rand($descriptors)],
         };
     }
 
@@ -257,9 +291,32 @@ class GalaxyInitialize extends Command
         $this->newLine();
     }
 
+    private function createGalaxy(string $name, int $width, int $height, string $density): Galaxy
+    {
+        return Galaxy::create([
+            'uuid'                => Str::uuid(),
+            'name'                => $name,
+            'width'               => $width,
+            'height'              => $height,
+            'seed'                => random_int(1, 999999),
+            'distribution_method' => GalaxyDistributionMethod::fromName($density),
+            'engine'              => GalaxyRandomEngine::MT19937,
+            'status'              => GalaxyStatus::ACTIVE,
+            'turn_limit'          => 0,
+            'is_public'           => false,
+        ]);
+    }
+
+    private function success(string $message): void
+    {
+        $this->newLine();
+        $this->info("✅ {$message}");
+        $this->newLine();
+    }
+
     private function seedPrerequisites(): void
     {
-        $seeded = [];
+        $seeded  = [];
         $skipped = [];
 
         // Check and seed Minerals
@@ -274,7 +331,9 @@ class GalaxyInitialize extends Command
         // Check and seed Ship Types
         if (Ship::count() === 0) {
             $this->info('  Seeding ship types...');
-            Artisan::call('db:seed', ['--class' => 'ShipTypesSeeder'], $this->output);
+            $seeder = new ShipTypesSeeder();
+            $seeder->run();
+            $seeder->generateShips($this->galaxy, $this);
             $seeded[] = 'Ship Types';
         } else {
             $skipped[] = 'Ship Types (already exist)';
@@ -292,7 +351,9 @@ class GalaxyInitialize extends Command
         // Check and seed Pirate Factions
         if (PirateFaction::count() === 0) {
             $this->info('  Seeding pirate factions...');
-            Artisan::call('db:seed', ['--class' => 'PirateFactionSeeder'], $this->output);
+            $seeder = new PirateFactionSeeder();
+            $seeder->run();
+            $seeder->generatePirateFactions($this->galaxy, $this);
             $seeded[] = 'Pirate Factions';
         } else {
             $skipped[] = 'Pirate Factions (already exist)';
@@ -307,45 +368,15 @@ class GalaxyInitialize extends Command
             $skipped[] = 'Pirate Captains (already exist)';
         }
 
-        // Check and seed Precursor Ships
-        if (PrecursorShip::count() === 0) {
-            $this->info('  Seeding precursor ships...');
-            Artisan::call('db:seed', ['--class' => 'PrecursorShipSeeder'], $this->output);
-            $seeded[] = 'Precursor Ships';
-        } else {
-            $skipped[] = 'Precursor Ships (already exist)';
-        }
+        // Note: Precursor Ships are now seeded per-galaxy in steps 11 and 14 (not globally)
 
         $this->newLine();
-        if (! empty($seeded)) {
-            $this->info('✅ Seeded: '.implode(', ', $seeded));
+        if (!empty($seeded)) {
+            $this->info('✅ Seeded: ' . implode(', ', $seeded));
         }
-        if (! empty($skipped)) {
-            $this->line('⊘ Skipped: '.implode(', ', $skipped));
+        if (!empty($skipped)) {
+            $this->line('⊘ Skipped: ' . implode(', ', $skipped));
         }
-        $this->newLine();
-    }
-
-    private function createGalaxy(string $name, int $width, int $height, string $density): Galaxy
-    {
-        return Galaxy::create([
-            'uuid' => Str::uuid(),
-            'name' => $name,
-            'width' => $width,
-            'height' => $height,
-            'seed' => random_int(1, 999999),
-            'distribution_method' => GalaxyDistributionMethod::fromName($density),
-            'engine' => GalaxyRandomEngine::MT19937,
-            'status' => GalaxyStatus::ACTIVE,
-            'turn_limit' => 0,
-            'is_public' => false,
-        ]);
-    }
-
-    private function success(string $message): void
-    {
-        $this->newLine();
-        $this->info("✅ {$message}");
         $this->newLine();
     }
 
@@ -414,9 +445,9 @@ class GalaxyInitialize extends Command
             ->uninhabited()
             ->count();
 
-        $poiCount = $this->galaxy->pointsOfInterest()->count();
+        $poiCount    = $this->galaxy->pointsOfInterest()->count();
         $sectorCount = $this->galaxy->sectors()->count();
-        $gateCount = $this->galaxy->warpGates()->count();
+        $gateCount   = $this->galaxy->warpGates()->count();
 
         $pirateCount = WarpLanePirate::whereHas('warpGate', function ($query) {
             $query->where('galaxy_id', $this->galaxy->id);
@@ -441,7 +472,7 @@ class GalaxyInitialize extends Command
 
         // Check for mirror universe
         $mirrorGalaxy = $this->galaxy->getPairedGalaxy();
-        $hasMirror = $mirrorGalaxy !== null;
+        $hasMirror    = $mirrorGalaxy !== null;
 
         $rows = [
             ['Galaxy ID', $this->galaxy->id],

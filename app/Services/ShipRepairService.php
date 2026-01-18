@@ -9,6 +9,7 @@ class ShipRepairService
 {
     // Repair costs per unit
     private const HULL_REPAIR_COST_PER_POINT = 10;
+
     private const COMPONENT_REPAIR_MULTIPLIER = 50; // Cost per level to restore
 
     /**
@@ -33,7 +34,7 @@ class ShipRepairService
             'needs_hull_repair' => $hullDamage > 0,
             'downgraded_components' => $downgradedComponents,
             'component_repair_cost' => $componentRepairCost,
-            'needs_component_repair' => !empty($downgradedComponents),
+            'needs_component_repair' => ! empty($downgradedComponents),
             'total_repair_cost' => $hullRepairCost + $componentRepairCost,
         ];
     }
@@ -172,7 +173,7 @@ class ShipRepairService
 
         return [
             'success' => true,
-            'message' => 'Components repaired: ' . implode(', ', $repaired),
+            'message' => 'Components repaired: '.implode(', ', $repaired),
             'cost' => $totalCost,
             'components_repaired' => $repaired,
         ];

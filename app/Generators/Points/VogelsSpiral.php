@@ -73,8 +73,8 @@ final class VogelsSpiral extends AbstractPointGenerator implements PointGenerato
             $x = max(0, min($this->width - 1, (int) round($x)));
             $y = max(0, min($this->height - 1, (int) round($y)));
 
-            $key = $x . ':' . $y;
-            if (!in_array([$x, $y], $pts, true)) {
+            $key = $x.':'.$y;
+            if (! in_array([$x, $y], $pts, true)) {
                 $pts[] = [$x, $y];
             }
         }

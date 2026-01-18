@@ -19,6 +19,7 @@ class GalaxyDistributePirates extends Command
     protected $description = 'Distribute pirates across warp lanes in a galaxy';
 
     private int $piratesCreated = 0;
+
     private int $piratesSkipped = 0;
 
     public function handle(): int
@@ -30,8 +31,9 @@ class GalaxyDistributePirates extends Command
             ? Galaxy::find($galaxyIdentifier)
             : Galaxy::where('name', 'like', "%{$galaxyIdentifier}%")->first();
 
-        if (!$galaxy) {
+        if (! $galaxy) {
             $this->error("Galaxy not found: {$galaxyIdentifier}");
+
             return Command::FAILURE;
         }
 
@@ -43,6 +45,7 @@ class GalaxyDistributePirates extends Command
 
         if ($totalGates === 0) {
             $this->error("Galaxy '{$galaxy->name}' has no active warp gates.");
+
             return Command::FAILURE;
         }
 
@@ -51,6 +54,7 @@ class GalaxyDistributePirates extends Command
         if ($captains->isEmpty()) {
             $this->error('No pirate captains found. Run PirateCaptainSeeder first.');
             $this->info('Run: php artisan db:seed --class=PirateCaptainSeeder');
+
             return Command::FAILURE;
         }
 
@@ -73,9 +77,9 @@ class GalaxyDistributePirates extends Command
         $this->newLine();
 
         // Calculate target count (only one direction per lane pair)
-        $percentage = max(1, min(100, (int)$this->option('percentage')));
+        $percentage = max(1, min(100, (int) $this->option('percentage')));
         $bidirectionalGates = $totalGates / 2; // Gates come in pairs
-        $targetPirateCount = max(1, (int)round($bidirectionalGates * ($percentage / 100)));
+        $targetPirateCount = max(1, (int) round($bidirectionalGates * ($percentage / 100)));
 
         $this->info("Target pirate encounters: {$targetPirateCount} ({$percentage}% of {$bidirectionalGates} lanes)");
         $this->newLine();
@@ -85,7 +89,7 @@ class GalaxyDistributePirates extends Command
 
         // Show summary
         $this->newLine();
-        $this->info("✅ Pirate distribution complete!");
+        $this->info('✅ Pirate distribution complete!');
         $this->newLine();
 
         $totalPirates = WarpLanePirate::whereHas('warpGate', function ($query) use ($galaxy) {
@@ -99,11 +103,35 @@ class GalaxyDistributePirates extends Command
                 ['Pirates Created', $this->piratesCreated],
                 ['Pirates Skipped', $this->piratesSkipped],
                 ['Total Active Pirates', $totalPirates],
-                ['Percentage of Lanes', round(($totalPirates / $bidirectionalGates) * 100, 1) . '%'],
+                ['Percentage of Lanes', round(($totalPirates / $bidirectionalGates) * 100, 1).'%'],
             ]
         );
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Calculate pirate spawn probability multiplier based on galactic zone
+     * Outer 50%: 2x spawn rate, Inner 50%: 1x spawn rate
+     *
+     * @return float Multiplier (1.0 for inner, 2.0 for outer)
+     */
+    private function calculatePirateZoneMultiplier(WarpGate $gate, Galaxy $galaxy): float
+    {
+        $sourcePoi = $gate->sourcePoi;
+
+        $centerX = $galaxy->width / 2.0;
+        $centerY = $galaxy->height / 2.0;
+
+        $dx = $sourcePoi->x - $centerX;
+        $dy = $sourcePoi->y - $centerY;
+        $distance = sqrt($dx * $dx + $dy * $dy);
+
+        $maxDistance = sqrt($centerX * $centerX + $centerY * $centerY);
+        $normalizedDistance = $distance / $maxDistance;
+
+        // Outer 50%: 2x, Inner 50%: 1x
+        return ($normalizedDistance > 0.5) ? 2.0 : 1.0;
     }
 
     private function distributePiratesIncremental(Galaxy $galaxy, $captains, int $targetCount): void
@@ -115,6 +143,7 @@ class GalaxyDistributePirates extends Command
 
         // Get unique gate pairs (source_id < destination_id to avoid duplicates)
         WarpGate::where('galaxy_id', $galaxy->id)
+            ->with('sourcePoi:id,x,y')  // Eager load coordinates for zone calculation
             ->where('is_hidden', false)
             ->where('status', 'active')
             ->whereColumn('source_poi_id', '<', 'destination_poi_id') // Only one direction
@@ -131,7 +160,20 @@ class GalaxyDistributePirates extends Command
                     // Check if this gate already has pirates
                     if (WarpLanePirate::where('warp_gate_id', $gate->id)->exists()) {
                         $this->piratesSkipped++;
+
                         continue;
+                    }
+
+                    // Calculate zone-based spawn multiplier
+                    $zoneMultiplier = $this->calculatePirateZoneMultiplier($gate, $galaxy);
+
+                    // Apply probability: outer zone (2.0x) = 100% attempt, inner (1.0x) = 50% attempt
+                    $spawnChance = ($zoneMultiplier === 2.0) ? 1.0 : 0.5;
+
+                    if (rand(1, 100) / 100 > $spawnChance) {
+                        $this->piratesSkipped++;
+
+                        continue; // Skip based on zone probability
                     }
 
                     // Create pirate encounter
@@ -153,9 +195,9 @@ class GalaxyDistributePirates extends Command
                     // Show progress every 10 pirates
                     if ($this->piratesCreated % 10 === 0) {
                         $this->output->write(
-                            "\r\033[K" .
-                            "Progress: {$this->piratesCreated}/{$targetCount} pirates created | " .
-                            "Gates checked: {$gatesProcessed} | " .
+                            "\r\033[K".
+                            "Progress: {$this->piratesCreated}/{$targetCount} pirates created | ".
+                            "Gates checked: {$gatesProcessed} | ".
                             "Skipped: {$this->piratesSkipped}"
                         );
                     }
@@ -164,9 +206,9 @@ class GalaxyDistributePirates extends Command
 
         // Final progress update
         $this->output->write(
-            "\r\033[K" .
-            "Progress: {$this->piratesCreated}/{$targetCount} pirates created | " .
-            "Gates checked: {$gatesProcessed} | " .
+            "\r\033[K".
+            "Progress: {$this->piratesCreated}/{$targetCount} pirates created | ".
+            "Gates checked: {$gatesProcessed} | ".
             "Skipped: {$this->piratesSkipped}"
         );
     }

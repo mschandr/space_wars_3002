@@ -27,33 +27,49 @@ class GalaxyViewCommand extends Command
 
     protected $description = 'Display ASCII visualization of a galaxy with interactive zoom';
 
-    private Galaxy      $galaxy;
-    private Collection  $pois;
-    private Collection  $sectors;
-    private Collection  $gates;
-    private Collection  $pirates;
-    private int         $termWidth;
-    private int         $termHeight;
-    private bool        $showHidden;
-    private bool        $showGates;
-    private array       $poiMap = [];
-    private array       $sectorMap = [];
-    private int         $viewLevel = 0; // 0 = sector grid, 1 = sector detail, 2 = star system
-    private ?Sector     $currentSector = null;
-    private ?int        $currentStarId = null;
+    private Galaxy $galaxy;
+
+    private Collection $pois;
+
+    private Collection $sectors;
+
+    private Collection $gates;
+
+    private Collection $pirates;
+
+    private int $termWidth;
+
+    private int $termHeight;
+
+    private bool $showHidden;
+
+    private bool $showGates;
+
+    private array $poiMap = [];
+
+    private array $sectorMap = [];
+
+    private int $viewLevel = 0; // 0 = sector grid, 1 = sector detail, 2 = star system
+
+    private ?Sector $currentSector = null;
+
+    private ?int $currentStarId = null;
 
     // Renderers
     private SectorRenderer $sectorRenderer;
+
     private GalaxyRenderer $galaxyRenderer;
+
     private StarSystemRenderer $starSystemRenderer;
+
     private TradingHubRenderer $tradingHubRenderer;
 
     public function handle(): int
     {
-        $this->termWidth    = (int) $this->option('width');
-        $this->termHeight   = (int) $this->option('height');
-        $this->showHidden   = $this->option('show-hidden');
-        $this->showGates    = $this->option('show-gates');
+        $this->termWidth = (int) $this->option('width');
+        $this->termHeight = (int) $this->option('height');
+        $this->showHidden = $this->option('show-hidden');
+        $this->showGates = $this->option('show-gates');
 
         // Initialize renderers
         $this->sectorRenderer = new SectorRenderer($this, $this->termWidth, $this->termHeight);
@@ -69,6 +85,7 @@ class GalaxyViewCommand extends Command
                 : Galaxy::latest()->firstOrFail();
         } catch (ModelNotFoundException $e) {
             $this->error('This galaxy does not exist');
+
             return self::FAILURE;
         }
 
@@ -77,6 +94,7 @@ class GalaxyViewCommand extends Command
 
         if ($this->pois->isEmpty()) {
             $this->error('No points of interest found in this galaxy.');
+
             return self::FAILURE;
         }
 
@@ -97,7 +115,7 @@ class GalaxyViewCommand extends Command
 
         // Load points of interest
         $query = $this->galaxy->pointsOfInterest()->with(['parent', 'children.tradingHub', 'tradingHub', 'sector']);
-        if (!$this->showHidden) {
+        if (! $this->showHidden) {
             $query->where('is_hidden', false);
         }
         $this->pois = $query->get();
@@ -106,9 +124,9 @@ class GalaxyViewCommand extends Command
         $gateQuery = $this->galaxy->warpGates()->with([
             'sourcePoi',
             'destinationPoi',
-            'warpLanePirate.captain.faction'
+            'warpLanePirate.captain.faction',
         ]);
-        if (!$this->showHidden) {
+        if (! $this->showHidden) {
             $gateQuery->where('is_hidden', false);
         }
         $this->gates = $gateQuery->get();
@@ -148,6 +166,7 @@ class GalaxyViewCommand extends Command
 
                 if ($char === false) {
                     usleep(50000); // 50ms
+
                     continue;
                 }
 
@@ -171,7 +190,7 @@ class GalaxyViewCommand extends Command
 
     private function displayControls(): void
     {
-        $this->info("\n" . $this->colorize('Controls:', 'header'));
+        $this->info("\n".$this->colorize('Controls:', 'header'));
 
         $col1Width = 40;
         $col2Width = 40;
@@ -179,38 +198,38 @@ class GalaxyViewCommand extends Command
         if ($this->viewLevel === 0) {
             // Sector grid controls
             $this->line(
-                str_pad($this->colorize('  [0-9,a-z]', 'label') . ' - View sector', $col1Width) .
-                str_pad($this->colorize('  [h]', 'label') . ' - Toggle hidden POIs', $col2Width) .
-                $this->colorize('  [r]', 'label') . ' - Refresh view'
+                str_pad($this->colorize('  [0-9,a-z]', 'label').' - View sector', $col1Width).
+                str_pad($this->colorize('  [h]', 'label').' - Toggle hidden POIs', $col2Width).
+                $this->colorize('  [r]', 'label').' - Refresh view'
             );
             $this->line(
-                str_pad($this->colorize('  [g]', 'label') . '       - Toggle warp gates', $col1Width) .
-                str_pad('', $col2Width) .
-                $this->colorize('  [q]', 'label') . ' - Quit'
+                str_pad($this->colorize('  [g]', 'label').'       - Toggle warp gates', $col1Width).
+                str_pad('', $col2Width).
+                $this->colorize('  [q]', 'label').' - Quit'
             );
         } elseif ($this->viewLevel === 1) {
             // Sector detail controls
             $this->line(
-                str_pad($this->colorize('  [0-9,a-z]', 'label') . ' - Zoom to star', $col1Width) .
-                str_pad($this->colorize('  [h]', 'label') . ' - Toggle hidden POIs', $col2Width) .
-                $this->colorize('  [r]', 'label') . ' - Refresh view'
+                str_pad($this->colorize('  [0-9,a-z]', 'label').' - Zoom to star', $col1Width).
+                str_pad($this->colorize('  [h]', 'label').' - Toggle hidden POIs', $col2Width).
+                $this->colorize('  [r]', 'label').' - Refresh view'
             );
             $this->line(
-                str_pad($this->colorize('  [g]', 'label') . '       - Toggle warp gates', $col1Width) .
-                str_pad('', $col2Width) .
-                $this->colorize('  [ESC]', 'label') . ' - Back to sectors'
+                str_pad($this->colorize('  [g]', 'label').'       - Toggle warp gates', $col1Width).
+                str_pad('', $col2Width).
+                $this->colorize('  [ESC]', 'label').' - Back to sectors'
             );
         } else {
             // Star system controls
             $this->line(
-                str_pad($this->colorize('  [t]', 'label') . '       - View trading hub', $col1Width) .
-                str_pad($this->colorize('  [h]', 'label') . ' - Toggle hidden POIs', $col2Width) .
-                $this->colorize('  [r]', 'label') . ' - Refresh view'
+                str_pad($this->colorize('  [t]', 'label').'       - View trading hub', $col1Width).
+                str_pad($this->colorize('  [h]', 'label').' - Toggle hidden POIs', $col2Width).
+                $this->colorize('  [r]', 'label').' - Refresh view'
             );
             $this->line(
-                str_pad('', $col1Width) .
-                str_pad('', $col2Width) .
-                $this->colorize('  [ESC]', 'label') . ' - Back to sector'
+                str_pad('', $col1Width).
+                str_pad('', $col2Width).
+                $this->colorize('  [ESC]', 'label').' - Back to sector'
             );
         }
 
@@ -225,30 +244,33 @@ class GalaxyViewCommand extends Command
             $this->viewLevel = 1;
             $this->currentStarId = null;
             $this->refreshView();
+
             return true;
         } elseif ($this->viewLevel === 1) {
             // Sector detail -> Sector grid
             $this->viewLevel = 0;
             $this->currentSector = null;
             $this->refreshView();
+
             return true;
         }
 
         // At sector grid level, quit
-        $this->info("\n" . $this->colorize('Exiting galaxy viewer...', 'header'));
+        $this->info("\n".$this->colorize('Exiting galaxy viewer...', 'header'));
+
         return false;
     }
 
     private function toggleHidden(): void
     {
-        $this->showHidden = !$this->showHidden;
+        $this->showHidden = ! $this->showHidden;
         $this->loadGalaxyData();
         $this->refreshView();
     }
 
     private function toggleGates(): void
     {
-        $this->showGates = !$this->showGates;
+        $this->showGates = ! $this->showGates;
         $this->refreshView();
     }
 
@@ -282,22 +304,24 @@ class GalaxyViewCommand extends Command
             }
         } elseif ($this->viewLevel === 1) {
             // Sector detail view (stars in sector)
-            if (!$this->currentSector) {
+            if (! $this->currentSector) {
                 $this->viewLevel = 0;
                 $this->refreshView();
+
                 return;
             }
 
             // Filter POIs by sector
-            $sectorPois = $this->pois->filter(fn($poi) => $poi->sector_id === $this->currentSector->id);
+            $sectorPois = $this->pois->filter(fn ($poi) => $poi->sector_id === $this->currentSector->id);
 
             // Debug: Show count
-            $starCount = $sectorPois->filter(fn($poi) => $poi->type === \App\Enums\PointsOfInterest\PointOfInterestType::STAR)->count();
+            $starCount = $sectorPois->filter(fn ($poi) => $poi->type === \App\Enums\PointsOfInterest\PointOfInterestType::STAR)->count();
             $this->info("Sector {$this->currentSector->name}: {$sectorPois->count()} POIs ({$starCount} stars)");
 
             if ($sectorPois->isEmpty()) {
-                $this->warn("No POIs found in this sector. Press ESC to go back.");
+                $this->warn('No POIs found in this sector. Press ESC to go back.');
                 $this->info("\nSector bounds: [{$this->currentSector->x_min}-{$this->currentSector->x_max}, {$this->currentSector->y_min}-{$this->currentSector->y_max}]");
+
                 return;
             }
 
@@ -354,7 +378,7 @@ class GalaxyViewCommand extends Command
         }
 
         $star = $this->pois->firstWhere('id', $this->currentStarId);
-        if (!$star) {
+        if (! $star) {
             return;
         }
 
@@ -362,8 +386,8 @@ class GalaxyViewCommand extends Command
         $hub = $star->tradingHub;
 
         // If not, look for trading hubs on planets in this system
-        if (!$hub) {
-            $planetsWithHubs = $star->children->filter(fn($planet) => $planet->tradingHub && $planet->tradingHub->is_active);
+        if (! $hub) {
+            $planetsWithHubs = $star->children->filter(fn ($planet) => $planet->tradingHub && $planet->tradingHub->is_active);
 
             if ($planetsWithHubs->isEmpty()) {
                 return; // No trading hubs in this system
@@ -408,7 +432,7 @@ class GalaxyViewCommand extends Command
 
         for ($i = 0; $i < 26; $i++) {
             $letter = chr(ord('a') + $i);
-            if (!in_array($letter, $reservedLetters)) {
+            if (! in_array($letter, $reservedLetters)) {
                 $singleChars[] = $letter;
             }
         }
@@ -416,6 +440,7 @@ class GalaxyViewCommand extends Command
         // Check single char
         if (strlen($input) === 1) {
             $index = array_search($input, $singleChars, true);
+
             return $index !== false ? $index : -1;
         }
 
@@ -424,7 +449,7 @@ class GalaxyViewCommand extends Command
             $letters = [];
             for ($i = 0; $i < 26; $i++) {
                 $letter = chr(ord('a') + $i);
-                if (!in_array($letter, $reservedLetters)) {
+                if (! in_array($letter, $reservedLetters)) {
                     $letters[] = $letter;
                 }
             }
@@ -438,6 +463,7 @@ class GalaxyViewCommand extends Command
             if ($firstIndex !== false && $secondIndex !== false) {
                 $letterCount = count($letters);
                 $doubleIndex = ($firstIndex * $letterCount) + $secondIndex;
+
                 return count($singleChars) + $doubleIndex;
             }
         }

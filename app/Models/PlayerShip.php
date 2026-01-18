@@ -95,7 +95,7 @@ class PlayerShip extends Model
      */
     public function getFighterCapacity(): int
     {
-        if (!$this->isCarrier()) {
+        if (! $this->isCarrier()) {
             return 0;
         }
 
@@ -107,7 +107,7 @@ class PlayerShip extends Model
      */
     public function canAddFighter(): bool
     {
-        if (!$this->isCarrier()) {
+        if (! $this->isCarrier()) {
             return false;
         }
 
@@ -142,6 +142,7 @@ class PlayerShip extends Model
     public function getCurrentFuel(): int
     {
         $this->regenerateFuel();
+
         return $this->current_fuel;
     }
 
@@ -177,6 +178,7 @@ class PlayerShip extends Model
         }
 
         $fuelNeeded = $this->max_fuel - $this->current_fuel;
+
         return $fuelNeeded * self::FUEL_REGEN_RATE;
     }
 
@@ -223,7 +225,7 @@ class PlayerShip extends Model
      */
     public function addCargo(int $amount): bool
     {
-        if (!$this->canAddCargo($amount)) {
+        if (! $this->canAddCargo($amount)) {
             return false;
         }
 

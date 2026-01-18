@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 class Ship extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'uuid',
         'name',
@@ -77,7 +78,7 @@ class Ship extends Model
         }
 
         foreach ($this->requirements as $requirement => $value) {
-            if (!isset($playerStats[$requirement]) || $playerStats[$requirement] < $value) {
+            if (! isset($playerStats[$requirement]) || $playerStats[$requirement] < $value) {
                 return false;
             }
         }

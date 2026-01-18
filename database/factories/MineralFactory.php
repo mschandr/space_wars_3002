@@ -20,7 +20,7 @@ class MineralFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->unique()->word() . 'ite',
+            'name' => fake()->unique()->word().'ite',
             'symbol' => strtoupper(fake()->unique()->lexify('??')),
             'description' => fake()->sentence(),
             'rarity' => fake()->randomElement(['common', 'uncommon', 'rare', 'legendary']),

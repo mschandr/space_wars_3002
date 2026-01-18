@@ -6,6 +6,7 @@ use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
 use App\Models\PointOfInterest;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Inhabited System Generator
@@ -50,10 +51,15 @@ class InhabitedSystemGenerator
         // Distribute inhabited systems with minimum spacing
         $inhabited = $this->distributeInhabitedSystems($allStars, $targetCount, $minSpacing);
 
-        // Mark the selected systems as inhabited
-        foreach ($inhabited as $poi) {
-            $poi->is_inhabited = true;
-            $poi->save();
+        // OPTIMIZED: Batch update all selected systems at once
+        if ($inhabited->isNotEmpty()) {
+            $inhabitedIds = $inhabited->pluck('id')->toArray();
+            PointOfInterest::whereIn('id', $inhabitedIds)->update(['is_inhabited' => true]);
+
+            // Refresh the collection to reflect the updated values
+            $inhabited->each(function ($poi) {
+                $poi->is_inhabited = true;
+            });
         }
 
         return $inhabited;
@@ -109,39 +115,53 @@ class InhabitedSystemGenerator
 
     /**
      * Get statistics about inhabited system distribution
+     * OPTIMIZED: Uses sampling for large datasets to avoid O(n²) calculations
      *
      * @return array Statistics array
      */
     public function getDistributionStats(Galaxy $galaxy): array
     {
-        $totalStars = PointOfInterest::where('galaxy_id', $galaxy->id)
-            ->stars()
-            ->count();
+        // Use single query for counts
+        $stats = DB::table('points_of_interest')
+            ->where('galaxy_id', $galaxy->id)
+            ->where('type', PointOfInterestType::STAR)
+            ->selectRaw('COUNT(*) as total_stars')
+            ->selectRaw('SUM(CASE WHEN is_inhabited = 1 THEN 1 ELSE 0 END) as inhabited_stars')
+            ->first();
 
-        $inhabitedStars = PointOfInterest::where('galaxy_id', $galaxy->id)
-            ->stars()
-            ->inhabited()
-            ->count();
-
+        $totalStars = (int) $stats->total_stars;
+        $inhabitedStars = (int) $stats->inhabited_stars;
         $uninhabitedStars = $totalStars - $inhabitedStars;
 
         $percentage = $totalStars > 0 ? ($inhabitedStars / $totalStars) * 100 : 0;
 
-        // Calculate average distance between inhabited systems
-        $inhabited = PointOfInterest::where('galaxy_id', $galaxy->id)
-            ->stars()
-            ->inhabited()
-            ->get();
-
+        // Calculate average distance using sampling for large datasets
         $avgDistance = 0;
-        if ($inhabited->count() > 1) {
-            $distances = [];
-            for ($i = 0; $i < $inhabited->count(); $i++) {
-                for ($j = $i + 1; $j < $inhabited->count(); $j++) {
-                    $distances[] = $this->calculateDistance($inhabited[$i], $inhabited[$j]);
+        if ($inhabitedStars > 1) {
+            // For large datasets, sample to avoid O(n²) complexity
+            $sampleSize = min(100, $inhabitedStars);
+            $inhabited = PointOfInterest::where('galaxy_id', $galaxy->id)
+                ->stars()
+                ->inhabited()
+                ->inRandomOrder()
+                ->limit($sampleSize)
+                ->get(['id', 'x', 'y']);
+
+            if ($inhabited->count() > 1) {
+                $distances = [];
+                $count = $inhabited->count();
+                // Limit comparisons for efficiency
+                $maxComparisons = min(500, ($count * ($count - 1)) / 2);
+                $comparisons = 0;
+
+                for ($i = 0; $i < $count && $comparisons < $maxComparisons; $i++) {
+                    for ($j = $i + 1; $j < $count && $comparisons < $maxComparisons; $j++) {
+                        $distances[] = $this->calculateDistance($inhabited[$i], $inhabited[$j]);
+                        $comparisons++;
+                    }
                 }
+                $avgDistance = count($distances) > 0 ? array_sum($distances) / count($distances) : 0;
             }
-            $avgDistance = count($distances) > 0 ? array_sum($distances) / count($distances) : 0;
         }
 
         return [

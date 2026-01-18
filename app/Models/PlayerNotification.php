@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class PlayerNotification extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'uuid',
         'player_id',
@@ -81,7 +83,7 @@ class PlayerNotification extends Model
      */
     public function getSeverityIcon(): string
     {
-        return match($this->severity) {
+        return match ($this->severity) {
             'critical' => '🚨',
             'warning' => '⚠️',
             'info' => 'ℹ️',
@@ -95,6 +97,7 @@ class PlayerNotification extends Model
     public function getFormattedDisplay(): string
     {
         $icon = $this->getSeverityIcon();
+
         return "{$icon} {$this->title}: {$this->message}";
     }
 

@@ -3,10 +3,10 @@
 namespace App\Services;
 
 use App\Models\Mineral;
-use App\Models\Plan;
-use App\Models\PirateCargo;
 use App\Models\PirateCaptain;
+use App\Models\PirateCargo;
 use App\Models\PirateFleet;
+use App\Models\Plan;
 use App\Models\Ship;
 use App\Models\WarpLanePirate;
 use Illuminate\Support\Collection;
@@ -35,12 +35,12 @@ class PirateFleetGenerator
     // Ship name components
     private const SHIP_NAME_PREFIXES = [
         'Crimson', 'Shadow', 'Dark', 'Blood', 'Iron', 'Steel', 'Void', 'Ghost',
-        'Phantom', 'Vengeful', 'Savage', 'Black', 'Red', 'Death', 'Hell', 'Doom'
+        'Phantom', 'Vengeful', 'Savage', 'Black', 'Red', 'Death', 'Hell', 'Doom',
     ];
 
     private const SHIP_NAME_SUFFIXES = [
         'Dagger', 'Talon', 'Reaver', 'Serpent', 'Fang', 'Claw', 'Terror', 'Raider',
-        'Marauder', 'Scourge', 'Fury', 'Vengeance', 'Blade', 'Edge', 'Storm', 'Wraith'
+        'Marauder', 'Scourge', 'Fury', 'Vengeance', 'Blade', 'Edge', 'Storm', 'Wraith',
     ];
 
     /**
@@ -71,9 +71,9 @@ class PirateFleetGenerator
         // Select ship type based on tier preferences
         $shipType = $this->selectShipType($tier);
 
-        if (!$shipType) {
-            // Fallback to Viper if no ship found
-            $shipType = Ship::where('name', 'Viper-class Fighter')->first();
+        if (! $shipType) {
+            // Fallback to Viper if no ship found, or any ship if Viper doesn't exist
+            $shipType = Ship::where('name', 'Viper-class Fighter')->first() ?? Ship::first();
         }
 
         // Get stat multiplier for this tier
@@ -85,9 +85,9 @@ class PirateFleetGenerator
             'captain_id' => $captain->id,
             'ship_id' => $shipType->id,
             'ship_name' => $this->generateShipName(),
-            'hull' => (int)round($shipType->hull_strength * $multiplier),
-            'max_hull' => (int)round($shipType->hull_strength * $multiplier),
-            'weapons' => (int)round(($shipType->attributes['starting_weapons'] ?? 10) * $multiplier),
+            'hull' => (int) round($shipType->hull_strength * $multiplier),
+            'max_hull' => (int) round($shipType->hull_strength * $multiplier),
+            'weapons' => (int) round(($shipType->attributes['starting_weapons'] ?? 10) * $multiplier),
             'speed' => $shipType->speed,
             'warp_drive' => $shipType->attributes['starting_warp_drive'] ?? 1,
             'cargo_capacity' => $shipType->cargo_capacity,
@@ -115,7 +115,7 @@ class PirateFleetGenerator
             }
         }
 
-        return !empty($weightedShips) ? $weightedShips[array_rand($weightedShips)] : null;
+        return ! empty($weightedShips) ? $weightedShips[array_rand($weightedShips)] : null;
     }
 
     /**
@@ -172,6 +172,6 @@ class PirateFleetGenerator
      */
     public function calculateFleetPower(Collection $fleet): int
     {
-        return $fleet->sum(fn($ship) => $ship->getCombatRating());
+        return $fleet->sum(fn ($ship) => $ship->getCombatRating());
     }
 }

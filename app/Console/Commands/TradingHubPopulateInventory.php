@@ -14,12 +14,14 @@ use Illuminate\Console\Command;
 class TradingHubPopulateInventory extends Command
 {
     protected $signature = 'trading-hub:populate-inventory
+                            {galaxy : Galaxy ID}
                             {--regenerate : Delete existing inventory and regenerate}';
 
     protected $description = 'Populate trading hubs with mineral inventory and upgrade plans';
 
     public function handle(): int
     {
+        $galaxy_id = $this->argument('galaxy');
         $this->info('════════════════════════════════════════════════════════════════');
         $this->info('  TRADING HUB INVENTORY POPULATION');
         $this->info('════════════════════════════════════════════════════════════════');
@@ -59,6 +61,9 @@ class TradingHubPopulateInventory extends Command
         $this->newLine();
 
         // Delete existing inventory if regenerating
+        if (!$galaxy_id) {
+            return Command::FAILURE;
+        }
         if ($this->option('regenerate')) {
             $this->info('Deleting existing inventory...');
             TradingHubInventory::truncate();
@@ -73,7 +78,7 @@ class TradingHubPopulateInventory extends Command
         $this->populateUpgradePlans($hubs, $plans);
 
         // Populate ship inventory
-        $this->populateShipInventory($hubs, $ships);
+        $this->populateShipInventory($galaxy_id, $hubs, $ships);
 
         $this->newLine();
         $this->info('✅ Trading hub inventory population complete!');
@@ -163,6 +168,7 @@ class TradingHubPopulateInventory extends Command
 
             if (!$hasPlans) {
                 $progressBar->advance();
+
                 continue;
             }
 
@@ -186,7 +192,7 @@ class TradingHubPopulateInventory extends Command
         $this->info("Assigned {$totalPlans} upgrade plans to hubs");
     }
 
-    private function populateShipInventory($hubs, $ships): void
+    private function populateShipInventory(int $galaxy_id, $hubs, $ships): void
     {
         $this->newLine();
         $this->info('Populating ship inventory...');
@@ -207,6 +213,7 @@ class TradingHubPopulateInventory extends Command
 
             if (!$hasShipyard) {
                 $progressBar->advance();
+
                 continue;
             }
 
@@ -244,6 +251,7 @@ class TradingHubPopulateInventory extends Command
                 // Create ship inventory record
                 TradingHubShip::create([
                     'trading_hub_id'    => $hub->id,
+                    'galaxy_id'         => $galaxy_id,
                     'ship_id'           => $ship->id,
                     'quantity'          => $quantity,
                     'current_price'     => $currentPrice,

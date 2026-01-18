@@ -24,11 +24,12 @@ class TradingHubGenerateCommand extends Command
         $galaxyIdentifier = $this->argument('galaxy');
 
         // If no galaxy specified, prompt for one
-        if (!$galaxyIdentifier) {
+        if (! $galaxyIdentifier) {
             $galaxies = Galaxy::all();
 
             if ($galaxies->isEmpty()) {
                 $this->error('No galaxies found. Create a galaxy first.');
+
                 return Command::FAILURE;
             }
 
@@ -37,7 +38,7 @@ class TradingHubGenerateCommand extends Command
             })->toArray();
 
             $galaxyId = $this->choice('Select a galaxy', $choices);
-            $galaxy   = Galaxy::find($galaxyId);
+            $galaxy = Galaxy::find($galaxyId);
         } else {
             // Try to find by ID first, then by name
             $galaxy = is_numeric($galaxyIdentifier)
@@ -45,8 +46,9 @@ class TradingHubGenerateCommand extends Command
                 : Galaxy::where('name', $galaxyIdentifier)->first();
         }
 
-        if (!$galaxy) {
+        if (! $galaxy) {
             $this->error("Galaxy not found: {$galaxyIdentifier}");
+
             return Command::FAILURE;
         }
 
@@ -56,6 +58,7 @@ class TradingHubGenerateCommand extends Command
         if ($gateCount < 2) {
             $this->error("Galaxy '{$galaxy->name}' must have warp gates before generating trading hubs.");
             $this->info("Run: php artisan galaxy:generate-gates {$galaxy->id}");
+
             return Command::FAILURE;
         }
 
@@ -65,7 +68,7 @@ class TradingHubGenerateCommand extends Command
             $this->warn('No minerals found in the database. Trading hubs will be created but not stocked.');
             $this->info('Run: php artisan db:seed --class=MineralSeeder');
 
-            if (!$this->confirm('Continue anyway?', false)) {
+            if (! $this->confirm('Continue anyway?', false)) {
                 return Command::FAILURE;
             }
         }
@@ -88,10 +91,10 @@ class TradingHubGenerateCommand extends Command
 
         // Create generator with options
         $generator = new TradingHubGenerator(
-            minGatesForHub: (int)$this->option('min-gates'),
-            salvageYardProbability: (float)$this->option('salvage-probability'),
-            hubSpawnProbability: (float)$this->option('hub-probability'),
-            minHubDistance: (int)$this->option('min-spacing')
+            minGatesForHub: (int) $this->option('min-gates'),
+            salvageYardProbability: (float) $this->option('salvage-probability'),
+            hubSpawnProbability: (float) $this->option('hub-probability'),
+            minHubDistance: (int) $this->option('min-spacing')
         );
 
         // Generate trading hubs
@@ -105,21 +108,22 @@ class TradingHubGenerateCommand extends Command
 
         if ($totalHubs === 0) {
             $this->warn('No trading hubs generated. Try lowering --min-gates option.');
+
             return Command::SUCCESS;
         }
 
-        $hubsByType      = $hubs->groupBy('type');
+        $hubsByType = $hubs->groupBy('type');
         $hubsWithSalvage = $hubs->where('has_salvage_yard', true)->count();
 
         $this->newLine();
-        $this->info("✅ Successfully generated trading hub network!");
+        $this->info('✅ Successfully generated trading hub network!');
 
         $tableData = [
             ['Total Hubs', $totalHubs],
             ['Standard Hubs', $hubsByType->get('standard', collect())->count()],
             ['Major Hubs', $hubsByType->get('major', collect())->count()],
             ['Premium Hubs', $hubsByType->get('premium', collect())->count()],
-            ['With Salvage Yards', "{$hubsWithSalvage} (" . round(($hubsWithSalvage / $totalHubs) * 100, 1) . "%)"],
+            ['With Salvage Yards', "{$hubsWithSalvage} (".round(($hubsWithSalvage / $totalHubs) * 100, 1).'%)'],
         ];
 
         if ($mineralCount > 0) {
@@ -138,7 +142,7 @@ class TradingHubGenerateCommand extends Command
         $this->info('Trading Hubs Created:');
         $hubTable = [];
         foreach ($hubs as $hub) {
-            $poi        = $hub->pointOfInterest;
+            $poi = $hub->pointOfInterest;
             $hubTable[] = [
                 $hub->name,
                 $hub->type,

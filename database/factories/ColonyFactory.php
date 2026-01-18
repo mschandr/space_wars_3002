@@ -26,7 +26,7 @@ class ColonyFactory extends Factory
             'uuid' => Str::uuid(),
             'player_id' => Player::factory(),
             'poi_id' => PointOfInterest::factory(),
-            'name' => fake()->words(2, true) . ' Colony',
+            'name' => fake()->words(2, true).' Colony',
             'population' => fake()->numberBetween(500, 5000),
             'population_growth_rate' => fake()->randomFloat(2, 0.01, 0.05),
             'max_population' => 10000,

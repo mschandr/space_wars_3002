@@ -76,7 +76,7 @@ class ProcessColonyCycles extends Command
         $this->line('                  CYCLE SUMMARY                    ');
         $this->line('═══════════════════════════════════════════════════');
         $this->line("Colonies Processed:    {$colonyStats['colonies_processed']}");
-        $this->line("Credits Generated:     " . number_format($colonyStats['credits_generated']));
+        $this->line('Credits Generated:     '.number_format($colonyStats['credits_generated']));
         $this->line("Alerts Sent:           {$colonyStats['alerts_sent']}");
         $this->line("Gates Shut Down:       {$colonyStats['gates_shutdown']}");
         $this->line("Buildings Completed:   {$constructionStats['buildings_completed']}");

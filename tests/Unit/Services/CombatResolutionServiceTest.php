@@ -2,13 +2,12 @@
 
 namespace Tests\Unit\Services;
 
+use App\Models\PirateFleet;
 use App\Models\Player;
 use App\Models\PlayerShip;
-use App\Models\PirateFleet;
 use App\Models\Ship;
 use App\Services\CombatResolutionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Collection;
 use Tests\TestCase;
 
 /**
@@ -33,7 +32,7 @@ class CombatResolutionServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->combatService = new CombatResolutionService();
+        $this->combatService = new CombatResolutionService;
     }
 
     /** @test */

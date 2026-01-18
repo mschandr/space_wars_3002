@@ -32,20 +32,22 @@ class UpgradeShipCommand extends Command
 
         // Find the player
         $player = Player::find($playerId);
-        if (!$player) {
+        if (! $player) {
             $this->error("Player with ID {$playerId} not found.");
+
             return 1;
         }
 
         // Get the player's active ship
         $ship = $player->activeShip;
-        if (!$ship) {
-            $this->error("Player has no active ship.");
+        if (! $ship) {
+            $this->error('Player has no active ship.');
+
             return 1;
         }
 
         // If no component specified, show upgrade info
-        if (!$component) {
+        if (! $component) {
             $this->info("Ship: {$ship->name}");
             $this->info("Player Credits: {$player->credits}");
             $this->newLine();
@@ -67,7 +69,8 @@ class UpgradeShipCommand extends Command
                 })->toArray()
             );
 
-            $this->info("Usage: ship:upgrade {player_id} {component}");
+            $this->info('Usage: ship:upgrade {player_id} {component}');
+
             return 0;
         }
 
@@ -84,6 +87,7 @@ class UpgradeShipCommand extends Command
             if (isset($result['cost'])) {
                 $this->info("Player credits: {$player->credits}");
             }
+
             return 1;
         }
 

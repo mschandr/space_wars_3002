@@ -214,6 +214,6 @@ class MineralSeeder extends Seeder
             Mineral::create($mineralData);
         }
 
-        $this->command->info('Created ' . count($minerals) . ' minerals across all rarity tiers.');
+        $this->command->info('Created '.count($minerals).' minerals across all rarity tiers.');
     }
 }

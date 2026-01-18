@@ -26,7 +26,7 @@ class PrecursorShipDetectionService
     {
         $ship = $player->activeShip;
 
-        if (!$ship) {
+        if (! $ship) {
             return [
                 'detected' => false,
                 'ship' => null,
@@ -52,7 +52,7 @@ class PrecursorShipDetectionService
         $precursorShip = PrecursorShip::where('galaxy_id', $player->galaxy_id)
             ->first();
 
-        if (!$precursorShip) {
+        if (! $precursorShip) {
             return [
                 'detected' => false,
                 'ship' => null,
@@ -79,7 +79,7 @@ class PrecursorShipDetectionService
 
         // DETECTED!
         // If this is first discovery, mark it
-        if (!$precursorShip->is_discovered) {
+        if (! $precursorShip->is_discovered) {
             $precursorShip->discover($player);
 
             return [
@@ -170,7 +170,7 @@ MESSAGE;
     {
         $ship = $player->activeShip;
 
-        if (!$ship) {
+        if (! $ship) {
             return [
                 'success' => false,
                 'message' => 'No active ship.',
@@ -225,7 +225,7 @@ MESSAGE;
     public function claim(Player $player, PrecursorShip $precursorShip): array
     {
         // Must be discovered first
-        if (!$precursorShip->is_discovered) {
+        if (! $precursorShip->is_discovered) {
             return [
                 'success' => false,
                 'message' => 'You must detect the ship before claiming it.',
@@ -235,6 +235,7 @@ MESSAGE;
         // Already claimed?
         if ($precursorShip->claimed_by_player_id) {
             $owner = $precursorShip->claimedBy;
+
             return [
                 'success' => false,
                 'message' => sprintf(

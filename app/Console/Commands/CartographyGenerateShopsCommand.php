@@ -37,7 +37,7 @@ class CartographyGenerateShopsCommand extends Command
         }
 
         $this->info("Generating Stellar Cartographer shops for galaxy: {$galaxy->name}");
-        $this->info("Spawn rate: ".($spawnRate * 100).'%');
+        $this->info('Spawn rate: '.($spawnRate * 100).'%');
         $this->newLine();
 
         // Delete existing cartographers if regenerating
@@ -55,12 +55,14 @@ class CartographyGenerateShopsCommand extends Command
         }
 
         // Get inhabited systems with trading hubs
+        // OPTIMIZED: Eager load stellarCartographer to avoid N+1 in the loop
         $tradingHubLocations = PointOfInterest::where('galaxy_id', $galaxyId)
             ->inhabited()
             ->where('is_hidden', false)
             ->whereHas('tradingHub', function ($query) {
                 $query->where('is_active', true);
             })
+            ->with('stellarCartographer')
             ->get();
 
         if ($tradingHubLocations->isEmpty()) {
@@ -80,6 +82,7 @@ class CartographyGenerateShopsCommand extends Command
             // Check if already has a cartographer
             if ($location->stellarCartographer) {
                 $progressBar->advance();
+
                 continue;
             }
 

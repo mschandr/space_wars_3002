@@ -11,8 +11,9 @@ trait ConsoleBoxRenderer
     {
         $plain = preg_replace('/\033\[[0-9;]*m/', '', $content);
         $padding = $boxWidth - mb_strlen($plain);
-        return $this->colorize('║', 'border') . ' ' . $content .
-               str_repeat(' ', $padding) . $this->colorize('║', 'border') . "\n";
+
+        return $this->colorize('║', 'border').' '.$content.
+               str_repeat(' ', $padding).$this->colorize('║', 'border')."\n";
     }
 
     /**
@@ -23,10 +24,10 @@ trait ConsoleBoxRenderer
         $titlePlain = preg_replace('/\033\[[0-9;]*m/', '', $title);
         $padding = $width - 4 - mb_strlen($titlePlain);
 
-        return $this->colorize('╔' . str_repeat('═', $width - 2) . '╗', 'border') . "\n" .
-               $this->colorize('║', 'border') . ' ' . $title .
-               str_repeat(' ', $padding) . $this->colorize('║', 'border') . "\n" .
-               $this->colorize('╠' . str_repeat('═', $width - 2) . '╣', 'border') . "\n";
+        return $this->colorize('╔'.str_repeat('═', $width - 2).'╗', 'border')."\n".
+               $this->colorize('║', 'border').' '.$title.
+               str_repeat(' ', $padding).$this->colorize('║', 'border')."\n".
+               $this->colorize('╠'.str_repeat('═', $width - 2).'╣', 'border')."\n";
     }
 
     /**
@@ -34,7 +35,7 @@ trait ConsoleBoxRenderer
      */
     protected function renderBoxFooter(int $width = 60): string
     {
-        return $this->colorize('╚' . str_repeat('═', $width - 2) . '╝', 'border') . "\n";
+        return $this->colorize('╚'.str_repeat('═', $width - 2).'╝', 'border')."\n";
     }
 
     /**

@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PirateCaptain extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'uuid',
         'faction_id',
@@ -34,6 +35,12 @@ class PirateCaptain extends Model
     public function fleet(): HasMany
     {
         return $this->hasMany(PirateFleet::class, 'captain_id');
+    }
+
+    // Alias for fleet (plural form)
+    public function fleets(): HasMany
+    {
+        return $this->fleet();
     }
 
     public function activeFleet(): HasMany

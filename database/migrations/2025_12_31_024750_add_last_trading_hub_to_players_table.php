@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::table('players', function (Blueprint $table) {
             $table->foreignId('last_trading_hub_poi_id')->nullable()
-                  ->constrained('points_of_interest')
-                  ->onDelete('set null');
+                ->constrained('points_of_interest')
+                ->onDelete('set null');
         });
     }
 

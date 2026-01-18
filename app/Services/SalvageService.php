@@ -12,7 +12,7 @@ class SalvageService
     /**
      * Collect salvage from destroyed pirate ships
      *
-     * @param Collection $destroyedPirateFleet Collection of destroyed PirateFleet models
+     * @param  Collection  $destroyedPirateFleet  Collection of destroyed PirateFleet models
      * @return Collection Collection of PirateCargo items available for salvage
      */
     public function collectSalvage(Collection $destroyedPirateFleet): Collection
@@ -31,17 +31,17 @@ class SalvageService
     /**
      * Organize salvage by type for display
      *
-     * @param Collection $salvageItems
      * @return array ['minerals' => Collection, 'plans' => Collection]
      */
     public function organizeSalvage(Collection $salvageItems): array
     {
-        $minerals = $salvageItems->filter(fn($item) => $item->mineral_id !== null);
-        $plans = $salvageItems->filter(fn($item) => $item->plan_id !== null);
+        $minerals = $salvageItems->filter(fn ($item) => $item->mineral_id !== null);
+        $plans = $salvageItems->filter(fn ($item) => $item->plan_id !== null);
 
         // Group minerals by type and sum quantities
         $mineralsSummed = $minerals->groupBy('mineral_id')->map(function ($group) {
             $first = $group->first();
+
             return [
                 'mineral' => $first->mineral,
                 'total_quantity' => $group->sum('quantity'),
@@ -58,10 +58,8 @@ class SalvageService
     /**
      * Transfer selected salvage items to player
      *
-     * @param Player $player
-     * @param PlayerShip $playerShip
-     * @param array $selectedMinerals Array of ['mineral_id' => quantity]
-     * @param array $selectedPlanIds Array of plan IDs
+     * @param  array  $selectedMinerals  Array of ['mineral_id' => quantity]
+     * @param  array  $selectedPlanIds  Array of plan IDs
      * @return array Result with success status and messages
      */
     public function transferSalvage(
@@ -81,7 +79,10 @@ class SalvageService
         $availableSpace = $playerShip->cargo_hold - $playerShip->current_cargo;
 
         // Transfer minerals (require cargo space)
-        foreach ($selectedMinerals as $mineralId => $quantity) {
+        foreach ($selectedMinerals as $mineral) {
+            $mineralId = $mineral['mineral_id'];
+            $quantity = $mineral['quantity'];
+
             if ($cargoSpaceUsed + $quantity > $availableSpace) {
                 $quantity = $availableSpace - $cargoSpaceUsed;
                 if ($quantity <= 0) {
@@ -122,13 +123,13 @@ class SalvageService
         // Transfer plans (don't consume cargo space)
         foreach ($selectedPlanIds as $planId) {
             // Check if player already has this plan
-            if (!$player->plans()->where('plan_id', $planId)->exists()) {
+            if (! $player->plans()->where('plan_id', $planId)->exists()) {
                 $player->plans()->attach($planId, [
                     'acquired_at' => now(),
                 ]);
                 $result['plans_added'][] = $planId;
             } else {
-                $result['messages'][] = "You already have this upgrade plan";
+                $result['messages'][] = 'You already have this upgrade plan';
             }
         }
 
@@ -138,19 +139,17 @@ class SalvageService
     /**
      * Calculate total cargo space needed for minerals
      *
-     * @param array $selectedMinerals Array of ['mineral_id' => quantity]
+     * @param  array  $selectedMinerals  Array of ['mineral_id' => id, 'quantity' => qty]
      * @return int Total space needed
      */
     public function calculateSpaceNeeded(array $selectedMinerals): int
     {
-        return array_sum($selectedMinerals);
+        return array_sum(array_column($selectedMinerals, 'quantity'));
     }
 
     /**
      * Validate salvage selection against cargo capacity
      *
-     * @param PlayerShip $playerShip
-     * @param array $selectedMinerals
      * @return array ['valid' => bool, 'space_needed' => int, 'space_available' => int]
      */
     public function validateSelection(PlayerShip $playerShip, array $selectedMinerals): array

@@ -32,7 +32,7 @@ class TradingServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tradingService = new TradingService();
+        $this->tradingService = new TradingService;
     }
 
     /** @test */

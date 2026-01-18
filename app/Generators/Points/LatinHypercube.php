@@ -100,12 +100,12 @@ final class LatinHypercube extends AbstractPointGenerator implements PointGenera
                 $maxY = $minY;
             }
 
-            file_put_contents("/tmp/permlo.mark", __METHOD__."::".__LINE__."\tmin x = ".$minX."\tmax x = ".$maxX, FILE_APPEND);
+            file_put_contents('/tmp/permlo.mark', __METHOD__.'::'.__LINE__."\tmin x = ".$minX."\tmax x = ".$maxX, FILE_APPEND);
 
             $x = $this->randomizer->getInt($minX, $maxX);
             $y = $this->randomizer->getInt($minY, $maxY);
 
-            if (!in_array([$x, $y], $pts, true)) {
+            if (! in_array([$x, $y], $pts, true)) {
                 $pts[] = [$x, $y];
             }
         }

@@ -12,7 +12,6 @@ return new class extends Migration
     public function up(): void
     {
         /**
-         *
          *  Schema::create('star_types', function (Blueprint $table) {
          *      $table->id();
          *      $table->enum('classification', ['O','B','A','F','G','K','M', 'N'])->nullable(false);

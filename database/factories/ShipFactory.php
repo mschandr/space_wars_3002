@@ -22,7 +22,7 @@ class ShipFactory extends Factory
     {
         return [
             'uuid' => Str::uuid(),
-            'name' => fake()->unique()->word() . '-class',
+            'name' => fake()->unique()->word().'-class',
             'class' => fake()->randomElement(['fighter', 'transport', 'hauler', 'battleship']),
             'description' => fake()->sentence(),
             'base_price' => fake()->numberBetween(5000, 100000),

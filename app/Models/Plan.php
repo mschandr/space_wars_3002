@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Str;
 
 class Plan extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'uuid',
         'name',
@@ -42,8 +44,8 @@ class Plan extends Model
     public function players(): BelongsToMany
     {
         return $this->belongsToMany(Player::class, 'player_plans')
-                    ->withTimestamps()
-                    ->withPivot('acquired_at');
+            ->withTimestamps()
+            ->withPivot('acquired_at');
     }
 
     /**
@@ -52,7 +54,7 @@ class Plan extends Model
     public function tradingHubs(): BelongsToMany
     {
         return $this->belongsToMany(TradingHub::class, 'trading_hub_plans')
-                    ->withTimestamps();
+            ->withTimestamps();
     }
 
     /**
@@ -68,7 +70,7 @@ class Plan extends Model
      */
     public function getTierName(): string
     {
-        return match($this->additional_levels) {
+        return match ($this->additional_levels) {
             10 => 'Basic',
             20 => 'Advanced',
             30 => 'Experimental',

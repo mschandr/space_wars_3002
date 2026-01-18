@@ -18,7 +18,6 @@ class PlanetTypeSelector
      * @param  StellarClassification  $stellarClass  The parent star's classification
      * @param  int  $orbitalIndex  The planet's position (1 = innermost)
      * @param  int  $totalPlanets  Total number of planets in the system
-     * @return PointOfInterestType
      *
      * @throws AssertionFailedException
      */

@@ -42,11 +42,12 @@ class ShipUpgradeService
      */
     public function calculateUpgradeCost(string $component, int $currentLevel): int
     {
-        if (!isset(self::BASE_COSTS[$component])) {
+        if (! isset(self::BASE_COSTS[$component])) {
             throw new \InvalidArgumentException("Invalid component: {$component}");
         }
 
         $baseCost = self::BASE_COSTS[$component];
+
         return (int) floor($baseCost * (1 + ($currentLevel * 0.5)));
     }
 
@@ -59,7 +60,7 @@ class ShipUpgradeService
 
         // Get base value from ship template
         $shipTemplate = $ship->ship;
-        $baseValue = match($component) {
+        $baseValue = match ($component) {
             'max_fuel' => $shipTemplate->attributes['max_fuel'] ?? 100,
             'max_hull' => $shipTemplate->hull_strength,
             'weapons' => $shipTemplate->attributes['starting_weapons'] ?? 10,
@@ -95,6 +96,7 @@ class ShipUpgradeService
     {
         $currentLevel = $this->getComponentLevel($ship, $component);
         $maxLevel = $this->getMaxLevel($ship->player, $component);
+
         return $currentLevel < $maxLevel;
     }
 
@@ -103,7 +105,7 @@ class ShipUpgradeService
      */
     public function upgrade(PlayerShip $ship, string $component): array
     {
-        if (!isset(self::BASE_COSTS[$component])) {
+        if (! isset(self::BASE_COSTS[$component])) {
             return [
                 'success' => false,
                 'message' => "Invalid component: {$component}",
@@ -111,7 +113,7 @@ class ShipUpgradeService
         }
 
         // Check if component can be upgraded
-        if (!$this->canUpgrade($ship, $component)) {
+        if (! $this->canUpgrade($ship, $component)) {
             return [
                 'success' => false,
                 'message' => "Component {$component} is already at maximum level.",
@@ -122,7 +124,7 @@ class ShipUpgradeService
         $cost = $this->calculateUpgradeCost($component, $currentLevel);
 
         // Check if player has enough credits
-        if (!$ship->player->deductCredits($cost)) {
+        if (! $ship->player->deductCredits($cost)) {
             return [
                 'success' => false,
                 'message' => "Insufficient credits. Upgrade costs {$cost} credits.",
@@ -143,7 +145,7 @@ class ShipUpgradeService
 
         return [
             'success' => true,
-            'message' => "Successfully upgraded {$component} to level " . ($currentLevel + 1),
+            'message' => "Successfully upgraded {$component} to level ".($currentLevel + 1),
             'cost' => $cost,
             'new_level' => $currentLevel + 1,
             'new_value' => $ship->{$component},
