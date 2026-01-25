@@ -2,14 +2,56 @@
 
 namespace App\Services;
 
+use App\Enums\Galaxy\RegionType;
 use App\Models\Colony;
 use App\Models\ColonyBuilding;
 use App\Models\Mineral;
+use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
 
 class MiningService
 {
+    /**
+     * Check if a player can mine at a specific POI.
+     *
+     * Core region mining requires ownership or no owner.
+     * Outer region is always mineable.
+     */
+    public function canMineAt(Player $player, PointOfInterest $poi): bool
+    {
+        // Outer region is always mineable
+        if ($poi->region === RegionType::OUTER) {
+            return true;
+        }
+
+        // Core region with no owner is mineable
+        if ($poi->owner_id === null) {
+            return true;
+        }
+
+        // Core region requires ownership
+        return $poi->owner_id === $player->id;
+    }
+
+    /**
+     * Get mining restriction message for a POI.
+     */
+    public function getMiningRestrictionMessage(Player $player, PointOfInterest $poi): ?string
+    {
+        if ($this->canMineAt($player, $poi)) {
+            return null;
+        }
+
+        if ($poi->region === RegionType::CORE) {
+            if ($poi->owner_id !== null && $poi->owner_id !== $player->id) {
+                return 'This core system is owned by another player. Mining rights are restricted.';
+            }
+        }
+
+        return 'You do not have permission to mine at this location.';
+    }
+
     /**
      * Calculate mining efficiency based on ship sensor level
      * Formula: min(2.0, 0.1 * (1.18^sensorLevel))

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\ColonyCombatController;
 use App\Http\Controllers\Api\GalaxyController;
+use App\Http\Controllers\Api\GalaxyCreationController;
 use App\Http\Controllers\Api\LeaderboardController;
 use App\Http\Controllers\Api\MarketEventController;
 use App\Http\Controllers\Api\MirrorUniverseController;
@@ -39,14 +40,20 @@ Route::prefix('auth')->group(function () {
 });
 
 // Galaxy information routes (public)
+// Note: {uuid} uses regex to avoid catching static routes like 'size-tiers'
 Route::prefix('galaxies')->group(function () {
     Route::get('/', [GalaxyController::class, 'index']);
-    Route::get('{uuid}', [GalaxyController::class, 'show']);
-    Route::get('{uuid}/statistics', [GalaxyController::class, 'statistics']);
-    Route::get('{uuid}/map', [GalaxyController::class, 'map']);
+    Route::get('list', [GalaxyController::class, 'list']);  // Dehydrated list for game selection
+    Route::get('{uuid}', [GalaxyController::class, 'show'])
+        ->where('uuid', '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
+    Route::get('{uuid}/statistics', [GalaxyController::class, 'statistics'])
+        ->where('uuid', '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
+    Route::get('{uuid}/map', [GalaxyController::class, 'map'])
+        ->where('uuid', '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
 });
 
-Route::get('sectors/{uuid}', [GalaxyController::class, 'showSector']);
+Route::get('sectors/{uuid}', [GalaxyController::class, 'showSector'])
+    ->where('uuid', '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
 
 // Leaderboard routes (public)
 Route::prefix('galaxies/{galaxyUuid}/leaderboards')->group(function () {
@@ -75,6 +82,28 @@ Route::get('pirate-factions/{factionUuid}/captains', [PirateFactionController::c
 
 // Protected routes requiring authentication
 Route::middleware('auth:sanctum')->group(function () {
+    // Galaxy creation routes
+    // Note: Static routes MUST come before dynamic {uuid} routes to avoid 404s
+    Route::prefix('galaxies')->group(function () {
+        Route::post('create', [GalaxyCreationController::class, 'create']);
+        Route::post('create-tiered', [GalaxyCreationController::class, 'createTiered']);
+        Route::get('size-tiers', [GalaxyCreationController::class, 'getSizeTiers']);
+    });
+
+    // Galaxy routes with dynamic UUID parameter (must come after static routes)
+    Route::prefix('galaxies/{uuid}')->group(function () {
+        Route::get('creation-status', [GalaxyCreationController::class, 'creationStatus']);
+        Route::post('npcs', [GalaxyCreationController::class, 'addNpcs']);
+        Route::get('npcs', [GalaxyCreationController::class, 'listNpcs']);
+    });
+
+    // NPC management routes
+    Route::prefix('npcs')->group(function () {
+        Route::get('archetypes', [GalaxyCreationController::class, 'getArchetypes']);
+        Route::get('{uuid}', [GalaxyCreationController::class, 'showNpc']);
+        Route::delete('{uuid}', [GalaxyCreationController::class, 'destroyNpc']);
+    });
+
     // Player management routes
     Route::prefix('players')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\PlayerController::class, 'index']);

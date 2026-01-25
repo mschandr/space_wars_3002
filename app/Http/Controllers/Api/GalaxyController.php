@@ -13,22 +13,59 @@ use Illuminate\Http\Request;
 class GalaxyController extends BaseApiController
 {
     /**
-     * List all available galaxies
+     * List all available galaxies (full details)
      */
     public function index(): JsonResponse
     {
-        $galaxies = Galaxy::with(['players' => function ($query) {
+        $galaxies = Galaxy::withCount(['players as active_player_count' => function ($query) {
             $query->where('status', 'active');
-        }])
-            ->withCount(['players as active_player_count' => function ($query) {
-                $query->where('status', 'active');
-            }])
-            ->get();
+        }])->get();
 
         return $this->success(
             GalaxyResource::collection($galaxies),
             'Galaxies retrieved successfully'
         );
+    }
+
+    /**
+     * Dehydrated galaxy list for game selection UI.
+     * Returns minimal data optimized for fast loading.
+     * Cached for 60 seconds.
+     */
+    public function list(): JsonResponse
+    {
+        $galaxies = cache()->remember('galaxies:list', 60, function () {
+            return Galaxy::query()
+                ->select(['uuid', 'name', 'width', 'height', 'status', 'game_mode', 'size_tier', 'created_at'])
+                ->withCount(['players as player_count' => fn ($q) => $q->where('status', 'active')])
+                ->where('status', 'active')
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(fn ($g) => [
+                    'uuid' => $g->uuid,
+                    'name' => $g->name,
+                    'size' => $g->size_tier?->value ?? $this->inferSize($g->width),
+                    'players' => $g->player_count,
+                    'mode' => $g->game_mode ?? 'multiplayer',
+                ]);
+        });
+
+        return response()->json([
+            'galaxies' => $galaxies,
+            'cached_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Infer galaxy size from dimensions for legacy galaxies.
+     */
+    private function inferSize(int $width): string
+    {
+        return match (true) {
+            $width <= 500 => 'small',
+            $width <= 1500 => 'medium',
+            default => 'large',
+        };
     }
 
     /**
@@ -127,7 +164,7 @@ class GalaxyController extends BaseApiController
 
         // Get revealed systems if player has star charts
         $revealedSystemIds = $player
-            ? $player->starCharts()->pluck('poi_id')->toArray()
+            ? $player->starCharts()->pluck('points_of_interest.id')->toArray()
             : [];
 
         // Get POIs based on visibility

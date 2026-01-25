@@ -2,17 +2,18 @@
 
 namespace Database\Seeders;
 
+use App\Models\Galaxy;
 use App\Models\Ship;
 use Illuminate\Database\Seeder;
 
 class ShipTypesSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * Get ship definitions
      */
-    public function run(): void
+    public function getShipDefinitions(): array
     {
-        $ships = [
+        return [
             [
                 'name' => 'Sparrow-class Light Freighter',
                 'class' => 'Light Freighter',
@@ -238,15 +239,24 @@ class ShipTypesSeeder extends Seeder
         ];
     }
 
-    public function generateShips(Galaxy $galaxy): void
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
     {
+        // Ships are created per-galaxy via generateShips()
+    }
+
+    public function generateShips(Galaxy $galaxy, $command = null): void
+    {
+        $ships = $this->getShipDefinitions();
+
         foreach ($ships as $shipData) {
-            // Use updateOrCreate to prevent duplicates
+            // Use updateOrCreate to prevent duplicates (ships are global blueprints, not per-galaxy)
             Ship::updateOrCreate(
                 [
-                    'name'      => $shipData['name'],
-                    'class'     => $shipData['class'],
-                    'galaxy_id' => $galaxy->id
+                    'name' => $shipData['name'],
+                    'class' => $shipData['class'],
                 ],
                 $shipData
             );

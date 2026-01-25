@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Galaxy\RegionType;
 use App\Enums\PointsOfInterest\PointOfInterestStatus;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Faker\Providers\AnomalyNameProvider;
@@ -42,6 +43,9 @@ class PointOfInterest extends Model
         'attributes',
         'is_hidden',
         'is_inhabited',
+        'region',
+        'is_fortified',
+        'owner_id',
         'version',
     ];
 
@@ -50,8 +54,10 @@ class PointOfInterest extends Model
         'mineral_deposits' => 'array',
         'is_hidden' => 'boolean',
         'is_inhabited' => 'boolean',
+        'is_fortified' => 'boolean',
         'status' => PointOfInterestStatus::class,
         'type' => PointOfInterestType::class,
+        'region' => RegionType::class,
     ];
 
     /**
@@ -210,6 +216,22 @@ class PointOfInterest extends Model
     }
 
     /**
+     * System defenses at this POI (for fortified systems)
+     */
+    public function systemDefenses()
+    {
+        return $this->hasMany(SystemDefense::class, 'poi_id');
+    }
+
+    /**
+     * Owner of this POI (for mining restrictions)
+     */
+    public function owner()
+    {
+        return $this->belongsTo(Player::class, 'owner_id');
+    }
+
+    /**
      *--------------------------------------------------------------------------
      * Query Scopes
      *--------------------------------------------------------------------------
@@ -237,6 +259,30 @@ class PointOfInterest extends Model
     public function scopeStars($query)
     {
         return $query->where('type', PointOfInterestType::STAR);
+    }
+
+    /**
+     * Scope to filter by core region
+     */
+    public function scopeCore($query)
+    {
+        return $query->where('region', RegionType::CORE);
+    }
+
+    /**
+     * Scope to filter by outer region
+     */
+    public function scopeOuter($query)
+    {
+        return $query->where('region', RegionType::OUTER);
+    }
+
+    /**
+     * Scope to filter fortified systems
+     */
+    public function scopeFortified($query)
+    {
+        return $query->where('is_fortified', true);
     }
 
     /**
@@ -335,5 +381,55 @@ class PointOfInterest extends Model
             PointOfInterestType::COMET => 'highlight',
             default => 'star_no_planets',
         };
+    }
+
+    /**
+     * Check if this POI is in the core region
+     */
+    public function isInCoreRegion(): bool
+    {
+        return $this->region === RegionType::CORE;
+    }
+
+    /**
+     * Check if this POI is in the outer region
+     */
+    public function isInOuterRegion(): bool
+    {
+        return $this->region === RegionType::OUTER;
+    }
+
+    /**
+     * Get active defenses at this POI
+     */
+    public function getActiveDefenses()
+    {
+        return $this->systemDefenses()->active()->get();
+    }
+
+    /**
+     * Calculate total defense strength at this POI
+     */
+    public function getTotalDefenseStrength(): int
+    {
+        return $this->getActiveDefenses()->sum(fn ($defense) => $defense->calculateDamage());
+    }
+
+    /**
+     * Check if player can mine at this POI
+     */
+    public function canPlayerMine(Player $player): bool
+    {
+        // Outer region is always mineable
+        if ($this->isInOuterRegion()) {
+            return true;
+        }
+
+        // Core region requires ownership or no owner
+        if ($this->owner_id === null) {
+            return true;
+        }
+
+        return $this->owner_id === $player->id;
     }
 }
