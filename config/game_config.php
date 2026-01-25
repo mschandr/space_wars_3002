@@ -226,4 +226,41 @@ return [
         'pirate_fleet_size_boost' => 1.5,  // 50% larger pirate fleets
     ],
 
+    /**
+    |--------------------------------------------------------------------------
+    | Tiered Galaxy Configuration
+    |--------------------------------------------------------------------------
+    | Configuration for tiered galaxies with core/outer regions.
+    | Core = civilized, Outer = frontier wilderness.
+     */
+    'tiered_galaxy' => [
+        // Core region settings
+        'core_min_spacing' => 15,           // Minimum spacing between core stars
+        'core_inhabited_percentage' => 1.0,  // 100% of core stars are inhabited
+        'core_defense_level' => 1,          // Default defense level for fortress systems
+
+        // Outer region settings
+        'outer_min_spacing' => 25,          // Minimum spacing between outer stars
+        'outer_inhabited_percentage' => 0.0, // 0% of outer stars are inhabited
+        'outer_mineral_multiplier' => 2.0,  // 2x mineral richness in outer region
+        'outer_gate_max_distance' => 200,   // Max distance for dormant gate connections
+
+        // Dormant gate activation
+        'dormant_gate_sensor_requirement' => 3, // Sensor level to activate dormant gates
+
+        // Fortress defenses
+        'fortress_defenses' => [
+            'orbital_cannons' => 4,
+            'space_lasers' => 2,
+            'ground_missiles' => 6,
+            'planetary_shield_strength' => 10000,
+            'fighter_port_fighters' => 1000,
+        ],
+
+        // Size tier formulas (for reference, actual values in GalaxySizeTier enum)
+        // core_bounds = outer_size / 2
+        // core_stars = outer_size / 5
+        // outer_stars = (outer_size / 2) - core_stars
+    ],
+
 ];

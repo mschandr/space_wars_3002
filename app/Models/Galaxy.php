@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\Galaxy\GalaxyDistributionMethod;
 use App\Enums\Galaxy\GalaxyRandomEngine;
+use App\Enums\Galaxy\GalaxySizeTier;
 use App\Enums\Galaxy\GalaxyStatus;
 use App\Faker\Common\GalaxySuffixes;
 use App\Faker\Common\RomanNumerals;
@@ -21,13 +22,20 @@ class Galaxy extends Model
     protected $fillable = [
         'galaxy_uuid', 'name', 'description', 'width', 'height', 'seed', 'distribution_method',
         'spacing_factor', 'engine', 'turn_limit', 'status', 'version', 'is_public', 'config',
+        'game_mode', 'owner_user_id', 'size_tier', 'core_bounds', 'progress_status',
+        'generation_started_at', 'generation_completed_at',
     ];
 
     protected $casts = [
         'status' => GalaxyStatus::class,
         'distribution_method' => GalaxyDistributionMethod::class,
         'engine' => GalaxyRandomEngine::class,
+        'size_tier' => GalaxySizeTier::class,
         'config' => 'array',
+        'core_bounds' => 'array',
+        'progress_status' => 'array',
+        'generation_started_at' => 'datetime',
+        'generation_completed_at' => 'datetime',
     ];
 
     public static function createGalaxy(array $galaxyData): self
@@ -120,6 +128,35 @@ class Galaxy extends Model
         return $this->hasManyThrough(TradingHub::class, PointOfInterest::class, 'galaxy_id', 'poi_id');
     }
 
+    public function npcs(): HasMany
+    {
+        return $this->hasMany(Npc::class);
+    }
+
+    /**
+     * Check if this is a single-player galaxy
+     */
+    public function isSinglePlayer(): bool
+    {
+        return $this->game_mode === 'single_player';
+    }
+
+    /**
+     * Check if this is a multiplayer galaxy
+     */
+    public function isMultiplayer(): bool
+    {
+        return $this->game_mode === 'multiplayer';
+    }
+
+    /**
+     * Check if this galaxy allows NPCs
+     */
+    public function allowsNpcs(): bool
+    {
+        return in_array($this->game_mode, ['single_player', 'mixed']);
+    }
+
     /**
      * Get paired galaxy (works both ways - prime<->mirror)
      */
@@ -185,5 +222,78 @@ class Galaxy extends Model
             'pirate_difficulty_boost' => 2.0,
             'rare_mineral_spawn_rate' => 3.0,
         ];
+    }
+
+    /**
+     * Check if this is a tiered galaxy.
+     */
+    public function isTieredGalaxy(): bool
+    {
+        return $this->size_tier !== null;
+    }
+
+    /**
+     * Check if coordinates are within the core region.
+     */
+    public function isInCoreRegion(float $x, float $y): bool
+    {
+        if (! $this->core_bounds) {
+            return false;
+        }
+
+        return $x >= $this->core_bounds['x_min']
+            && $x <= $this->core_bounds['x_max']
+            && $y >= $this->core_bounds['y_min']
+            && $y <= $this->core_bounds['y_max'];
+    }
+
+    /**
+     * Update progress status for galaxy generation.
+     */
+    public function updateProgress(int $step, string $name, int $percentage, string $status = 'running', ?string $message = null): void
+    {
+        $progress = $this->progress_status ?? [];
+
+        $progress[$step] = [
+            'step' => $step,
+            'name' => $name,
+            'percentage' => $percentage,
+            'status' => $status,
+            'message' => $message,
+            'timestamp' => now()->toIso8601String(),
+        ];
+
+        $this->progress_status = $progress;
+        $this->save();
+    }
+
+    /**
+     * Get the current generation progress percentage.
+     */
+    public function getCurrentProgress(): int
+    {
+        if (empty($this->progress_status)) {
+            return 0;
+        }
+
+        $latestStep = collect($this->progress_status)->sortByDesc('step')->first();
+
+        return $latestStep['percentage'] ?? 0;
+    }
+
+    /**
+     * Get core region POIs.
+     */
+    public function corePointsOfInterest(): HasMany
+    {
+        return $this->pointsOfInterest()->where('region', 'core');
+    }
+
+    /**
+     * Get outer region POIs.
+     */
+    public function outerPointsOfInterest(): HasMany
+    {
+        return $this->pointsOfInterest()->where('region', 'outer');
     }
 }

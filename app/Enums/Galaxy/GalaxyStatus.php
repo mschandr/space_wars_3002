@@ -9,6 +9,7 @@ enum GalaxyStatus: int
     case INACTIVE = 2;
     case ARCHIVED = 3;
     case SUSPENDED = 4;
+    case PROCESSING = 5;
 
     public function label(): string
     {
@@ -18,6 +19,7 @@ enum GalaxyStatus: int
             self::INACTIVE => 'Inactive',
             self::ARCHIVED => 'Archived',
             self::SUSPENDED => 'Suspended',
+            self::PROCESSING => 'Processing',
         };
     }
 

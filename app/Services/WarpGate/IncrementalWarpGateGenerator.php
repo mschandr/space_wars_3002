@@ -4,9 +4,9 @@ namespace App\Services\WarpGate;
 
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 use App\Models\WarpGate;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class IncrementalWarpGateGenerator
@@ -38,8 +38,9 @@ class IncrementalWarpGateGenerator
     }
 
     /**
-     * Generate warp gates incrementally for inhabited star systems only
-     * Uninhabited systems remain isolated to encourage exploration and colonization
+     * Generate warp gates incrementally for inhabited star systems only.
+     * Uses canonical coordinate ordering with bulk inserts for O(n) performance.
+     * Uninhabited systems remain isolated to encourage exploration and colonization.
      */
     public function generateGatesIncremental(Galaxy $galaxy): array
     {
@@ -47,11 +48,13 @@ class IncrementalWarpGateGenerator
         $this->gatesCreated = 0;
         $this->gatesSkipped = 0;
 
-        // Get total INHABITED star count for progress tracking
-        $totalStars = $galaxy->pointsOfInterest()
+        // Load all inhabited stars with coordinates
+        $stars = $galaxy->pointsOfInterest()
             ->where('type', PointOfInterestType::STAR)
-            ->where('is_inhabited', true)  // Only inhabited systems get warp gates
-            ->count();
+            ->where('is_inhabited', true)
+            ->get(['id', 'x', 'y']);
+
+        $totalStars = $stars->count();
 
         if ($totalStars < 2) {
             return [
@@ -66,30 +69,16 @@ class IncrementalWarpGateGenerator
         $this->output("Max gates per system: {$this->maxGatesPerSystem}");
         $this->newLine();
 
-        // Process stars in chunks to avoid memory issues
-        $chunkSize = 50;
-        $starsProcessed = 0;
+        // Build spatial index for fast neighbor lookup
+        $starIndex = $this->buildSpatialIndex($stars);
 
-        PointOfInterest::where('galaxy_id', $galaxy->id)
-            ->where('type', PointOfInterestType::STAR)
-            ->where('is_inhabited', true)  // Only inhabited systems get warp gates
-            ->orderBy('id')
-            ->chunk($chunkSize, function ($starChunk) use (&$starsProcessed, $totalStars, $galaxy) {
-                foreach ($starChunk as $star) {
-                    $this->processStarSystem($star, $galaxy);
-                    $starsProcessed++;
+        // Collect all gate pairs using canonical coordinates
+        $gatePairs = $this->collectGatePairs($stars, $starIndex, $galaxy);
 
-                    // Show progress every 10 stars
-                    if ($starsProcessed % 10 === 0 || $starsProcessed === $totalStars) {
-                        $percent = round(($starsProcessed / $totalStars) * 100, 1);
-                        $this->output(
-                            "Progress: {$starsProcessed}/{$totalStars} stars ({$percent}%) | ".
-                            "Gates created: {$this->gatesCreated} | Skipped: {$this->gatesSkipped}",
-                            true // Overwrite line
-                        );
-                    }
-                }
-            });
+        $this->output('Found '.count($gatePairs).' unique gate pairs to create...');
+
+        // Bulk insert with INSERT IGNORE for automatic deduplication
+        $this->bulkInsertGates($galaxy, $gatePairs);
 
         $this->newLine();
 
@@ -101,193 +90,159 @@ class IncrementalWarpGateGenerator
         return [
             'gates_created' => $this->gatesCreated,
             'gates_skipped' => $this->gatesSkipped,
-            'stars_processed' => $starsProcessed,
+            'stars_processed' => $totalStars,
         ];
     }
 
     /**
-     * Calculate gate density multiplier based on distance from galactic center
-     * Linear falloff: center = 2.0x, edge = 1.0x
-     *
-     * @param  PointOfInterest  $star  The star system
-     * @param  Galaxy  $galaxy  The galaxy
-     * @return float Multiplier between 1.0 (edge) and 2.0 (center)
+     * Build a spatial index for fast neighbor lookup.
+     * Groups stars into grid cells based on adjacency threshold.
      */
-    private function calculateGateDensityMultiplier(PointOfInterest $star, Galaxy $galaxy): float
+    private function buildSpatialIndex($stars): array
     {
-        $centerX = $galaxy->width / 2.0;
-        $centerY = $galaxy->height / 2.0;
+        $cellSize = $this->adjacencyThreshold * 2;
+        $index = [];
 
-        $dx = $star->x - $centerX;
-        $dy = $star->y - $centerY;
-        $distance = sqrt($dx * $dx + $dy * $dy);
+        foreach ($stars as $star) {
+            $cellX = (int) floor($star->x / $cellSize);
+            $cellY = (int) floor($star->y / $cellSize);
+            $key = "{$cellX},{$cellY}";
 
-        $maxDistance = sqrt($centerX * $centerX + $centerY * $centerY);
-        $normalizedDistance = min(1.0, $distance / $maxDistance);
+            if (! isset($index[$key])) {
+                $index[$key] = [];
+            }
+            $index[$key][] = $star;
+        }
 
-        return 2.0 - $normalizedDistance;
+        return $index;
     }
 
     /**
-     * Process a single star system, creating gates to nearby stars
+     * Collect all valid gate pairs using canonical coordinate ordering.
+     * Uses spatial index for O(n) performance instead of O(n²).
      */
-    private function processStarSystem(PointOfInterest $star, Galaxy $galaxy): void
+    private function collectGatePairs($stars, array $spatialIndex, Galaxy $galaxy): array
     {
-        // Get current connection count for this star
-        $currentConnections = WarpGate::where('source_poi_id', $star->id)->count();
+        $pairs = [];
+        $seen = [];  // Track canonical pairs we've already added
+        $cellSize = $this->adjacencyThreshold * 2;
+        $starsProcessed = 0;
+        $totalStars = count($stars);
 
-        // Calculate gate density multiplier based on distance from galactic center
-        $densityMultiplier = $this->calculateGateDensityMultiplier($star, $galaxy);
+        foreach ($stars as $star) {
+            $cellX = (int) floor($star->x / $cellSize);
+            $cellY = (int) floor($star->y / $cellSize);
 
-        // Adjust max gates based on density multiplier
-        // Center stars can have up to 2x more gates than edge stars
-        $effectiveMaxGates = (int) round($this->maxGatesPerSystem * ($densityMultiplier / 1.5));
-        $effectiveMaxGates = max(2, min($this->maxGatesPerSystem * 2, $effectiveMaxGates));
-
-        // Skip if already at max connections
-        if ($currentConnections >= $effectiveMaxGates) {
-            return;
-        }
-
-        // Find nearby stars within adjacency threshold
-        $nearbyStars = $this->findNearbyStars($star, $galaxy);
-
-        $connectionsToCreate = $effectiveMaxGates - $currentConnections;
-        $connectionsCreated = 0;
-
-        foreach ($nearbyStars as $nearbyStarData) {
-            if ($connectionsCreated >= $connectionsToCreate) {
-                break;
-            }
-
-            $destinationId = $nearbyStarData['id'];
-
-            // Check if bidirectional gate already exists
-            if ($this->gateExists($star->id, $destinationId)) {
-                $this->gatesSkipped++;
-
-                continue;
-            }
-
-            // Check if destination star is at max connections
-            // Need to get the destination POI to calculate its effective max gates
-            $destinationPoi = PointOfInterest::find($destinationId);
-            if ($destinationPoi) {
-                $destDensityMultiplier = $this->calculateGateDensityMultiplier($destinationPoi, $galaxy);
-                $destEffectiveMaxGates = (int) round($this->maxGatesPerSystem * ($destDensityMultiplier / 1.5));
-                $destEffectiveMaxGates = max(2, min($this->maxGatesPerSystem * 2, $destEffectiveMaxGates));
-
-                $destinationConnections = WarpGate::where('source_poi_id', $destinationId)->count();
-                if ($destinationConnections >= $destEffectiveMaxGates) {
-                    $this->gatesSkipped++;
-
-                    continue;
+            // Check current cell and 8 neighboring cells
+            $candidates = [];
+            for ($dx = -1; $dx <= 1; $dx++) {
+                for ($dy = -1; $dy <= 1; $dy++) {
+                    $key = ($cellX + $dx).','.($cellY + $dy);
+                    if (isset($spatialIndex[$key])) {
+                        foreach ($spatialIndex[$key] as $candidate) {
+                            if ($candidate->id !== $star->id) {
+                                $candidates[] = $candidate;
+                            }
+                        }
+                    }
                 }
             }
 
-            // Create bidirectional gates
-            $this->createBidirectionalGate(
-                $galaxy->id,
-                $star->id,
-                $destinationId,
-                $nearbyStarData['distance']
-            );
+            // Calculate distances and filter by adjacency threshold
+            $nearby = [];
+            foreach ($candidates as $candidate) {
+                $dx = $candidate->x - $star->x;
+                $dy = $candidate->y - $star->y;
+                $distance = sqrt($dx * $dx + $dy * $dy);
 
-            $connectionsCreated++;
-            $this->gatesCreated += 2; // Bidirectional
-        }
-    }
+                if ($distance <= $this->adjacencyThreshold) {
+                    $nearby[] = ['poi' => $candidate, 'distance' => $distance];
+                }
+            }
 
-    /**
-     * Find nearby inhabited stars using efficient spatial query
-     * Only inhabited systems can be connected via warp gates
-     */
-    private function findNearbyStars(PointOfInterest $star, Galaxy $galaxy): array
-    {
-        // Calculate bounding box for adjacency threshold
-        $minX = $star->x - ($this->adjacencyThreshold * 10); // 10x threshold for redundancy
-        $maxX = $star->x + ($this->adjacencyThreshold * 10);
-        $minY = $star->y - ($this->adjacencyThreshold * 10);
-        $maxY = $star->y + ($this->adjacencyThreshold * 10);
+            // Sort by distance and limit connections
+            usort($nearby, fn ($a, $b) => $a['distance'] <=> $b['distance']);
+            $nearby = array_slice($nearby, 0, $this->maxGatesPerSystem);
 
-        // Query INHABITED stars within bounding box
-        $candidates = PointOfInterest::where('galaxy_id', $galaxy->id)
-            ->where('type', PointOfInterestType::STAR)
-            ->where('is_inhabited', true)  // Only connect to inhabited systems
-            ->where('id', '!=', $star->id)
-            ->whereBetween('x', [$minX, $maxX])
-            ->whereBetween('y', [$minY, $maxY])
-            ->get(['id', 'x', 'y']);
+            // Create canonical pairs
+            foreach ($nearby as $neighbor) {
+                $coords = WarpGate::canonicalCoordinates(
+                    (int) $star->x,
+                    (int) $star->y,
+                    (int) $neighbor['poi']->x,
+                    (int) $neighbor['poi']->y
+                );
 
-        // Calculate exact distances and sort
-        $nearbyStars = [];
-        foreach ($candidates as $candidate) {
-            $distance = $this->calculateDistance($star, $candidate);
+                $key = "{$coords['source_x']},{$coords['source_y']},{$coords['dest_x']},{$coords['dest_y']}";
 
-            // Only include stars within reasonable distance
-            if ($distance <= $this->adjacencyThreshold * 10) {
-                $nearbyStars[] = [
-                    'id' => $candidate->id,
-                    'distance' => $distance,
-                ];
+                if (! isset($seen[$key])) {
+                    $seen[$key] = true;
+                    $pairs[] = [
+                        'source_poi_id' => $star->id,
+                        'destination_poi_id' => $neighbor['poi']->id,
+                        'source_x' => $coords['source_x'],
+                        'source_y' => $coords['source_y'],
+                        'dest_x' => $coords['dest_x'],
+                        'dest_y' => $coords['dest_y'],
+                        'distance' => $neighbor['distance'],
+                    ];
+                }
+            }
+
+            $starsProcessed++;
+            if ($starsProcessed % 50 === 0 || $starsProcessed === $totalStars) {
+                $percent = round(($starsProcessed / $totalStars) * 100, 1);
+                $this->output(
+                    "Scanning: {$starsProcessed}/{$totalStars} stars ({$percent}%) | Pairs found: ".count($pairs),
+                    true
+                );
             }
         }
 
-        // Sort by distance and return closest ones
-        usort($nearbyStars, fn ($a, $b) => $a['distance'] <=> $b['distance']);
+        $this->newLine();
 
-        return array_slice($nearbyStars, 0, $this->maxGatesPerSystem * 2);
+        return $pairs;
     }
 
     /**
-     * Check if a bidirectional gate already exists
+     * Bulk insert gates using INSERT IGNORE for automatic deduplication.
      */
-    private function gateExists(int $sourceId, int $destinationId): bool
+    private function bulkInsertGates(Galaxy $galaxy, array $pairs): void
     {
-        return WarpGate::where(function ($query) use ($sourceId, $destinationId) {
-            $query->where('source_poi_id', $sourceId)
-                ->where('destination_poi_id', $destinationId);
-        })->orWhere(function ($query) use ($sourceId, $destinationId) {
-            $query->where('source_poi_id', $destinationId)
-                ->where('destination_poi_id', $sourceId);
-        })->exists();
-    }
+        $now = now();
+        $chunkSize = 500;
+        $chunks = array_chunk($pairs, $chunkSize);
 
-    /**
-     * Create bidirectional warp gates
-     */
-    private function createBidirectionalGate(
-        int $galaxyId,
-        int $sourceId,
-        int $destinationId,
-        float $distance
-    ): void {
-        // Calculate fuel cost based on distance
-        $fuelCost = max(1, (int) ceil($distance / 2));
+        foreach ($chunks as $chunk) {
+            $rows = [];
 
-        // Create gate: source -> destination
-        WarpGate::create([
-            'uuid' => Str::uuid(),
-            'galaxy_id' => $galaxyId,
-            'source_poi_id' => $sourceId,
-            'destination_poi_id' => $destinationId,
-            'fuel_cost' => $fuelCost,
-            'distance' => $distance,
-            'is_hidden' => false,
-            'status' => 'active',
-        ]);
+            foreach ($chunk as $pair) {
+                $uuid = (string) Str::uuid();
+                $fuelCost = max(1, (int) ceil($pair['distance'] / 2));
 
-        // Create gate: destination -> source
-        WarpGate::create([
-            'uuid' => Str::uuid(),
-            'galaxy_id' => $galaxyId,
-            'source_poi_id' => $destinationId,
-            'destination_poi_id' => $sourceId,
-            'fuel_cost' => $fuelCost,
-            'distance' => $distance,
-            'is_hidden' => false,
-            'status' => 'active',
-        ]);
+                $rows[] = [
+                    'uuid' => $uuid,
+                    'galaxy_id' => $galaxy->id,
+                    'source_poi_id' => $pair['source_poi_id'],
+                    'destination_poi_id' => $pair['destination_poi_id'],
+                    'source_x' => $pair['source_x'],
+                    'source_y' => $pair['source_y'],
+                    'dest_x' => $pair['dest_x'],
+                    'dest_y' => $pair['dest_y'],
+                    'distance' => $pair['distance'],
+                    'fuel_cost' => $fuelCost,
+                    'is_hidden' => false,
+                    'status' => 'active',
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+
+            // Use insertOrIgnore for automatic deduplication via unique constraint
+            $inserted = DB::table('warp_gates')->insertOrIgnore($rows);
+            $this->gatesCreated += $inserted;
+            $this->gatesSkipped += count($rows) - $inserted;
+        }
     }
 
     /**
@@ -306,17 +261,6 @@ class IncrementalWarpGateGenerator
                 ->limit($hiddenCount)
                 ->update(['is_hidden' => true]);
         }
-    }
-
-    /**
-     * Calculate Euclidean distance between two POIs
-     */
-    private function calculateDistance(PointOfInterest $poi1, object $poi2): float
-    {
-        $dx = $poi2->x - $poi1->x;
-        $dy = $poi2->y - $poi1->y;
-
-        return sqrt($dx * $dx + $dy * $dy);
     }
 
     /**
