@@ -34,7 +34,10 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
     public int $timeout = 600; // 10 minutes
 
     /**
-     * Create a new job instance.
+     * Initialize the job for populating trading hub inventories for a specific galaxy.
+     *
+     * @param int $galaxyId ID of the galaxy whose trading hub inventories will be populated.
+     * @param bool $regenerate If true, existing inventories will be rebuilt; otherwise existing inventories are preserved.
      */
     public function __construct(
         public int $galaxyId,
@@ -42,7 +45,9 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
     ) {}
 
     /**
-     * Execute the job.
+     * Populate trading hub inventories for the configured galaxy.
+     *
+     * Loads the galaxy by ID (exits silently if not found), preloads minerals and points of interest, builds per-mineral source data, processes each trading hub to create inventory rows and update pricing, and updates the galaxy's inventory_populated_at timestamp.
      */
     public function handle(): void
     {
@@ -94,8 +99,11 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
     }
 
     /**
-     * Build an index of mineral symbol => producing POIs for O(1) lookups
-     */
+         * Build an index mapping each mineral symbol to a list of producing POI coordinates.
+         *
+         * @param iterable|array $allPois Collection or array of POI objects; each POI is expected to expose `x`, `y` and an `attributes['produces']` array of mineral symbols.
+         * @return array<string, array<int, array{ x: float|int, y: float|int }>> Array where keys are mineral symbols and values are arrays of coordinate arrays with keys `x` and `y`.
+         */
     private function buildMineralSourceIndex($allPois): array
     {
         $index = [];
@@ -117,8 +125,18 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
     }
 
     /**
-     * Process inventory for a single trading hub
-     */
+         * Populate inventory rows for a trading hub based on mineral proximity and stocking rules.
+         *
+         * Builds proximity data per mineral, decides whether the hub should stock each mineral,
+         * determines quantity when stocked, performs a bulk insert of inventory rows, and
+         * triggers pricing updates for the hub's inventories.
+         *
+         * @param TradingHub $hub The trading hub being populated.
+         * @param iterable|Collection $minerals Iterable collection of Mineral models to consider.
+         * @param Collection|array $allPois All points of interest for the galaxy (preloaded).
+         * @param array $mineralSources Map of mineral symbol => list of source coordinates (['x'=>float,'y'=>float]).
+         * @return int The number of inventory items created for the hub.
+         */
     private function processHubInventory(
         TradingHub $hub,
         $minerals,
@@ -195,6 +213,15 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
         return $inventoryCount;
     }
 
+    /**
+     * Map a distance to a relative supply level using distance bands.
+     *
+     * Computes an integer supply level that decreases as distance from a mineral source increases,
+     * using piecewise bands with progressively shallower declines and a minimum floor.
+     *
+     * @param float $distance Distance to the nearest mineral source (map units).
+     * @return int Supply level as an integer between 5 and 100, where higher values indicate greater supply.
+     */
     private function calculateSupply(float $distance): int
     {
         if ($distance < 1.0) return (int)(100 - ($distance * 20));
@@ -204,6 +231,17 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
         return max(5, (int)(20 - (($distance - 10) * 1)));
     }
 
+    /**
+     * Compute the demand level for a mineral at a given trading hub.
+     *
+     * Computes a demand score based on the mineral's rarity, applies a connectivity
+     * bonus determined by the hub type, adds a small random adjustment, and clamps
+     * the result to the range 10–100.
+     *
+     * @param Mineral $mineral Mineral whose rarity is used to determine base demand.
+     * @param TradingHub $hub Trading hub whose type can modify demand via a connectivity bonus.
+     * @return int Demand level between 10 and 100 inclusive.
+     */
     private function calculateDemand(Mineral $mineral, TradingHub $hub): int
     {
         $baseDemand = match ($mineral->rarity->value) {
@@ -219,6 +257,17 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
         return max(10, min(100, $baseDemand + $connectivityBonus + mt_rand(-5, 5)));
     }
 
+    /**
+     * Calculate the number of units of a mineral to stock at a trading hub.
+     *
+     * The result is derived from a hub-type base quantity, a multiplier based on the mineral's rarity,
+     * and a proximity stocking multiplier computed from the nearest source distance.
+     *
+     * @param TradingHub $hub The trading hub whose type influences the base stock level.
+     * @param Mineral $mineral The mineral whose rarity influences the rarity multiplier.
+     * @param float|null $nearestDistance Distance to the nearest producing POI, or `null` if no source is known.
+     * @return int The final integer quantity to stock for the given hub and mineral.
+     */
     private function determineQuantity(TradingHub $hub, Mineral $mineral, ?float $nearestDistance): int
     {
         $baseQuantity = match ($hub->type) {
@@ -237,8 +286,12 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
     }
 
     /**
-     * Handle a job failure.
-     */
+         * Log error details when the job fails.
+         *
+         * Logs the exception message and stack trace along with the job's galaxy ID for debugging.
+         *
+         * @param \Throwable $exception The exception thrown during job execution.
+         */
     public function failed(\Throwable $exception): void
     {
         Log::error("PopulateTradingHubInventoryJob: Failed for galaxy {$this->galaxyId}", [

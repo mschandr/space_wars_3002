@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Create the `npcs` table for storing non-player character data, including identity, stats, AI configuration, state, timestamps, and indexes.
+     *
+     * The table includes a primary id, unique uuid, foreign keys to `galaxies` and `points_of_interest` (with cascade and set-null delete rules), identity fields (`call_sign`, `archetype`), gameplay stats (credits, experience, level, ships_destroyed, combats_won, combats_lost, total_trade_volume), AI behavior fields (difficulty, aggression, risk_tolerance, trade_focus, optional JSON `personality`), state tracking (status, current_activity, last_action_at, last_mirror_travel_at), standard timestamps, composite indexes on (galaxy_id, status) and (galaxy_id, archetype), and a unique constraint on (galaxy_id, call_sign).
      */
     public function up(): void
     {
@@ -54,7 +56,7 @@ return new class extends Migration
     }
 
     /**
-     * Reverse the migrations.
+     * Drop the `npcs` table if it exists.
      */
     public function down(): void
     {

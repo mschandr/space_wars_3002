@@ -16,7 +16,16 @@ class NpcShipFactory extends Factory
     protected $model = NpcShip::class;
 
     /**
-     * Define the model's default state.
+     * Default attributes for creating an NpcShip model.
+     *
+     * Notable fields:
+     * - `uuid`: generated UUID.
+     * - `npc_id`: created via Npc factory.
+     * - `ship_id`: created via Ship factory.
+     * - `name`: composed fake word plus a ship-type suffix.
+     * - Ship stats and resources defaulted (fuel, hull, weapons, cargo, sensors, warp).
+     * - `fuel_last_updated_at`: set to the current time.
+     * - `is_active`: true, `status`: "operational".
      *
      * @return array<string, mixed>
      */
@@ -43,7 +52,12 @@ class NpcShipFactory extends Factory
     }
 
     /**
-     * Create with specific ship blueprint
+     * Set the factory state to use the provided Ship as the blueprint and synchronize core ship attributes.
+     *
+     * Uses the Ship's `base_*` values for fuel, hull, weapons, cargo, sensors, and warp drive, falling back to sensible defaults when those base values are null.
+     *
+     * @param Ship $ship The Ship model to use as a blueprint for the generated NpcShip.
+     * @return static A factory configured to create an NpcShip associated with the given Ship and matching its core attributes.
      */
     public function withShip(Ship $ship): static
     {
@@ -61,7 +75,9 @@ class NpcShipFactory extends Factory
     }
 
     /**
-     * Upgraded ship
+     * Configure the factory to produce an upgraded ship with enhanced capabilities.
+     *
+     * @return static The factory instance configured to set higher fuel, hull, weapons, cargo hold, sensors, and warp drive values for an upgraded ship.
      */
     public function upgraded(): static
     {
@@ -78,7 +94,11 @@ class NpcShipFactory extends Factory
     }
 
     /**
-     * Damaged ship
+     * Apply a damaged state to the factory.
+     *
+     * Sets `hull` to 25% of `max_hull` (cast to int) and `status` to `'damaged'`.
+     *
+     * @return static The factory configured with damaged hull and status.
      */
     public function damaged(): static
     {
@@ -89,7 +109,11 @@ class NpcShipFactory extends Factory
     }
 
     /**
-     * Low fuel
+     * Configure the factory so the ship has low fuel.
+     *
+     * Sets `current_fuel` to 10% of `max_fuel` (rounded down).
+     *
+     * @return static A factory configured with `current_fuel` reduced to 10% of `max_fuel`.
      */
     public function lowFuel(): static
     {
@@ -99,7 +123,9 @@ class NpcShipFactory extends Factory
     }
 
     /**
-     * Inactive ship
+     * Configure the factory to produce an inactive ship.
+     *
+     * @return static The factory state where `is_active` is false.
      */
     public function inactive(): static
     {

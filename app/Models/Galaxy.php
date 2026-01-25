@@ -38,6 +38,16 @@ class Galaxy extends Model
         'generation_completed_at' => 'datetime',
     ];
 
+    /**
+     * Create a Galaxy model instance from provided attributes.
+     *
+     * Accepts an associative array with required keys `width`, `height`, `seed`, `distribution_method`, and `engine`.
+     * Optional keys: `turn_limit` (defaults to 0), `description` (defaults to null), and `is_public` (defaults to false).
+     * When the `game_config.feature.persist_data` configuration is truthy, the created Galaxy is persisted to storage; otherwise a filled but unsaved instance is returned.
+     *
+     * @param array $galaxyData Associative array of galaxy attributes.
+     * @return self The created Galaxy instance; persisted when data persistence is enabled, unsaved otherwise.
+     */
     public static function createGalaxy(array $galaxyData): self
     {
         $attributes = [
@@ -123,18 +133,30 @@ class Galaxy extends Model
         return $this->hasMany(Player::class);
     }
 
+    /**
+     * Get the trading hubs associated with the galaxy through its points of interest.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasManyThrough A has-many-through relation for TradingHub models accessed via PointOfInterest.
+     */
     public function tradingHubs(): HasManyThrough
     {
         return $this->hasManyThrough(TradingHub::class, PointOfInterest::class, 'galaxy_id', 'poi_id');
     }
 
+    /**
+     * Get the NPCs associated with the galaxy.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany Relation for `Npc` models belonging to this galaxy.
+     */
     public function npcs(): HasMany
     {
         return $this->hasMany(Npc::class);
     }
 
     /**
-     * Check if this is a single-player galaxy
+     * Determine whether the galaxy uses single-player game mode.
+     *
+     * @return bool `true` if the galaxy's `game_mode` equals 'single_player', `false` otherwise.
      */
     public function isSinglePlayer(): bool
     {
@@ -142,7 +164,9 @@ class Galaxy extends Model
     }
 
     /**
-     * Check if this is a multiplayer galaxy
+     * Determine whether the galaxy uses the multiplayer game mode.
+     *
+     * @return bool `true` if `game_mode` is 'multiplayer', `false` otherwise.
      */
     public function isMultiplayer(): bool
     {
@@ -150,7 +174,9 @@ class Galaxy extends Model
     }
 
     /**
-     * Check if this galaxy allows NPCs
+     * Determines whether NPCs are permitted in this galaxy.
+     *
+     * @return bool `true` if the galaxy's `game_mode` is 'single_player' or 'mixed', `false` otherwise.
      */
     public function allowsNpcs(): bool
     {
@@ -208,8 +234,18 @@ class Galaxy extends Model
     }
 
     /**
-     * Get mirror universe modifiers for this galaxy
-     */
+         * Retrieve mirror-universe modifier values for this galaxy.
+         *
+         * When the galaxy is configured as a mirror universe, returns an associative array mapping modifier
+         * names to their numeric values; returns an empty array when the galaxy is not a mirror universe.
+         *
+         * @return array{
+         *     resource_multiplier?: float,
+         *     price_boost?: float,
+         *     pirate_difficulty_boost?: float,
+         *     rare_mineral_spawn_rate?: float
+         * } Associative array of modifier keys to numeric values, or an empty array if not applicable.
+         */
     public function getMirrorModifiers(): array
     {
         if (! $this->isMirrorUniverse()) {
@@ -225,7 +261,9 @@ class Galaxy extends Model
     }
 
     /**
-     * Check if this is a tiered galaxy.
+     * Indicates whether the galaxy has an assigned size tier.
+     *
+     * @return bool `true` if `size_tier` is set, `false` otherwise.
      */
     public function isTieredGalaxy(): bool
     {
@@ -233,7 +271,13 @@ class Galaxy extends Model
     }
 
     /**
-     * Check if coordinates are within the core region.
+     * Determines whether the given coordinates lie inside the galaxy's core bounds.
+     *
+     * If `core_bounds` is not set, the method returns `false`.
+     *
+     * @param float $x X coordinate.
+     * @param float $y Y coordinate.
+     * @return bool `true` if the coordinate is within `core_bounds` inclusive (`x_min`..`x_max`, `y_min`..`y_max`), `false` otherwise.
      */
     public function isInCoreRegion(float $x, float $y): bool
     {
@@ -248,7 +292,13 @@ class Galaxy extends Model
     }
 
     /**
-     * Update progress status for galaxy generation.
+     * Record or update a generation progress step for the galaxy and persist it.
+     *
+     * @param int $step Numeric identifier for the progress step.
+     * @param string $name Human-readable name for the step.
+     * @param int $percentage Completion percentage for the step (0-100).
+     * @param string $status Status label for the step (e.g., 'running', 'completed', 'failed').
+     * @param string|null $message Optional additional information about the step.
      */
     public function updateProgress(int $step, string $name, int $percentage, string $status = 'running', ?string $message = null): void
     {
@@ -268,7 +318,11 @@ class Galaxy extends Model
     }
 
     /**
-     * Get the current generation progress percentage.
+     * Retrieve the latest generation progress percentage.
+     *
+     * Returns the `percentage` value from the most recent progress step, or 0 when no progress is recorded.
+     *
+     * @return int Latest progress percentage (0–100), or 0 if no progress exists.
      */
     public function getCurrentProgress(): int
     {
@@ -282,15 +336,19 @@ class Galaxy extends Model
     }
 
     /**
-     * Get core region POIs.
-     */
+         * Retrieve related PointOfInterest models that are in the core region.
+         *
+         * @return HasMany A query for PointOfInterest records filtered to region = 'core'.
+         */
     public function corePointsOfInterest(): HasMany
     {
         return $this->pointsOfInterest()->where('region', 'core');
     }
 
     /**
-     * Get outer region POIs.
+     * Retrieve points of interest that belong to the outer region.
+     *
+     * @return HasMany A relation scoped to PointOfInterest records where `region` is `"outer"`.
      */
     public function outerPointsOfInterest(): HasMany
     {

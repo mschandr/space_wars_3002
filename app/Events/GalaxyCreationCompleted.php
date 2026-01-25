@@ -29,7 +29,12 @@ class GalaxyCreationCompleted implements ShouldBroadcast
     public string $timestamp;
 
     /**
-     * Create a new event instance.
+     * Initialize the event with data from a Galaxy model and prepare its broadcast payload.
+     *
+     * Populates the public properties `galaxyId`, `galaxyUuid`, `galaxyName`, `status`, and `timestamp`.
+     * The `status` defaults to 'active' if not present on the model and `timestamp` is set to the current time in ISO 8601 format.
+     *
+     * @param Galaxy $galaxy The Galaxy model to extract event data from.
      */
     public function __construct(Galaxy $galaxy)
     {
@@ -41,9 +46,9 @@ class GalaxyCreationCompleted implements ShouldBroadcast
     }
 
     /**
-     * Get the channels the event should broadcast on.
+     * Specify the broadcast channels for this event.
      *
-     * @return array<int, Channel>
+     * @return array<int, Channel> An array containing the Channel for the 'galaxy-creation.{galaxyId}' channel.
      */
     public function broadcastOn(): array
     {
@@ -53,7 +58,9 @@ class GalaxyCreationCompleted implements ShouldBroadcast
     }
 
     /**
-     * The event's broadcast name.
+     * Determine the broadcast event name for this event.
+     *
+     * @return string The broadcast name used for the event, `'completed'`.
      */
     public function broadcastAs(): string
     {
@@ -61,7 +68,9 @@ class GalaxyCreationCompleted implements ShouldBroadcast
     }
 
     /**
-     * Get the data to broadcast.
+     * Provide the payload sent with the broadcast event.
+     *
+     * @return array{galaxy_id:int,galaxy_uuid:string,galaxy_name:string,status:string,timestamp:string} Associative array containing the galaxy data included in the broadcast payload.
      */
     public function broadcastWith(): array
     {

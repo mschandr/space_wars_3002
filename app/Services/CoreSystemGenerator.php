@@ -26,18 +26,25 @@ class CoreSystemGenerator
 {
     private SystemDefenseFactory $defenseFactory;
 
+    /**
+     * Create a CoreSystemGenerator and register the defense factory for later use.
+     *
+     * @param SystemDefenseFactory $defenseFactory Factory used to deploy fortress defenses for generated core systems.
+     */
     public function __construct(SystemDefenseFactory $defenseFactory)
     {
         $this->defenseFactory = $defenseFactory;
     }
 
     /**
-     * Generate the core region for a tiered galaxy.
+     * Generate the galaxy's core region by creating star points of interest within the provided bounds.
      *
-     * @param  Galaxy  $galaxy  The galaxy to populate
-     * @param  int  $starCount  Number of stars to generate
-     * @param  array  $coreBounds  Core region bounds {x_min, x_max, y_min, y_max}
-     * @return Collection<PointOfInterest> Created POIs
+     * Inserts the generated star POIs into the database and returns the created core-region POI records.
+     *
+     * @param Galaxy $galaxy The galaxy to populate.
+     * @param int $starCount Number of stars to generate.
+     * @param array $coreBounds Associative array with keys 'x_min', 'x_max', 'y_min', 'y_max' defining the core bounds.
+     * @return Collection<PointOfInterest> Collection of PointOfInterest records for the galaxy's core region.
      */
     public function generateCoreRegion(Galaxy $galaxy, int $starCount, array $coreBounds): Collection
     {
@@ -108,11 +115,12 @@ class CoreSystemGenerator
     }
 
     /**
-     * Create trading posts at core systems.
-     * Premium hubs with all services: shipyard, salvage, upgrades.
+     * Create premium trading hubs at star POIs within the core region.
      *
-     * @param  Collection<PointOfInterest>  $coreSystems  Core region POIs
-     * @return int Number of trading posts created
+     * For each POI of type STAR, creates a premium trading hub providing shipyard, repair, component and plans services.
+     *
+     * @param Collection<PointOfInterest> $coreSystems Core region POIs to process.
+     * @return int The number of trading posts created.
      */
     public function createTradingPosts(Collection $coreSystems): int
     {
@@ -131,7 +139,13 @@ class CoreSystemGenerator
     }
 
     /**
-     * Create a premium trading hub with all services.
+     * Create and persist a premium trading hub attached to the given point of interest.
+     *
+     * The created hub is a fully featured "trading_post" with ship, repair, component, and plans
+     * shops, a 5% tax rate, and attributes marking it as a premium core-region service provider.
+     *
+     * @param PointOfInterest $poi The point of interest to attach the trading hub to.
+     * @return TradingHub The newly created TradingHub model.
      */
     private function createPremiumTradingHub(PointOfInterest $poi): TradingHub
     {
@@ -158,7 +172,13 @@ class CoreSystemGenerator
     }
 
     /**
-     * Generate points within the core bounds using quasi-random distribution.
+     * Generate up to $count coordinate pairs inside the provided bounds while enforcing minimum spacing.
+     *
+     * Coordinates are constrained to the rectangular area defined by $bounds and returned as integer pairs.
+     *
+     * @param int $count Number of points to generate.
+     * @param array $bounds Associative array with keys: 'x_min', 'x_max', 'y_min', 'y_max' defining the bounding rectangle.
+     * @return array<int[]> An array of unique `[x, y]` integer coordinate pairs; spacing between points will respect the configured minimum where possible.
      */
     private function generateCorePoints(int $count, array $bounds): array
     {
@@ -214,7 +234,10 @@ class CoreSystemGenerator
     }
 
     /**
-     * Generate a trading hub name.
+     * Create a premium trading hub name that incorporates the POI's name.
+     *
+     * @param PointOfInterest $poi The point of interest whose name will be embedded in the hub name.
+     * @return string A hub name in the format "<Prefix> <POI Name> <Suffix>" (e.g., "Central Vega Trading Post").
      */
     private function generateHubName(PointOfInterest $poi): string
     {
@@ -228,7 +251,11 @@ class CoreSystemGenerator
     }
 
     /**
-     * Generate a random stellar class weighted toward hospitable stars.
+     * Pick a stellar spectral class at random with weights favoring hospitable types.
+     *
+     * Possible return values are the single-letter classes: 'G', 'K', 'F', 'M', or 'A'.
+     *
+     * @return string One of 'G', 'K', 'F', 'M', or 'A' indicating the selected stellar class.
      */
     private function randomStellarClass(): string
     {

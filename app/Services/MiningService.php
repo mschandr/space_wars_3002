@@ -13,11 +13,14 @@ use App\Models\PointOfInterest;
 class MiningService
 {
     /**
-     * Check if a player can mine at a specific POI.
-     *
-     * Core region mining requires ownership or no owner.
-     * Outer region is always mineable.
-     */
+         * Determine whether a player is permitted to mine at a given point of interest.
+         *
+         * Core-region POIs are mineable if unowned or owned by the player; outer-region POIs are always mineable.
+         *
+         * @param Player $player The player attempting to mine.
+         * @param PointOfInterest $poi The point of interest to check.
+         * @return bool `true` if the player may mine at the POI, `false` otherwise.
+         */
     public function canMineAt(Player $player, PointOfInterest $poi): bool
     {
         // Outer region is always mineable
@@ -35,7 +38,11 @@ class MiningService
     }
 
     /**
-     * Get mining restriction message for a POI.
+     * Provide a user-facing message explaining why the player cannot mine at the point of interest, or null if mining is permitted.
+     *
+     * @param Player $player The player attempting to mine.
+     * @param PointOfInterest $poi The point of interest being evaluated.
+     * @return string|null A restriction message when mining is not allowed, or `null` if the player may mine at the POI.
      */
     public function getMiningRestrictionMessage(Player $player, PointOfInterest $poi): ?string
     {

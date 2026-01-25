@@ -17,11 +17,21 @@ class NpcCargo extends Model
         'quantity' => 'integer',
     ];
 
+    /**
+     * Get the owning NpcShip for this cargo.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo The belongs-to relation for the owning NpcShip.
+     */
     public function npcShip(): BelongsTo
     {
         return $this->belongsTo(NpcShip::class);
     }
 
+    /**
+     * Get the mineral associated with this cargo.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo The relationship to the Mineral model.
+     */
     public function mineral(): BelongsTo
     {
         return $this->belongsTo(Mineral::class);

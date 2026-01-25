@@ -36,6 +36,11 @@ return new class extends Migration
         });
     }
 
+    /**
+     * Reverts the migration by removing canonical coordinate columns and their unique index from the warp_gates table.
+     *
+     * Drops the unique index `warp_gates_canonical_coords_unique` and removes the `source_x`, `source_y`, `dest_x`, and `dest_y` columns.
+     */
     public function down(): void
     {
         Schema::table('warp_gates', function (Blueprint $table) {

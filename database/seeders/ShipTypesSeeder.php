@@ -9,7 +9,16 @@ use Illuminate\Database\Seeder;
 class ShipTypesSeeder extends Seeder
 {
     /**
-     * Get ship definitions
+     * Provide predefined ship blueprints for seeding.
+     *
+     * @return array An array of ship definition associative arrays. Each definition includes the keys:
+     *               `name`, `class`, `description`, `base_price`, `cargo_capacity`, `speed`,
+     *               `hull_strength`, `shield_strength`, `weapon_slots`, `utility_slots`, `rarity`,
+     *               `requirements`, `attributes`, and `is_available`. The `attributes` entry is an
+     *               associative array that typically contains `max_fuel`, `starting_weapons`,
+     *               `starting_sensors`, and `starting_warp_drive`, and may include optional capability
+     *               flags such as `warp_interdiction`, `fighter_capacity`, `is_carrier`,
+     *               `colonist_capacity`, and `colony_supplies_capacity`.
      */
     public function getShipDefinitions(): array
     {
@@ -240,13 +249,26 @@ class ShipTypesSeeder extends Seeder
     }
 
     /**
-     * Run the database seeds.
-     */
+         * No-op seeder entry point.
+         *
+         * Ship blueprint records are created per-galaxy by calling generateShips(); this method intentionally
+         * does not perform seeding itself.
+         */
     public function run(): void
     {
         // Ships are created per-galaxy via generateShips()
     }
 
+    /**
+     * Creates or updates global ship blueprint records from the predefined ship definitions.
+     *
+     * Fetches definitions from getShipDefinitions() and ensures each definition exists in the database
+     * by creating or updating a Ship record keyed by name and class. The provided Galaxy is only used
+     * for contextual invocation and does not scope the created blueprints to that galaxy.
+     *
+     * @param \App\Models\Galaxy $galaxy Galaxy instance used for contextual seeding (not used to scope records).
+     * @param mixed|null $command Optional command/context object (for callers that provide one).
+     */
     public function generateShips(Galaxy $galaxy, $command = null): void
     {
         $ships = $this->getShipDefinitions();

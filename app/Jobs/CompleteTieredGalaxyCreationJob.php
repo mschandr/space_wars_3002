@@ -32,7 +32,13 @@ class CompleteTieredGalaxyCreationJob implements ShouldQueue
 
     public int $tries = 3;
 
-    public int $timeout = 3600;  // 1 hour max
+    public int $timeout = 3600;  /**
+     * Create a job instance to asynchronously finish tiered galaxy creation.
+     *
+     * @param int $galaxyId The ID of the galaxy to complete.
+     * @param GalaxySizeTier $tier The size tier configuration used for generation.
+     * @param array $options Runtime options that modify job behavior (e.g., flags to skip precursor or mirror generation, and controls for NPC generation/count).
+     */
 
     public function __construct(
         public int $galaxyId,
@@ -40,6 +46,26 @@ class CompleteTieredGalaxyCreationJob implements ShouldQueue
         public array $options = []
     ) {}
 
+    /****
+     * Finalizes asynchronous completion of a tiered galaxy creation process for the configured galaxy.
+     *
+     * Completes remaining generation tasks started by the synchronous phase and updates the galaxy's
+     * generation progress and final state. Tasks include deploying fortress defenses, creating trading
+     * posts, generating core warp gates and outer frontier stars, creating outer planetary systems,
+     * populating mineral deposits, placing dormant gates, optionally seeding precursor ships and a mirror
+     * universe, populating trading-hub inventory, generating market events and cartographer shops,
+     * and optionally generating NPC players. On successful completion the galaxy is marked ACTIVE and
+     * a GalaxyCreationCompleted event is fired. Progress updates are emitted during the run.
+     *
+     * Recognized runtime options:
+     * - skip_precursors (bool): if true, skip seeding precursor ships.
+     * - skip_mirror (bool): if true, skip generating a mirror universe.
+     * - game_mode (string): 'multiplayer', 'single_player', or 'mixed' (affects NPC generation).
+     * - npc_count (int): number of NPCs to generate.
+     * - npc_difficulty (string): difficulty level for NPC generation.
+     *
+     * @throws \Exception If any generation step fails; the galaxy status is set to DRAFT before the exception is rethrown.
+     */
     public function handle(): void
     {
         $galaxy = Galaxy::find($this->galaxyId);
@@ -184,6 +210,18 @@ class CompleteTieredGalaxyCreationJob implements ShouldQueue
         }
     }
 
+    /**
+     * Update the galaxy's creation progress, attempt to broadcast a progress event, and log the step.
+     *
+     * Updates the Galaxy model's progress state, fires a GalaxyCreationProgress event if possible
+     * (broadcast failures are caught and logged at debug level), and records an informational log entry.
+     *
+     * @param Galaxy $galaxy The galaxy being updated.
+     * @param int $step Numeric identifier of the current creation step.
+     * @param string $name Human-readable name of the current step.
+     * @param int $percentage Completion percentage for the step (0–100).
+     * @param string $status Progress status label (e.g., 'running', 'completed'). 
+     */
     private function updateProgress(Galaxy $galaxy, int $step, string $name, int $percentage, string $status = 'running'): void
     {
         $galaxy->updateProgress($step, $name, $percentage, $status);
@@ -198,6 +236,11 @@ class CompleteTieredGalaxyCreationJob implements ShouldQueue
         Log::info("CompleteTieredGalaxyCreationJob: Step {$step} ({$name}) - {$percentage}%");
     }
 
+    /**
+     * Handle a job failure by logging the error and reverting the associated galaxy to DRAFT if it exists.
+     *
+     * @param \Throwable $exception The exception that caused the job to fail.
+     */
     public function failed(\Throwable $exception): void
     {
         Log::error("CompleteTieredGalaxyCreationJob: Job failed for galaxy {$this->galaxyId}", [

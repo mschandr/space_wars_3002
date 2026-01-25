@@ -10,7 +10,9 @@ use Illuminate\Validation\Rule;
 class CreateGalaxyRequest extends FormRequest
 {
     /**
-     * Determine if the user is authorized to make this request.
+     * Allow any user to make this request.
+     *
+     * @return bool `true` if the request is authorized, `false` otherwise.
      */
     public function authorize(): bool
     {
@@ -18,10 +20,10 @@ class CreateGalaxyRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, ValidationRule|array<mixed>|string>
-     */
+         * Define validation rules for an incoming galaxy creation request.
+         *
+         * @return array<string, ValidationRule|array<mixed>|string> An associative array mapping request field names to their validation rules.
+         */
     public function rules(): array
     {
         return [
@@ -42,7 +44,9 @@ class CreateGalaxyRequest extends FormRequest
     }
 
     /**
-     * Get custom messages for validator errors.
+     * Provide custom validation error messages for the request's validation rules.
+     *
+     * @return array<string,string> Mapping of validation rule keys (e.g., `field.rule`) to message strings.
      */
     public function messages(): array
     {
@@ -63,7 +67,19 @@ class CreateGalaxyRequest extends FormRequest
     }
 
     /**
-     * Get validated data with defaults applied
+     * Return validated request data merged with default values for optional galaxy fields.
+     *
+     * Defaults applied when not present in the validated data:
+     * - `grid_size`: 10
+     * - `npc_count`: 0
+     * - `npc_difficulty`: "medium"
+     * - `skip_mirror`: false
+     * - `skip_pirates`: false
+     * - `skip_precursors`: false
+     * - `async`: false
+     * - `size_tier`: null
+     *
+     * @return array The validated input merged with the defaults listed above.
      */
     public function validatedWithDefaults(): array
     {
@@ -82,7 +98,9 @@ class CreateGalaxyRequest extends FormRequest
     }
 
     /**
-     * Check if this request is for a tiered galaxy.
+     * Determines whether the request specifies a size tier for the galaxy.
+     *
+     * @return bool `true` if the request contains a non-empty `size_tier` value, `false` otherwise.
      */
     public function isTieredGalaxy(): bool
     {
@@ -90,7 +108,10 @@ class CreateGalaxyRequest extends FormRequest
     }
 
     /**
-     * Get the size tier enum if specified.
+     * Get the GalaxySizeTier enum for the request's `size_tier` when present.
+     *
+     * @return GalaxySizeTier|null The enum instance for the requested size tier, or `null` if `size_tier` is not present.
+     * @throws \ValueError If `size_tier` is present but does not correspond to a valid GalaxySizeTier value.
      */
     public function getSizeTier(): ?GalaxySizeTier
     {
@@ -102,7 +123,11 @@ class CreateGalaxyRequest extends FormRequest
     }
 
     /**
-     * Prepare the data for validation.
+     * Merge default request values before validation and adjust NPC count for single-player mode.
+     *
+     * Merges defaults into the request data when fields are not provided: grid_size = 10, npc_count = 0,
+     * npc_difficulty = 'medium', skip_mirror = false, skip_pirates = false, skip_precursors = false.
+     * If game_mode is 'single_player' and npc_count is less than 1, sets npc_count to 5.
      */
     protected function prepareForValidation(): void
     {

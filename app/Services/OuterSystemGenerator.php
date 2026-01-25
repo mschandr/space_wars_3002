@@ -31,12 +31,15 @@ class OuterSystemGenerator
     private const CHUNK_SIZE = 500;
 
     /**
-     * Generate the outer region for a tiered galaxy.
+     * Create and persist outer-region star points for a tiered galaxy.
      *
-     * @param  Galaxy  $galaxy  The galaxy to populate
-     * @param  int  $starCount  Number of stars to generate
-     * @param  array  $coreBounds  Core region bounds (to avoid)
-     * @return Collection<PointOfInterest> Created POIs
+     * Generates star coordinates outside the provided core bounds, inserts corresponding
+     * PointOfInterest records in bulk, and returns the created outer-region star POIs.
+     *
+     * @param Galaxy $galaxy The galaxy to populate.
+     * @param int $starCount Number of stars to generate.
+     * @param array $coreBounds Bounds of the galaxy core; generated stars will be placed outside these bounds.
+     * @return Collection<PointOfInterest> The created outer-region star points of interest.
      */
     public function generateOuterRegion(Galaxy $galaxy, int $starCount, array $coreBounds): Collection
     {
@@ -85,12 +88,10 @@ class OuterSystemGenerator
     }
 
     /**
-     * Generate planetary systems for outer region stars using bulk inserts.
-     * Phase 1: Generate all planets/belts in memory, bulk insert
-     * Phase 2: Generate all moons, bulk insert with parent IDs
+     * Generate planetary systems (planets, belts, and moons) for the given outer-region stars and persist them to the points_of_interest table.
      *
-     * @param  Collection<PointOfInterest>  $outerStars  Outer region stars
-     * @return int Number of orbital bodies created
+     * @param  Collection<PointOfInterest>  $outerStars  Collection of outer-region star POIs to generate systems for
+     * @return int Total number of orbital bodies created (planets + moons)
      */
     public function generatePlanetarySystems(Collection $outerStars): int
     {
@@ -183,7 +184,19 @@ class OuterSystemGenerator
     }
 
     /**
-     * Generate planet data for a single star (in-memory, no DB operations).
+     * Build in-memory planet (and optional asteroid belt) specifications for a given star.
+     *
+     * Generates an array of planet descriptors for insertion: each entry contains the planet's
+     * `data` payload matching points_of_interest columns (including orbital_index, type, name,
+     * attributes JSON, coordinates, timestamps, etc.) and a `moon_count` hint indicating how
+     * many moons should be created for that planet.
+     *
+     * @param PointOfInterest $star The star POI to host the generated planets; used for galaxy_id, parent_poi_id, coordinates, and naming.
+     * @param int $count Number of primary orbital bodies (planets) to generate for the star.
+     * @param \DateTimeImmutable|\Carbon\Carbon|string $now Timestamp value to set for created_at and updated_at in each generated row.
+     * @return array[] Array of generated entries. Each entry is an associative array with keys:
+     *                 - `data` (array): POI column values ready for bulk insert (uuid, galaxy_id, parent_poi_id, orbital_index, type, status, x, y, name, attributes (JSON), is_hidden, is_inhabited, region, created_at, updated_at).
+     *                 - `moon_count` (int): number of moons to create for this planet (0 for asteroid belts).
      */
     private function generatePlanetDataForStar(PointOfInterest $star, int $count, $now): array
     {
@@ -272,11 +285,13 @@ class OuterSystemGenerator
     }
 
     /**
-     * Populate mineral deposits in outer region using bulk updates.
-     * Processes in chunks to minimize memory usage.
+     * Assign randomized mineral deposits to mineable outer-region POIs using chunked bulk updates.
      *
-     * @param  Collection<PointOfInterest>  $outerSystems  Outer region POIs
-     * @return int Number of deposits created
+     * Filters the provided collection to non-star POIs, assigns 1–3 randomized deposits (size scaled by a configurable multiplier,
+     * with a 95% natural probability to receive deposits), and writes updates in CHUNK_SIZE batches via bulk SQL updates.
+     *
+     * @param Collection<PointOfInterest> $outerSystems Collection of outer-region POIs (stars and non-stars); only non-star POIs are considered for deposits.
+     * @return int Number of POIs that received mineral deposits.
      */
     public function populateMineralDeposits(Collection $outerSystems): int
     {
@@ -341,7 +356,14 @@ class OuterSystemGenerator
     }
 
     /**
-     * Bulk update mineral deposits using a single query with CASE WHEN.
+     * Update mineral_deposits for multiple points of interest in bulk.
+     *
+     * Each batch entry must be an associative array with keys 'id' and 'mineral_deposits' (JSON-encoded string).
+     * An empty batch is a no-op.
+     *
+     * @param array $batch Array of arrays each containing:
+     *                     - int    'id'                The POI database id.
+     *                     - string 'mineral_deposits' JSON-encoded mineral deposit data.
      */
     private function bulkUpdateMineralDeposits(array $batch): void
     {
@@ -372,12 +394,11 @@ class OuterSystemGenerator
     }
 
     /**
-     * Generate dormant gates in the outer region using canonical coordinates.
-     * Uses spatial indexing and bulk inserts for O(n) performance.
+     * Create dormant warp gates between outer-region stars using a spatial neighborhood heuristic and canonical coordinates.
      *
-     * @param  Galaxy  $galaxy  The galaxy
-     * @param  Collection<PointOfInterest>  $outerStars  Outer region stars
-     * @return int Number of dormant gates created
+     * @param Galaxy $galaxy The galaxy in which gates will be created.
+     * @param Collection<PointOfInterest> $outerStars Collection of outer-region POIs; only entries with type STAR are considered.
+     * @return int The number of dormant warp gates created.
      */
     public function generateDormantGates(Galaxy $galaxy, Collection $outerStars): int
     {
@@ -487,8 +508,12 @@ class OuterSystemGenerator
     }
 
     /**
-     * Generate points in the outer region (outside core bounds).
-     */
+     * Generate coordinate pairs for outer-region points outside the galaxy core.
+     *
+     * @param Galaxy $galaxy The galaxy whose bounds (width, height) constrain generated coordinates.
+     * @param int $count The desired number of points to generate.
+     * @param array $coreBounds Associative array with keys `x_min`, `x_max`, `y_min`, `y_max` defining the rectangular core area to exclude.
+     * @return array<int, array{0:int,1:int}> An array of `[x, y]` integer coordinate pairs. May contain fewer than `$count` points if a placement limit is reached due to spacing or attempts.
     private function generateOuterPoints(Galaxy $galaxy, int $count, array $coreBounds): array
     {
         $points = [];
@@ -532,8 +557,11 @@ class OuterSystemGenerator
     }
 
     /**
-     * Calculate richness description based on deposit size.
-     */
+         * Map a deposit size to a textual richness descriptor.
+         *
+         * @param float $size Deposit size used to determine richness.
+         * @return string One of 'legendary', 'abundant', 'rich', 'moderate', or 'trace' indicating richness for the given size.
+         */
     private function calculateRichness(float $size): string
     {
         if ($size >= 1500) {
@@ -553,7 +581,9 @@ class OuterSystemGenerator
     }
 
     /**
-     * Generate a random stellar class (outer stars tend to be larger/hotter).
+     * Pick a stellar spectral class using weighted probabilities favoring hotter/larger outer-region stars.
+     *
+     * @return string One of 'O', 'B', 'A', 'F', 'G', 'K', or 'M', selected according to the method's weight distribution.
      */
     private function randomStellarClass(): string
     {
@@ -577,7 +607,9 @@ class OuterSystemGenerator
     }
 
     /**
-     * Generate stellar size (outer stars are often larger).
+     * Selects a stellar size key according to weighted probabilities that favor larger outer stars.
+     *
+     * @return string One of 'dwarf', 'main_sequence', 'subgiant', 'giant', or 'supergiant' representing the chosen stellar size.
      */
     private function randomStellarSize(): string
     {
@@ -597,7 +629,10 @@ class OuterSystemGenerator
     }
 
     /**
-     * Generate planet size based on type.
+     * Map a planet point-of-interest type to a size descriptor used for planet generation.
+     *
+     * @param PointOfInterestType $type The planet POI type.
+     * @return string One of `'massive'`, `'large'`, `'medium'`, or `'small'` representing the planet size category.
      */
     private function randomPlanetSize(PointOfInterestType $type): string
     {
@@ -611,8 +646,11 @@ class OuterSystemGenerator
     }
 
     /**
-     * Convert number to roman numeral.
-     */
+         * Convert an integer to its Roman numeral representation for values 1–12.
+         *
+         * @param int $num The integer to convert.
+         * @return string The Roman numeral for integers 1 through 12 (e.g., `1` -> `I`); for other values returns the number as a decimal string.
+         */
     private function romanNumeral(int $num): string
     {
         $numerals = [

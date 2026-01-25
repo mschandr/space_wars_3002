@@ -116,6 +116,12 @@ class Npc extends Model
         ],
     ];
 
+    /**
+     * Register model boot hooks to ensure an NPC has a UUID before creation.
+     *
+     * Registers a creating event listener that assigns a new UUID to the model's
+     * `uuid` attribute if it is empty.
+     */
     protected static function boot()
     {
         parent::boot();
@@ -127,37 +133,73 @@ class Npc extends Model
         });
     }
 
+    /**
+     * Get the galaxy that the NPC belongs to.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo The relation to the Galaxy model.
+     */
     public function galaxy(): BelongsTo
     {
         return $this->belongsTo(Galaxy::class);
     }
 
+    / **
+     * Get the PointOfInterest that represents the NPC's current location.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo BelongsTo relation to the PointOfInterest model for the NPC's current_poi_id.
+     */
     public function currentLocation(): BelongsTo
     {
         return $this->belongsTo(PointOfInterest::class, 'current_poi_id');
     }
 
+    /**
+     * Get the NPC's current point of interest relationship.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo The BelongsTo relationship for the NPC's current PointOfInterest.
+     */
     public function currentPoi(): BelongsTo
     {
         return $this->currentLocation();
     }
 
+    /**
+     * Get the NPC's ships relationship.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany Relation for the NPC's NpcShip models.
+     */
     public function ships(): HasMany
     {
         return $this->hasMany(NpcShip::class);
     }
 
+    /**
+     * Get the NPC's currently active ship.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne Relation for the NPC's active App\Models\NpcShip (filtered by `is_active = true`).
+     */
     public function activeShip(): HasOne
     {
         return $this->hasOne(NpcShip::class)->where('is_active', true);
     }
 
+    /**
+     * Increase the NPC's credits balance by the specified amount and persist the change.
+     *
+     * @param float $amount The amount of credits to add to the NPC's balance.
+     */
     public function addCredits(float $amount): void
     {
         $this->credits += $amount;
         $this->save();
     }
 
+    /**
+     * Deducts a specified amount from the NPC's credits and saves the model.
+     *
+     * @param float $amount The amount of credits to deduct.
+     * @return bool `true` if the amount was deducted and persisted, `false` if the NPC has insufficient credits.
+     */
     public function deductCredits(float $amount): bool
     {
         if ($this->credits < $amount) {
@@ -170,6 +212,11 @@ class Npc extends Model
         return true;
     }
 
+    /**
+     * Increases the NPC's experience by the given amount, updates level if thresholds are crossed, and persists the model.
+     *
+     * @param int $amount The number of experience points to add.
+     */
     public function addExperience(int $amount): void
     {
         $this->experience += $amount;
@@ -182,13 +229,21 @@ class Npc extends Model
         $this->save();
     }
 
+    /**
+     * Determine the NPC's level from total experience points.
+     *
+     * @param int $experience Total accumulated experience points.
+     * @return int NPC level (1-based), computed as floor(sqrt($experience / 100)) + 1.
+     */
     protected function calculateLevel(int $experience): int
     {
         return (int) floor(sqrt($experience / 100)) + 1;
     }
 
     /**
-     * Check if NPC is currently in the mirror universe
+     * Determine whether the NPC's current location is in the mirror universe.
+     *
+     * @return bool `true` if the NPC's current location's galaxy is a mirror universe, `false` otherwise.
      */
     public function isInMirrorUniverse(): bool
     {
@@ -198,15 +253,22 @@ class Npc extends Model
     }
 
     /**
-     * Get the difficulty multiplier for a specific stat
-     */
+         * Retrieve the multiplier for a given stat according to this NPC's current difficulty.
+         *
+         * @param string $stat The stat key to lookup (e.g., 'credits', 'combat_skill', 'decision_quality').
+         * @return float The multiplier for the specified stat based on the NPC's difficulty; `1.0` if not defined.
+         */
     public function getDifficultyMultiplier(string $stat): float
     {
         return self::DIFFICULTY_MULTIPLIERS[$this->difficulty][$stat] ?? 1.0;
     }
 
     /**
-     * Get archetype configuration
+     * Retrieve the configuration for the NPC's archetype.
+     *
+     * Falls back to the `'trader'` archetype if the NPC's archetype is not defined in ARCHETYPES.
+     *
+     * @return array The archetype configuration array (e.g., `aggression`, `risk_tolerance`, `trade_focus`, `description`).
      */
     public function getArchetypeConfig(): array
     {
@@ -214,8 +276,10 @@ class Npc extends Model
     }
 
     /**
-     * Update current activity
-     */
+         * Set the NPC's current activity, update the last action timestamp, and persist the change.
+         *
+         * @param string $activity The activity identifier or description to assign to the NPC.
+         */
     public function setActivity(string $activity): void
     {
         $this->current_activity = $activity;

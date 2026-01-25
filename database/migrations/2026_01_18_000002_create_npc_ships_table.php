@@ -7,7 +7,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Create the `npc_ships` table with identifiers, foreign keys, ship attributes, state fields, and indexes.
+     *
+     * The table includes a primary id, unique `uuid`, foreign keys `npc_id` and `ship_id` (cascade on delete),
+     * ship identity (`name`), ship stats (fuel, hull, weapons, cargo_hold, sensors, warp_drive, current_cargo),
+     * state fields (`is_active`, `status`), timestamp for fuel updates, and automatic `created_at`/`updated_at`.
+     * Adds a composite index on `npc_id` and `is_active`.
      */
     public function up(): void
     {
@@ -44,7 +49,7 @@ return new class extends Migration
     }
 
     /**
-     * Reverse the migrations.
+     * Drop the `npc_ships` table if it exists.
      */
     public function down(): void
     {

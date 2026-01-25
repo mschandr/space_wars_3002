@@ -44,27 +44,31 @@ NPC_UUID=""
 
 #######################################################################
 # Utility Functions
-#######################################################################
+# log_info prints an informational message prefixed with [INFO] and colorized using BLUE; accepts a single message string.
 
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
 
+# log_success prints a pass message prefixed with `[PASS]` in green and increments the TESTS_PASSED counter.
 log_success() {
     echo -e "${GREEN}[PASS]${NC} $1"
     ((TESTS_PASSED++))
 }
 
+# log_fail prints a failure message prefixed with [FAIL] and increments the TESTS_FAILED counter.
 log_fail() {
     echo -e "${RED}[FAIL]${NC} $1"
     ((TESTS_FAILED++))
 }
 
+# log_skip prints a skip message prefixed with `[SKIP]` and increments the `TESTS_SKIPPED` counter.
 log_skip() {
     echo -e "${YELLOW}[SKIP]${NC} $1"
     ((TESTS_SKIPPED++))
 }
 
+# log_section prints a formatted, colorized section header using the provided title.
 log_section() {
     echo ""
     echo -e "${YELLOW}========================================${NC}"
@@ -73,7 +77,7 @@ log_section() {
 }
 
 # Make API request and check status code
-# Usage: api_test "description" "method" "endpoint" "expected_status" ["data"] ["auth"]
+# api_test sends an HTTP request to the API (API_URL + endpoint) using the given method, optional JSON data and optional auth, compares the returned HTTP status to expected_status, logs success or failure, echoes the response body (truncated on failure) and returns 0 on match or 1 on mismatch.
 api_test() {
     local description="$1"
     local method="$2"
@@ -120,7 +124,7 @@ api_test() {
     fi
 }
 
-# Extract JSON value using jq or grep fallback
+# json_extract extracts a value from a JSON string using a jq expression when `jq` is available, otherwise uses a simple grep-based fallback to return the first matching value.
 json_extract() {
     local json="$1"
     local key="$2"
@@ -135,7 +139,7 @@ json_extract() {
 
 #######################################################################
 # Test Functions
-#######################################################################
+# test_auth_endpoints runs authentication-related API tests: registers a unique test user, logs in to obtain and store `AUTH_TOKEN` and `USER_ID`, exercises `me` and `refresh` endpoints when authenticated, skips authenticated checks if no token is acquired, and deliberately skips logout to retain the token for subsequent tests.
 
 test_auth_endpoints() {
     log_section "AUTHENTICATION ENDPOINTS"
@@ -181,6 +185,7 @@ test_auth_endpoints() {
     # We'll skip logout to keep the token for other tests
 }
 
+# test_galaxy_public_endpoints runs public Galaxy-related API tests: lists galaxies, uses a found galaxy UUID to test details, statistics, and map (extracting POI and sector UUIDs), conditionally tests the sector endpoint, and verifies a 404 response for a nonexistent galaxy.
 test_galaxy_public_endpoints() {
     log_section "GALAXY ENDPOINTS (PUBLIC)"
 
@@ -229,6 +234,7 @@ test_galaxy_public_endpoints() {
     api_test "Get nonexistent galaxy (404)" "GET" "/galaxies/00000000-0000-0000-0000-000000000000" "404" || true
 }
 
+# test_galaxy_creation_endpoints runs authenticated tests for galaxy creation and NPC-related endpoints, stores created galaxy and NPC UUIDs when available, and verifies validation and error responses.
 test_galaxy_creation_endpoints() {
     log_section "GALAXY CREATION ENDPOINTS (PROTECTED)"
 
@@ -312,6 +318,7 @@ test_galaxy_creation_endpoints() {
     api_test "Create galaxy with width too small (422)" "POST" "/galaxies/create" "422" "$small_width_data" "true" || true
 }
 
+# test_leaderboard_endpoints tests public leaderboard endpoints for the current galaxy and skips the checks when no GALAXY_UUID is available.
 test_leaderboard_endpoints() {
     log_section "LEADERBOARD ENDPOINTS (PUBLIC)"
 
@@ -333,6 +340,7 @@ test_leaderboard_endpoints() {
     api_test "Get colonial leaderboard" "GET" "/galaxies/$GALAXY_UUID/leaderboards/colonial" "200" || true
 }
 
+# test_victory_endpoints tests public victory condition and victory leader endpoints for the configured GALAXY_UUID and skips when GALAXY_UUID is unset or null.
 test_victory_endpoints() {
     log_section "VICTORY CONDITION ENDPOINTS (PUBLIC)"
 
@@ -348,6 +356,7 @@ test_victory_endpoints() {
     api_test "Get victory leaders" "GET" "/galaxies/$GALAXY_UUID/victory-leaders" "200" || true
 }
 
+# test_market_events_endpoints tests market-events endpoints for the configured galaxy: fetches the galaxy's market events and, if an event UUID is found, fetches that event's details.
 test_market_events_endpoints() {
     log_section "MARKET EVENTS ENDPOINTS"
 
@@ -370,6 +379,7 @@ test_market_events_endpoints() {
     fi
 }
 
+# test_pirate_faction_endpoints tests public pirate-faction API endpoints for the configured galaxy and, if a faction UUID is found, fetches faction details and its captains.
 test_pirate_faction_endpoints() {
     log_section "PIRATE FACTION ENDPOINTS (PUBLIC)"
 
@@ -395,6 +405,7 @@ test_pirate_faction_endpoints() {
     fi
 }
 
+# test_player_endpoints Runs protected player-related API tests: lists players, creates a player in the configured galaxy, and exercises player detail endpoints (status, stats, set-active, update, ranking, statistics, victory-progress, pirate-reputation); skips when auth token or galaxy is unavailable.
 test_player_endpoints() {
     log_section "PLAYER ENDPOINTS (PROTECTED)"
 
@@ -465,6 +476,7 @@ test_player_endpoints() {
     fi
 }
 
+# test_ship_endpoints runs authenticated tests for player ship-related API endpoints, exercising retrieval and actions (status, fuel, upgrades, damage, rename, regenerate fuel, upgrade options, repair estimate, maintenance), and also verifies the ships catalog and the player's fleet; skips when AUTH_TOKEN or PLAYER_UUID (or no ship found) are unavailable.
 test_ship_endpoints() {
     log_section "SHIP ENDPOINTS (PROTECTED)"
 
@@ -539,6 +551,7 @@ test_ship_endpoints() {
     fi
 }
 
+# test_navigation_endpoints runs navigation-related protected API tests for the active player: it fetches the player's current location (extracting and storing a POI UUID when present), requests nearby systems, and performs a local scan, skipping tests if no auth token or player is available.
 test_navigation_endpoints() {
     log_section "NAVIGATION ENDPOINTS (PROTECTED)"
 
@@ -568,6 +581,7 @@ test_navigation_endpoints() {
     api_test "Scan local area" "GET" "/players/$PLAYER_UUID/scan-local" "200" "" "true" || true
 }
 
+# test_travel_endpoints tests travel-related API endpoints requiring a valid auth token and a POI UUID and skips the suite when those prerequisites are missing.
 test_travel_endpoints() {
     log_section "TRAVEL ENDPOINTS (PROTECTED)"
 
@@ -595,6 +609,8 @@ test_travel_endpoints() {
     api_test "Preview travel XP" "GET" "/travel/xp-preview?distance=100" "200" "" "true" || true
 }
 
+# test_trading_endpoints runs authenticated trading-related API tests, including minerals, nearby trading hubs (and detailed hub endpoints when a hub UUID is found), player cargo, and affordability; it skips all tests if no auth token is available.
+# It may set TRADING_HUB_UUID from the hubs response and uses PLAYER_UUID when available.
 test_trading_endpoints() {
     log_section "TRADING ENDPOINTS (PROTECTED)"
 
@@ -656,6 +672,7 @@ test_trading_endpoints() {
     api_test "Calculate affordability" "GET" "/trading/affordability?credits=1000&mineral_id=1" "200" "" "true" || true
 }
 
+# test_upgrade_endpoints runs protected upgrade and plans API endpoint tests, skipping them if no authentication token is available.
 test_upgrade_endpoints() {
     log_section "UPGRADE ENDPOINTS (PROTECTED)"
 
@@ -683,6 +700,7 @@ test_upgrade_endpoints() {
     fi
 }
 
+# test_cartography_endpoints runs protected cartography API tests (player star charts, star-chart pricing, system system info and preview) and skips when AUTH_TOKEN or PLAYER_UUID are not available.
 test_cartography_endpoints() {
     log_section "CARTOGRAPHY ENDPOINTS (PROTECTED)"
 
@@ -715,6 +733,7 @@ test_cartography_endpoints() {
     fi
 }
 
+# test_colony_endpoints tests colony-related endpoints for the authenticated player: it lists the player's colonies (capturing COLONY_UUID when present) and, if a colony exists, retrieves its details, production, defenses, buildings, and ship-production; skips the suite when no auth token or player is available.
 test_colony_endpoints() {
     log_section "COLONY ENDPOINTS (PROTECTED)"
 
@@ -762,6 +781,7 @@ test_colony_endpoints() {
     fi
 }
 
+# test_combat_endpoints tests combat-related protected endpoints for a player, including combat preview, PvP challenges, and team invitations, and skips all tests if AUTH_TOKEN or PLAYER_UUID is not available.
 test_combat_endpoints() {
     log_section "COMBAT ENDPOINTS (PROTECTED)"
 
@@ -788,6 +808,7 @@ test_combat_endpoints() {
     api_test "List team invitations" "GET" "/players/$PLAYER_UUID/team-invitations" "200" "" "true" || true
 }
 
+# test_notification_endpoints exercises protected notification API endpoints for the active player when an auth token and player UUID are available.
 test_notification_endpoints() {
     log_section "NOTIFICATION ENDPOINTS (PROTECTED)"
 
@@ -818,6 +839,7 @@ test_notification_endpoints() {
     api_test "Clear read notifications" "POST" "/players/$PLAYER_UUID/notifications/clear-read" "200" "" "true" || true
 }
 
+# test_mirror_universe_endpoints exercises mirror-universe API endpoints that require an authenticated player, skipping tests if no auth token or player is available; it checks player mirror access and, if a galaxy UUID is present, the galaxy mirror gate.
 test_mirror_universe_endpoints() {
     log_section "MIRROR UNIVERSE ENDPOINTS (PROTECTED)"
 
@@ -842,6 +864,7 @@ test_mirror_universe_endpoints() {
     fi
 }
 
+# test_mining_endpoints tests protected mining endpoints; requires AUTH_TOKEN and POI_UUID and, when present, requests the POI's mining opportunities, otherwise logs a skip.
 test_mining_endpoints() {
     log_section "MINING ENDPOINTS (PROTECTED)"
 
@@ -857,6 +880,7 @@ test_mining_endpoints() {
     fi
 }
 
+# test_authentication_required Verifies that API endpoints requiring authentication return HTTP 401 when called without an Authorization token.
 test_authentication_required() {
     log_section "AUTHENTICATION REQUIRED TESTS"
 
@@ -873,7 +897,7 @@ test_authentication_required() {
 
 #######################################################################
 # Main Test Runner
-#######################################################################
+# print_summary prints a colored test summary (total, passed, failed, skipped) and returns 0 if no tests failed, 1 otherwise.
 
 print_summary() {
     log_section "TEST SUMMARY"
@@ -893,6 +917,7 @@ print_summary() {
     fi
 }
 
+# main prints a header, verifies the server is reachable (exits 1 if not), executes the full ordered set of API test suites, and prints the final test summary which determines the script exit status.
 main() {
     echo ""
     echo "========================================"

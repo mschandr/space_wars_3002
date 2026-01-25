@@ -26,6 +26,14 @@ use Illuminate\Support\Str;
  */
 class TieredGalaxyCreationService
 {
+    /**
+     * Initialize the TieredGalaxyCreationService with required generation services.
+     *
+     * @param CoreSystemGenerator $coreGenerator Generates core-region star systems and structures.
+     * @param OuterSystemGenerator $outerGenerator Generates outer/frontier star systems and POIs.
+     * @param NpcGenerationService $npcGenerator Generates NPCs and formats NPC data for the galaxy.
+     * @param MarketEventGenerator $marketEventGenerator Generates market and event-related content during creation.
+     */
     public function __construct(
         private CoreSystemGenerator $coreGenerator,
         private OuterSystemGenerator $outerGenerator,
@@ -34,12 +42,29 @@ class TieredGalaxyCreationService
     ) {}
 
     /**
-     * Create a tiered galaxy synchronously.
-     *
-     * @param  GalaxySizeTier  $tier  Size tier (small, medium, large)
-     * @param  array  $options  Additional options
-     * @return array Result with galaxy and statistics
-     */
+         * Create a complete tiered galaxy synchronously and perform all generation steps.
+         *
+         * Performs core and outer region generation, places defenses, trading posts, warp gates,
+         * optional precursor ships and mirror universe, generates NPCs when configured, marks the
+         * galaxy active, and returns a summary with statistics.
+         *
+         * @param GalaxySizeTier $tier Size tier determining dimensions and counts for generation.
+         * @param array $options Optional flags and overrides:
+         *                       - skip_precursors (bool): if true, do not place precursor ships.
+         *                       - skip_mirror (bool): if true, skip mirror universe creation.
+         *                       - game_mode (string): 'multiplayer', 'single_player', or 'mixed'.
+         *                       - npc_count (int): number of NPCs to generate.
+         *                       - npc_difficulty (string): difficulty for generated NPCs.
+         *                       - owner_user_id (int): optional owner id for the new galaxy.
+         *                       - name (string): optional custom galaxy name.
+         * @return array Result containing:
+         *               - success (bool)
+         *               - galaxy (array): summary with id, uuid, name, size_tier, width, height, core_bounds, game_mode, status
+         *               - statistics (array): counts for stars, POIs, gates, sectors, etc.
+         *               - mirror_galaxy (array|null): mirror summary if created
+         *               - npcs (array): generated NPCs with `uuid` and `call_sign`
+         *               - execution_time_seconds (float)
+         */
     public function createTieredGalaxy(GalaxySizeTier $tier, array $options = []): array
     {
         set_time_limit(600);  // 10 minutes max
@@ -193,12 +218,18 @@ class TieredGalaxyCreationService
     }
 
     /**
-     * Create a tiered galaxy asynchronously.
-     * Returns immediately with basic structure, processes heavy ops in background.
+     * Initiates tiered galaxy creation and schedules the remaining heavy generation steps to run in the background.
      *
-     * @param  GalaxySizeTier  $tier  Size tier
-     * @param  array  $options  Additional options
-     * @return array Result with galaxy info and processing status
+     * @param GalaxySizeTier $tier Size tier that determines galaxy dimensions and core/outer configuration.
+     * @param array $options Optional flags and overrides (e.g. 'skip_precursors' to avoid placing precursor ships, owner_user_id, or other generation modifiers).
+     * @return array Array containing:
+     *               - 'success' (bool): operation accepted,
+     *               - 'async' (bool): whether processing is asynchronous,
+     *               - 'galaxy' (array): summary with keys 'id', 'uuid', 'name', 'size_tier', 'width', 'height', 'core_bounds', 'game_mode', 'status',
+     *               - 'message' (string): human-readable status,
+     *               - 'pending_steps' (array): list of generation steps to be completed in background,
+     *               - 'execution_time_seconds' (float): time spent in this call.
+     * @throws \Exception If an error occurs while initiating the async creation.
      */
     public function createTieredGalaxyAsync(GalaxySizeTier $tier, array $options = []): array
     {
@@ -271,8 +302,17 @@ class TieredGalaxyCreationService
     }
 
     /**
-     * Create the galaxy database record.
-     */
+         * Create and persist a new Galaxy record configured for generation based on the provided size tier and options.
+         *
+         * Options supported:
+         * - `name` (string): custom galaxy name; a unique name is generated if omitted.
+         * - `game_mode` (string): game mode, e.g. "multiplayer" or "single_player"; controls `is_public`.
+         * - `owner_user_id` (int|null): user id to assign as the galaxy owner.
+         *
+         * @param GalaxySizeTier $tier Size tier used to derive dimensions and core bounds.
+         * @param array $options Creation options (see description).
+         * @return Galaxy The newly created Galaxy model initialized with draft status, seed, distribution/engine defaults, dimensions from the tier, and generation start timestamp.
+         */
     private function createGalaxyRecord(GalaxySizeTier $tier, array $options): Galaxy
     {
         $gameMode = $options['game_mode'] ?? 'multiplayer';
@@ -299,8 +339,17 @@ class TieredGalaxyCreationService
     }
 
     /**
-     * Update progress status and broadcast event.
-     */
+         * Update a galaxy's generation progress and broadcast a progress event.
+         *
+         * Updates the Galaxy model's progress for the given step and attempts to broadcast a GalaxyCreationProgress event.
+         * If event broadcasting fails, the error is logged and not propagated.
+         *
+         * @param \App\Models\Galaxy $galaxy The galaxy whose progress will be updated.
+         * @param int $step Ordinal identifier for the current generation step.
+         * @param string $name Human-readable name of the current step.
+         * @param int $percentage Completion percentage for the step (0-100).
+         * @param string $status Progress status label, e.g. 'running' (defaults to 'running').
+         */
     private function updateProgress(Galaxy $galaxy, int $step, string $name, int $percentage, string $status = 'running'): void
     {
         $galaxy->updateProgress($step, $name, $percentage, $status);
@@ -314,8 +363,14 @@ class TieredGalaxyCreationService
     }
 
     /**
-     * Generate warp gates for the core region.
-     * Uses IncrementalWarpGateGenerator directly for performance.
+     * Generate and replace warp gates for the galaxy's core region using configuration from the size tier.
+     *
+     * Existing warp gates for the galaxy are removed before new core-region gates are created. The provided
+     * size tier supplies adjacency and placement parameters that control gate distribution.
+     *
+     * @param Galaxy $galaxy The galaxy whose core-region warp gates will be generated and replaced.
+     * @param GalaxySizeTier $tier Configuration source for warp gate adjacency and placement parameters.
+     * @return void
      */
     private function generateCoreWarpGates(Galaxy $galaxy, GalaxySizeTier $tier): void
     {
@@ -333,7 +388,16 @@ class TieredGalaxyCreationService
     }
 
     /**
-     * Seed prerequisites if not already present.
+     * Ensure required seed data exists and generate galaxy-specific assets when needed.
+     *
+     * When a data type is missing this method runs the appropriate seeder or generator:
+     * - seeds minerals,
+     * - seeds ship types and generates ships for the given galaxy,
+     * - seeds plans,
+     * - seeds pirate factions and generates factions for the given galaxy,
+     * - seeds pirate captains.
+     *
+     * @param Galaxy $galaxy Galaxy instance used when generating ships and pirate factions.
      */
     private function seedPrerequisites(Galaxy $galaxy): void
     {
@@ -363,8 +427,23 @@ class TieredGalaxyCreationService
     }
 
     /**
-     * Gather statistics about the created galaxy.
-     */
+         * Gather counts of key entities and features for the given galaxy.
+         *
+         * @param Galaxy $galaxy The galaxy to inspect.
+         * @return array{
+         *     total_stars:int,
+         *     core_stars:int,
+         *     outer_stars:int,
+         *     core_inhabited:int,
+         *     outer_inhabited:int,
+         *     fortified_systems:int,
+         *     total_pois:int,
+         *     warp_gates:int,
+         *     dormant_gates:int,
+         *     trading_hubs:int,
+         *     sectors:int
+         * } An associative array of statistics where each value is the count of the named entity or feature in the galaxy.
+         */
     private function gatherStatistics(Galaxy $galaxy): array
     {
         $galaxy->refresh();

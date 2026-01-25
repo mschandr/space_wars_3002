@@ -13,7 +13,13 @@ use Illuminate\Http\Request;
 class GalaxyController extends BaseApiController
 {
     /**
-     * List all available galaxies (full details)
+     * Retrieve all galaxies including a count of active players for each.
+     *
+     * Each galaxy in the JSON response is represented by a GalaxyResource and
+     * includes an `active_player_count` field containing the number of players
+     * with status "active".
+     *
+     * @return \Illuminate\Http\JsonResponse JSON success response containing a collection of GalaxyResource instances with `active_player_count`.
      */
     public function index(): JsonResponse
     {
@@ -28,9 +34,20 @@ class GalaxyController extends BaseApiController
     }
 
     /**
-     * Dehydrated galaxy list for game selection UI.
-     * Returns minimal data optimized for fast loading.
-     * Cached for 60 seconds.
+     * Provide a minimal, cached list of active galaxies for the game selection UI.
+     *
+     * Returns a compact representation of active galaxies optimized for fast loading and cached for 60 seconds.
+     *
+     * Each galaxy object contains:
+     * - `uuid`: galaxy UUID
+     * - `name`: galaxy name
+     * - `size`: size tier value or inferred size (`small`, `medium`, `large`)
+     * - `players`: active player count
+     * - `mode`: game mode (defaults to `multiplayer`)
+     *
+     * @return \Illuminate\Http\JsonResponse JSON object with keys:
+     *  - `galaxies`: array of galaxy objects as described above
+     *  - `cached_at`: ISO 8601 timestamp indicating when the response was cached
      */
     public function list(): JsonResponse
     {
@@ -57,8 +74,11 @@ class GalaxyController extends BaseApiController
     }
 
     /**
-     * Infer galaxy size from dimensions for legacy galaxies.
-     */
+         * Determine a galaxy size category from its width.
+         *
+         * @param int $width Galaxy width.
+         * @return string One of `'small'`, `'medium'`, or `'large'` based on the provided width.
+         */
     private function inferSize(int $width): string
     {
         return match (true) {
@@ -149,7 +169,23 @@ class GalaxyController extends BaseApiController
     }
 
     /**
-     * Get galaxy map data (optimized for rendering)
+     * Builds and returns map data for a galaxy optimized for client rendering.
+     *
+     * The response includes galaxy metadata, a list of systems (POIs) visible to the requester,
+     * non-hidden warp gates with endpoint coordinates, sector summaries, and the requesting
+     * player's current location when available.
+     *
+     * Visibility rules: if an authenticated player has revealed systems via star charts,
+     * only those systems are returned; otherwise only inhabited systems are included.
+     *
+     * @param string $uuid The UUID of the galaxy to retrieve map data for.
+     * @param Request $request The current HTTP request (used to identify an authenticated player).
+     * @return JsonResponse JSON object with keys:
+     *   - `galaxy`: object with `uuid`, `name`, `width`, `height`
+     *   - `systems`: array of systems with `uuid`, `name`, `type`, `x`, `y`, `is_inhabited`, `is_current_location`
+     *   - `warp_gates`: array of gates with `uuid`, `from` (x,y), `to` (x,y), `is_mirror`
+     *   - `sectors`: array of sectors with `uuid`, `name`, bounding coordinates, and `danger_level`
+     *   - `player_location`: object with `x` and `y` or `null` when no player location is available
      */
     public function map(string $uuid, Request $request): JsonResponse
     {

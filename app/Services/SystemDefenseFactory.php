@@ -21,11 +21,11 @@ use Illuminate\Support\Str;
 class SystemDefenseFactory
 {
     /**
-     * Deploy fortress-level defenses at a POI.
+     * Deploys a full fortress set of defenses at the given point of interest and marks the POI as fortified.
      *
-     * @param  PointOfInterest  $poi  The POI to fortify
-     * @param  int  $level  Defense level (affects damage and health)
-     * @return Collection<SystemDefense> Created defenses
+     * @param PointOfInterest $poi The POI to fortify; this method sets `$poi->is_fortified = true` and saves the model.
+     * @param int $level Defense level that scales defenses' health and damage.
+     * @return \Illuminate\Support\Collection<\App\Models\SystemDefense> Collection of created SystemDefense models.
      */
     public function deployFortressDefenses(PointOfInterest $poi, int $level = 1): Collection
     {
@@ -70,12 +70,15 @@ class SystemDefenseFactory
     }
 
     /**
-     * Create a single defense at a POI.
+     * Create and persist a single defense record for the given POI.
      *
-     * @param  PointOfInterest  $poi  The POI to defend
-     * @param  SystemDefenseType  $type  Defense type
-     * @param  int  $level  Defense level
-     * @param  array  $overrides  Optional attribute overrides
+     * Creates a defense using the provided type and level (health scales 20% per level above 1) and applies optional overrides.
+     *
+     * @param PointOfInterest $poi The point of interest to attach the defense to.
+     * @param SystemDefenseType $type The defense type providing defaults for health and attributes.
+     * @param int $level Level used to scale the defense's base health; each level above 1 increases health by 20%.
+     * @param array $overrides Optional associative overrides. Supported keys: `health` (int), `max_health` (int), and `attributes` (array) to merge with type defaults.
+     * @return SystemDefense The newly created SystemDefense instance.
      */
     public function createDefense(
         PointOfInterest $poi,
@@ -113,11 +116,11 @@ class SystemDefenseFactory
     }
 
     /**
-     * Deploy minimal defenses (for less important systems).
+     * Deploys a minimal set of defenses at the given POI and marks the POI as fortified.
      *
-     * @param  PointOfInterest  $poi  The POI to defend
-     * @param  int  $level  Defense level
-     * @return Collection<SystemDefense> Created defenses
+     * @param PointOfInterest $poi The POI to defend.
+     * @param int $level Defense level used to scale health and attributes.
+     * @return \Illuminate\Support\Collection<\App\Models\SystemDefense> Collection of created SystemDefense instances.
      */
     public function deployMinimalDefenses(PointOfInterest $poi, int $level = 1): Collection
     {
@@ -147,7 +150,24 @@ class SystemDefenseFactory
     }
 
     /**
-     * Calculate total defense power at a POI.
+     * Compute aggregate defense metrics for a point of interest.
+     *
+     * @param PointOfInterest $poi The POI whose active defenses will be evaluated.
+     * @return array{
+     *   total_damage_per_round: int|float,
+     *   total_health: int|float,
+     *   active_defenses: int,
+     *   fighter_count: int,
+     *   defense_breakdown: \Illuminate\Support\Collection
+     * } An array with:
+     *   - `total_damage_per_round`: sum of base defense damage and fighter damage per round.
+     *   - `total_health`: sum of current health of all active defenses.
+     *   - `active_defenses`: number of active defenses considered.
+     *   - `fighter_count`: total number of fighters available across fighter ports.
+     *   - `defense_breakdown`: collection keyed by `defense_type`, each value containing:
+     *       - `count`: number of defenses of that type.
+     *       - `total_health`: summed health for that type.
+     *       - `total_damage`: summed base damage for that type.
      */
     public function calculateTotalDefensePower(PointOfInterest $poi): array
     {
@@ -182,11 +202,13 @@ class SystemDefenseFactory
     }
 
     /**
-     * Repair all defenses at a POI.
+     * Repair all defenses at the given POI by a fixed amount.
      *
-     * @param  PointOfInterest  $poi  The POI with defenses
-     * @param  int  $repairAmount  Amount to repair each defense
-     * @return int Total health restored
+     * Repairs only defenses whose current health is greater than zero by calling each defense's repair method and returns the sum of health restored.
+     *
+     * @param PointOfInterest $poi The POI whose defenses will be repaired.
+     * @param int $repairAmount The number of health points to attempt to restore on each defense.
+     * @return int Total health points restored across all repaired defenses.
      */
     public function repairAllDefenses(PointOfInterest $poi, int $repairAmount): int
     {

@@ -23,7 +23,9 @@ enum GalaxySizeTier: string
     case LARGE = 'large';
 
     /**
-     * Get the outer bounds (width/height) for this tier.
+     * Return the outer square bounds (width and height) associated with this galaxy size tier.
+     *
+     * @return int The outer bounds length in units (e.g., 500 for small, 1500 for medium, 2500 for large).
      */
     public function getOuterBounds(): int
     {
@@ -35,8 +37,9 @@ enum GalaxySizeTier: string
     }
 
     /**
-     * Get the core bounds (width/height) for this tier.
-     * Formula: outer_size / 2
+     * Get the core bounds size for this tier.
+     *
+     * @return int Core bounds width/height (half of the outer bounds).
      */
     public function getCoreBounds(): int
     {
@@ -44,8 +47,9 @@ enum GalaxySizeTier: string
     }
 
     /**
-     * Get the number of stars in the core region.
-     * Formula: outer_size / 5
+     * The number of stars allocated to the core region for this size tier.
+     *
+     * @return int The core-region star count for the tier.
      */
     public function getCoreStars(): int
     {
@@ -53,8 +57,9 @@ enum GalaxySizeTier: string
     }
 
     /**
-     * Get the number of stars in the outer (frontier) region.
-     * Formula: (outer_size / 2) - core_stars
+     * Determine the count of stars located in the outer (frontier) region of the galaxy tier.
+     *
+     * @return int The number of outer-region stars.
      */
     public function getOuterStars(): int
     {
@@ -62,16 +67,23 @@ enum GalaxySizeTier: string
     }
 
     /**
-     * Get total star count for this tier.
-     */
+         * Compute the total number of stars in both the core and outer regions for this tier.
+         *
+         * @return int The total number of stars for the tier.
+         */
     public function getTotalStars(): int
     {
         return $this->getCoreStars() + $this->getOuterStars();
     }
 
     /**
-     * Get the core region bounds as an array.
-     * The core is centered in the galaxy.
+     * Calculate the core region bounds centered within the outer galaxy and return them as integer coordinates.
+     *
+     * @return array{ x_min: int, x_max: int, y_min: int, y_max: int } Associative array containing the core region bounds:
+     *  - `x_min`: left X coordinate
+     *  - `x_max`: right X coordinate
+     *  - `y_min`: top Y coordinate
+     *  - `y_max`: bottom Y coordinate
      */
     public function getCoreBoundsArray(): array
     {
@@ -88,7 +100,9 @@ enum GalaxySizeTier: string
     }
 
     /**
-     * Get recommended grid size for sectors.
+     * Returns the recommended grid size for dividing the galaxy into sectors for this tier.
+     *
+     * @return int The recommended grid size (number of units per sector) for the tier.
      */
     public function getRecommendedGridSize(): int
     {
@@ -100,8 +114,11 @@ enum GalaxySizeTier: string
     }
 
     /**
-     * Get warp gate adjacency threshold for this tier.
-     * Formula: max dimension / 15
+     * Compute the warp gate adjacency threshold for the tier.
+     *
+     * Calculated as the outer bounds divided by 15.
+     *
+     * @return int The adjacency threshold (outer bounds / 15).
      */
     public function getWarpGateAdjacency(): int
     {
@@ -109,7 +126,9 @@ enum GalaxySizeTier: string
     }
 
     /**
-     * Get human-readable label.
+     * Human-readable label for the galaxy size tier.
+     *
+     * @return string The label describing the tier and its outer dimensions (e.g., "Small Galaxy (500×500)").
      */
     public function label(): string
     {
@@ -121,8 +140,18 @@ enum GalaxySizeTier: string
     }
 
     /**
-     * Get all tiers as options array for API responses.
-     * Returns static pre-computed values for performance.
+     * Provide a static, pre-computed list of galaxy size tier options for API responses.
+     *
+     * Each array entry represents a tier and contains:
+     * - `value`: tier identifier (`small`, `medium`, `large`)
+     * - `label`: human-readable label including dimensions
+     * - `outer_bounds`: outer dimension (width and height)
+     * - `core_bounds`: core region dimension
+     * - `core_stars`: number of core stars
+     * - `outer_stars`: number of outer/frontier stars
+     * - `total_stars`: total star count (core + outer)
+     *
+     * @return array<int,array<string,mixed>> List of tier option arrays for small, medium, and large.
      */
     public static function toOptionsArray(): array
     {

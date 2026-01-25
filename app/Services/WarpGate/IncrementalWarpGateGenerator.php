@@ -25,6 +25,14 @@ class IncrementalWarpGateGenerator
 
     private Galaxy $galaxy;
 
+    /**
+     * Initialize the generator with parameters controlling gate creation behavior.
+     *
+     * @param float $adjacencyThreshold Distance threshold used to consider two stars adjacent.
+     * @param float $hiddenGatePercentage Fraction (0..1) of created gates to mark as hidden.
+     * @param int   $maxGatesPerSystem   Maximum number of gates to create for a single star system.
+     * @param Command|null $command      Optional console command instance used for progress output.
+     */
     public function __construct(
         float $adjacencyThreshold = 1.5,
         float $hiddenGatePercentage = 0.02,
@@ -38,9 +46,16 @@ class IncrementalWarpGateGenerator
     }
 
     /**
-     * Generate warp gates incrementally for inhabited star systems only.
-     * Uses canonical coordinate ordering with bulk inserts for O(n) performance.
-     * Uninhabited systems remain isolated to encourage exploration and colonization.
+     * Generate warp gates between inhabited star systems in the given galaxy.
+     *
+     * Builds a spatial index of inhabited stars, collects unique canonical gate pairs between nearby stars up to the configured per-system limit, inserts gates in bulk with deduplication, and optionally marks a percentage of gates as hidden.
+     *
+     * @param Galaxy $galaxy The galaxy whose inhabited star systems will be processed.
+     * @return array{
+     *     gates_created: int,   // number of gates inserted
+     *     gates_skipped: int,   // number of candidate gates ignored due to deduplication or insertion conflicts
+     *     stars_processed: int  // number of inhabited stars examined
+     * }
      */
     public function generateGatesIncremental(Galaxy $galaxy): array
     {
@@ -95,8 +110,12 @@ class IncrementalWarpGateGenerator
     }
 
     /**
-     * Build a spatial index for fast neighbor lookup.
-     * Groups stars into grid cells based on adjacency threshold.
+     * Create a grid-based spatial index that maps cell keys to stars for fast neighbor lookup.
+     *
+     * Cells are sized using adjacencyThreshold * 2; each returned key is "cellX,cellY".
+     *
+     * @param iterable|array $stars Iterable of objects (or arrays) with numeric `x` and `y` coordinates.
+     * @return array<string, array> Map from grid cell key ("cellX,cellY") to an array of stars assigned to that cell.
      */
     private function buildSpatialIndex($stars): array
     {
@@ -118,8 +137,23 @@ class IncrementalWarpGateGenerator
     }
 
     /**
-     * Collect all valid gate pairs using canonical coordinate ordering.
-     * Uses spatial index for O(n) performance instead of O(n²).
+     * Build a deduplicated list of valid warp-gate pairs for nearby inhabited stars.
+     *
+     * Uses the provided spatial index to find neighbours within the adjacency threshold,
+     * limits connections per star to the configured maximum, and normalizes pair ordering
+     * using canonical coordinates so each physical gate appears once.
+     *
+     * @param array $stars List of star objects (each must have `id`, `x`, and `y` properties).
+     * @param array $spatialIndex Grid-based spatial index mapping cell keys ("cellX,cellY") to arrays of star objects.
+     * @param Galaxy $galaxy The galaxy context (used for contextual decisions and logging).
+     * @return array An array of associative arrays representing unique gate pairs. Each entry contains:
+     *               - source_poi_id (int)
+     *               - destination_poi_id (int)
+     *               - source_x (int)
+     *               - source_y (int)
+     *               - dest_x (int)
+     *               - dest_y (int)
+     *               - distance (float)
      */
     private function collectGatePairs($stars, array $spatialIndex, Galaxy $galaxy): array
     {
@@ -205,7 +239,10 @@ class IncrementalWarpGateGenerator
     }
 
     /**
-     * Bulk insert gates using INSERT IGNORE for automatic deduplication.
+     * Insert multiple warp gate records for a galaxy in bulk, using INSERT IGNORE to avoid duplicate database entries and update creation/skipped counters.
+     *
+     * @param Galaxy $galaxy The galaxy for which gates are created.
+     * @param array $pairs Array of gate pair records. Each element must contain the keys: 'source_poi_id', 'destination_poi_id', 'source_x', 'source_y', 'dest_x', 'dest_y', and 'distance'.
      */
     private function bulkInsertGates(Galaxy $galaxy, array $pairs): void
     {
@@ -246,8 +283,13 @@ class IncrementalWarpGateGenerator
     }
 
     /**
-     * Apply hidden gate percentage to existing gates
-     */
+         * Mark a random subset of this galaxy's warp gates as hidden based on the configured percentage.
+         *
+         * Calculates ceil(total_gates * hiddenGatePercentage) and sets `is_hidden = true` on that many
+         * randomly selected warp gates for the provided galaxy. If the calculated count is zero, no changes are made.
+         *
+         * @param Galaxy $galaxy The galaxy whose warp gates will be considered.
+         */
     private function applyHiddenGates(Galaxy $galaxy): void
     {
         $totalGates = WarpGate::where('galaxy_id', $galaxy->id)->count();

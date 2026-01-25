@@ -14,7 +14,9 @@ enum RegionType: string
     case OUTER = 'outer';
 
     /**
-     * Get the inhabited percentage for this region.
+     * Return the proportion of systems in the region that are inhabited.
+     *
+     * @return float Proportion between 0.0 and 1.0 (e.g. 1.0 for fully inhabited, 0.0 for uninhabited).
      */
     public function getInhabitedPercentage(): float
     {
@@ -25,7 +27,9 @@ enum RegionType: string
     }
 
     /**
-     * Get the mineral richness multiplier for this region.
+     * Provide the mineral richness multiplier for the region.
+     *
+     * @return float The multiplier applied to base mineral deposits; `1.0` for standard richness (Core), `2.0` for double richness (Outer).
      */
     public function getMineralMultiplier(): float
     {
@@ -36,7 +40,9 @@ enum RegionType: string
     }
 
     /**
-     * Check if trading posts should spawn in this region.
+     * Determine whether this region contains trading posts.
+     *
+     * @return bool `true` if the region contains trading posts, `false` otherwise.
      */
     public function hasTradingPosts(): bool
     {
@@ -47,7 +53,9 @@ enum RegionType: string
     }
 
     /**
-     * Check if defenses should be deployed in this region.
+     * Determines whether the region type includes defensive installations.
+     *
+     * @return bool `true` if the region includes defenses, `false` otherwise.
      */
     public function hasDefenses(): bool
     {
@@ -58,7 +66,9 @@ enum RegionType: string
     }
 
     /**
-     * Get warp gate status for this region.
+     * Get the default warp gate status for this region.
+     *
+     * @return string `'active'` for core regions, `'dormant'` for outer regions.
      */
     public function getDefaultGateStatus(): string
     {
@@ -69,7 +79,9 @@ enum RegionType: string
     }
 
     /**
-     * Get human-readable label.
+     * Get a human-readable label for the region type.
+     *
+     * @return string The human-readable label for the enum case.
      */
     public function label(): string
     {
@@ -80,7 +92,9 @@ enum RegionType: string
     }
 
     /**
-     * Get description for this region type.
+     * Human-readable description of the region type.
+     *
+     * @return string A human-readable description for this region type.
      */
     public function description(): string
     {

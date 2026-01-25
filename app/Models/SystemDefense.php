@@ -39,6 +39,14 @@ class SystemDefense extends Model
         'attributes' => 'array',
     ];
 
+    /**
+     * Register model event handlers used during model lifecycle initialization.
+     *
+     * Ensures a UUID is assigned when a SystemDefense is created and, if max_health
+     * is not provided but health is set, initializes max_health from health.
+     *
+     * @return void
+     */
     protected static function boot(): void
     {
         parent::boot();
@@ -56,7 +64,9 @@ class SystemDefense extends Model
     }
 
     /**
-     * Relationships
+     * Get the PointOfInterest this SystemDefense belongs to.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo The associated PointOfInterest relation (foreign key: `poi_id`).
      */
     public function pointOfInterest(): BelongsTo
     {
@@ -64,8 +74,9 @@ class SystemDefense extends Model
     }
 
     /**
-     * Calculate damage output for this defense.
-     * Takes into account level, quantity, and defense type.
+     * Calculate the total damage this defense currently deals.
+     *
+     * @return int The computed damage considering the defense's operational state, base damage, level multiplier (15% per level above 1), quantity, and any `attributes['damage_multiplier']`.
      */
     public function calculateDamage(): int
     {
@@ -86,8 +97,14 @@ class SystemDefense extends Model
     }
 
     /**
-     * Calculate fighter damage (for fighter ports).
-     */
+         * Compute total damage dealt by fighters stationed in this defense.
+         *
+         * Uses `attributes['fighter_count']` (default 0) and `attributes['fighter_damage']` (default 25),
+         * and applies a level multiplier of 1 + (level - 1) * 0.1. Returns 0 if the defense is not a fighter port
+         * or is not operational.
+         *
+         * @return int Total fighter damage as an integer.
+         */
     public function calculateFighterDamage(): int
     {
         if ($this->defense_type !== SystemDefenseType::FIGHTER_PORT || ! $this->isOperational()) {
@@ -102,9 +119,18 @@ class SystemDefense extends Model
     }
 
     /**
-     * Apply damage to this defense.
+     * Apply incoming damage to this defense and persist the updated health.
      *
-     * @return array Result of the damage application
+     * If the defense is a planetary shield, the incoming damage is reduced by the
+     * `damage_reduction` attribute (defaults to 0.5). Health is decreased but not
+     * below zero and the model is saved.
+     *
+     * @return array{
+     *     damage_taken: int,       // actual health subtracted
+     *     damage_absorbed: int,    // portion of incoming damage prevented or absorbed
+     *     remaining_health: int,   // health after applying damage
+     *     destroyed: bool          // true if health is zero or less
+     * }
      */
     public function takeDamage(int $damage): array
     {
@@ -130,7 +156,9 @@ class SystemDefense extends Model
     }
 
     /**
-     * Check if this defense is operational.
+     * Determine whether the defense is operational.
+     *
+     * @return bool `true` if the defense is active and its health is greater than zero, `false` otherwise.
      */
     public function isOperational(): bool
     {
@@ -138,7 +166,9 @@ class SystemDefense extends Model
     }
 
     /**
-     * Check if this defense can be repaired.
+     * Determine whether the defense is eligible for repairs.
+     *
+     * @return bool `true` if health is greater than 0 and less than max_health, `false` otherwise.
      */
     public function canBeRepaired(): bool
     {
@@ -146,9 +176,10 @@ class SystemDefense extends Model
     }
 
     /**
-     * Repair this defense.
+     * Restore the defense's health by the given amount, not exceeding its max_health.
      *
-     * @param  int  $amount  Amount of health to restore
+     * @param int $amount The amount of health to restore.
+     * @return int The actual amount of health restored.
      */
     public function repair(int $amount): int
     {
@@ -160,7 +191,11 @@ class SystemDefense extends Model
     }
 
     /**
-     * Regenerate shields (for planetary shields).
+     * Restores shield health for planetary shields when active.
+     *
+     * Uses the defense's `recharge_rate` attribute (default 100) to determine how much health to restore.
+     *
+     * @return int The actual amount of health restored.
      */
     public function regenerateShield(): int
     {
@@ -174,7 +209,12 @@ class SystemDefense extends Model
     }
 
     /**
-     * Reduce fighter count after combat losses.
+     * Decrease the stored fighter count for a fighter port by a given number.
+     *
+     * If the defense is not a fighter port, no change is made and zero is returned.
+     *
+     * @param int $count Number of fighters to remove.
+     * @return int The actual number of fighters removed (may be less than `$count` if not enough fighters were available).
      */
     public function loseFighters(int $count): int
     {
@@ -194,7 +234,9 @@ class SystemDefense extends Model
     }
 
     /**
-     * Get health percentage.
+     * Current health expressed as a percentage of max health.
+     *
+     * @return float The health percentage (0–100) rounded to one decimal place; returns 0 if max health is less than or equal to 0.
      */
     public function getHealthPercentage(): float
     {
@@ -206,16 +248,23 @@ class SystemDefense extends Model
     }
 
     /**
-     * Query scope for active defenses.
-     */
+         * Restrict the query to defenses that are active and have health greater than zero.
+         *
+         * @param \Illuminate\Database\Eloquent\Builder $query The query builder instance.
+         * @return \Illuminate\Database\Eloquent\Builder The query builder filtered to active defenses with health > 0.
+         */
     public function scopeActive($query)
     {
         return $query->where('is_active', true)->where('health', '>', 0);
     }
 
     /**
-     * Query scope for defenses of a specific type.
-     */
+         * Filter the query to defenses matching the provided defense type.
+         *
+         * @param \Illuminate\Database\Eloquent\Builder $query The Eloquent query builder instance.
+         * @param SystemDefenseType $type The defense type to filter by.
+         * @return \Illuminate\Database\Eloquent\Builder The modified query builder.
+         */
     public function scopeOfType($query, SystemDefenseType $type)
     {
         return $query->where('defense_type', $type);

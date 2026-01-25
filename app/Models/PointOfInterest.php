@@ -208,23 +208,29 @@ class PointOfInterest extends Model
     }
 
     /**
-     * Stellar Cartographer shop at this POI (if any)
-     */
+         * Get the Stellar Cartographer shop associated with this point of interest.
+         *
+         * @return \Illuminate\Database\Eloquent\Relations\HasOne The has-one relation to the StellarCartographer model.
+         */
     public function stellarCartographer()
     {
         return $this->hasOne(StellarCartographer::class, 'poi_id');
     }
 
     /**
-     * System defenses at this POI (for fortified systems)
-     */
+         * Get the system defenses associated with this point of interest.
+         *
+         * @return \Illuminate\Database\Eloquent\Relations\HasMany<SystemDefense> Has many SystemDefense models related to this POI.
+         */
     public function systemDefenses()
     {
         return $this->hasMany(SystemDefense::class, 'poi_id');
     }
 
     /**
-     * Owner of this POI (for mining restrictions)
+     * Relation to the Player that owns this point of interest, used for ownership and mining rules.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo Relation to the owning Player model, or null if unowned.
      */
     public function owner()
     {
@@ -254,23 +260,32 @@ class PointOfInterest extends Model
     }
 
     /**
-     * Scope to filter by star systems only
-     */
+         * Filter the query to point-of-interest records whose type is STAR.
+         *
+         * @param \Illuminate\Database\Eloquent\Builder $query The query builder instance.
+         * @return \Illuminate\Database\Eloquent\Builder The query builder filtered to STAR POI records.
+         */
     public function scopeStars($query)
     {
         return $query->where('type', PointOfInterestType::STAR);
     }
 
     /**
-     * Scope to filter by core region
+     * Limit the query to points of interest in the CORE region.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query The query builder instance.
+     * @return \Illuminate\Database\Eloquent\Builder The query builder filtered to the CORE region.
      */
     public function scopeCore($query)
     {
         return $query->where('region', RegionType::CORE);
     }
 
-    /**
-     * Scope to filter by outer region
+    / **
+     * Constrains the query to points of interest in the outer region.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query The query builder.
+     * @return \Illuminate\Database\Eloquent\Builder The query builder filtered to RegionType::OUTER.
      */
     public function scopeOuter($query)
     {
@@ -360,7 +375,12 @@ class PointOfInterest extends Model
     }
 
     /**
-     * Get celestial color for universe-level objects
+     * Determine the celestial color category for this point of interest.
+     *
+     * For stars, returns the `stellar_class` attribute if present; otherwise returns
+     * `'star_with_planets'` when the star has child bodies or `'star_no_planets'` when it does not.
+     *
+     * @return string One of: 'star_with_planets', 'star_no_planets', 'black_hole', 'nebula', 'anomaly', 'planet', 'highlight'.
      */
     public function getCelestialColor(): string
     {
@@ -384,7 +404,9 @@ class PointOfInterest extends Model
     }
 
     /**
-     * Check if this POI is in the core region
+     * Determine whether this point of interest is located in the core region.
+     *
+     * @return bool `true` if the POI's region equals RegionType::CORE, `false` otherwise.
      */
     public function isInCoreRegion(): bool
     {
@@ -392,7 +414,9 @@ class PointOfInterest extends Model
     }
 
     /**
-     * Check if this POI is in the outer region
+     * Determine whether the point of interest is located in the outer region.
+     *
+     * @return bool `true` if the POI's region is RegionType::OUTER, `false` otherwise.
      */
     public function isInOuterRegion(): bool
     {
@@ -400,15 +424,19 @@ class PointOfInterest extends Model
     }
 
     /**
-     * Get active defenses at this POI
-     */
+         * Retrieve active SystemDefense records associated with this POI.
+         *
+         * @return \Illuminate\Database\Eloquent\Collection|\App\Models\SystemDefense[] Active SystemDefense models for this POI.
+         */
     public function getActiveDefenses()
     {
         return $this->systemDefenses()->active()->get();
     }
 
     /**
-     * Calculate total defense strength at this POI
+     * Compute the total defensive strength of active system defenses for this POI.
+     *
+     * @return int Total defense strength equal to the sum of `calculateDamage()` for each active defense.
      */
     public function getTotalDefenseStrength(): int
     {
@@ -416,8 +444,14 @@ class PointOfInterest extends Model
     }
 
     /**
-     * Check if player can mine at this POI
-     */
+         * Determine whether the given player is allowed to mine at this point of interest.
+         *
+         * Mining is permitted if the POI is in the outer region, if it has no owner, or if the
+         * player's id matches the POI's owner.
+         *
+         * @param Player $player The player attempting to mine.
+         * @return bool `true` if the player may mine at this POI, `false` otherwise.
+         */
     public function canPlayerMine(Player $player): bool
     {
         // Outer region is always mineable

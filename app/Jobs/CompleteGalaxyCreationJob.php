@@ -31,13 +31,35 @@ class CompleteGalaxyCreationJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
-    public int $timeout = 1800; // 30 minutes max
+    public int $timeout = 1800; /**
+     * Create a job instance to finish creating a galaxy.
+     *
+     * @param int $galaxyId The ID of the Galaxy to process.
+     * @param array $options Options that modify job behavior. Supported keys:
+     *                      - 'skip_precursors' (bool): if true, do not spawn precursor ships.
+     *                      - 'skip_pirates' (bool): if true, do not distribute pirates.
+     *                      - 'skip_mirror' (bool): if true, do not create a mirror universe.
+     *                      - 'npc_count' (int): number of NPCs to generate (if > 0).
+     *                      - 'game_mode' (string): expected game mode, e.g. 'single_player' or 'mixed'.
+     *                      - 'difficulty' (int): NPC generation difficulty level.
+     */
 
     public function __construct(
         public int $galaxyId,
         public array $options = []
     ) {}
 
+    /**
+     * Completes asynchronous galaxy creation by running post-creation tasks and updating the galaxy status.
+     *
+     * Executes a sequence of post-creation steps (inventory population, shop generation, market events,
+     * optional precursor ship spawning, pirate distribution, optional mirror universe creation and mirror
+     * precursor spawning, and optional NPC generation), records step timings, and marks the galaxy ACTIVE
+     * on success. If the target galaxy is not found the job exits early. On failure the galaxy status is
+     * reverted to DRAFT and the original exception is rethrown.
+     *
+     * @throws \Exception Rethrows any exception encountered while executing the post-creation steps.
+     */
     public function handle(): void
     {
         $galaxy = Galaxy::find($this->galaxyId);
@@ -154,6 +176,19 @@ class CompleteGalaxyCreationJob implements ShouldQueue
         }
     }
 
+    /**
+     * Execute a named step, measure its execution time, and return metadata about the completed step.
+     *
+     * @param string   $name     The descriptive name of the step.
+     * @param callable $callback A callable that performs the step's work.
+     * @return array{
+     *     step: string,
+     *     status: 'completed',
+     *     duration: float
+     * } An associative array containing the step name, a completion status, and the duration in seconds.
+     *
+     * @throws \Exception If the callback throws; the exception is propagated.
+     */
     private function runStep(string $name, callable $callback): array
     {
         $start = microtime(true);
@@ -175,6 +210,13 @@ class CompleteGalaxyCreationJob implements ShouldQueue
         }
     }
 
+    /**
+     * Handle a job failure by logging the error and reverting the galaxy to draft.
+     *
+     * Logs the provided exception message and, if the galaxy exists, sets its status to GalaxyStatus::DRAFT and saves it.
+     *
+     * @param \Throwable $exception The exception that caused the job to fail.
+     */
     public function failed(\Throwable $exception): void
     {
         Log::error("CompleteGalaxyCreationJob: Job failed for galaxy {$this->galaxyId}", [

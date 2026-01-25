@@ -15,9 +15,9 @@ class NpcFactory extends Factory
     protected $model = Npc::class;
 
     /**
-     * Define the model's default state.
+     * Provide default attribute values for a new Npc model instance.
      *
-     * @return array<string, mixed>
+     * @return array<string, mixed> Associative array mapping Npc model attributes to their default values.
      */
     public function definition(): array
     {
@@ -44,7 +44,12 @@ class NpcFactory extends Factory
     }
 
     /**
-     * Create a trader NPC
+     * Configure the factory to produce a trader archetype NPC.
+     *
+     * Sets the archetype to 'trader' and applies trader-specific attributes:
+     * aggression = 0.1, risk_tolerance = 0.3, trade_focus = 0.9.
+     *
+     * @return static The factory instance with the trader state applied.
      */
     public function trader(): static
     {
@@ -57,7 +62,9 @@ class NpcFactory extends Factory
     }
 
     /**
-     * Create an explorer NPC
+     * Configure the factory to produce an explorer NPC with archetype 'explorer' and tuned attributes.
+     *
+     * @return static The factory state producing an explorer NPC with aggression 0.2, risk_tolerance 0.7, and trade_focus 0.4.
      */
     public function explorer(): static
     {
@@ -70,7 +77,12 @@ class NpcFactory extends Factory
     }
 
     /**
-     * Create a pirate hunter NPC
+     * Configure the factory to produce a pirate hunter NPC.
+     *
+     * Sets the archetype to "pirate_hunter" and assigns aggression, risk tolerance,
+     * and trade focus values appropriate for a pirate hunter.
+     *
+     * @return static The factory instance with the pirate hunter state applied.
      */
     public function pirateHunter(): static
     {
@@ -83,7 +95,9 @@ class NpcFactory extends Factory
     }
 
     /**
-     * Create a miner NPC
+     * Configure the factory to produce a miner NPC.
+     *
+     * @return static The factory instance with archetype set to "miner" and aggression, risk_tolerance, and trade_focus adjusted for a miner. 
      */
     public function miner(): static
     {
@@ -96,7 +110,12 @@ class NpcFactory extends Factory
     }
 
     /**
-     * Create a merchant NPC
+     * Configure the factory to produce a merchant NPC.
+     *
+     * @return static Factory instance with attributes set for a merchant NPC:
+     *                `archetype` = 'merchant', `aggression` = 0.05,
+     *                `risk_tolerance` = 0.2, `trade_focus` = 0.95,
+     *                and `credits` randomized in a higher range.
      */
     public function merchant(): static
     {
@@ -110,8 +129,13 @@ class NpcFactory extends Factory
     }
 
     /**
-     * Set difficulty level
-     */
+         * Set the NPC difficulty and scale its credits by the configured difficulty multiplier.
+         *
+         * Looks up the credits multiplier from Npc::DIFFICULTY_MULTIPLIERS[$difficulty]['credits'] and falls back to 1.0 if not found.
+         *
+         * @param string $difficulty The difficulty key to apply (e.g., 'easy', 'hard', 'expert').
+         * @return static The factory state with 'difficulty' set and 'credits' multiplied accordingly.
+         */
     public function difficulty(string $difficulty): static
     {
         $multiplier = Npc::DIFFICULTY_MULTIPLIERS[$difficulty]['credits'] ?? 1.0;
@@ -123,7 +147,9 @@ class NpcFactory extends Factory
     }
 
     /**
-     * Easy difficulty
+     * Set the factory's difficulty to "easy".
+     *
+     * @return static The factory configured for easy difficulty.
      */
     public function easy(): static
     {
@@ -131,7 +157,9 @@ class NpcFactory extends Factory
     }
 
     /**
-     * Hard difficulty
+     * Configure the factory to produce NPCs with 'hard' difficulty.
+     *
+     * @return static The factory instance with hard difficulty applied.
      */
     public function hard(): static
     {
@@ -139,7 +167,11 @@ class NpcFactory extends Factory
     }
 
     /**
-     * Expert difficulty
+     * Configure the factory to produce NPCs with expert difficulty.
+     *
+     * Applies the 'expert' difficulty setting and adjusts credits according to its multiplier.
+     *
+     * @return static The factory instance with expert difficulty applied.
      */
     public function expert(): static
     {
@@ -147,7 +179,11 @@ class NpcFactory extends Factory
     }
 
     /**
-     * Veteran NPC with high level
+     * Configure the factory to produce a veteran NPC with elevated stats.
+     *
+     * Sets the NPC to level 10, experience to 8100, and credits to a random value between 100000 and 500000.
+     *
+     * @return static The factory configured to create a veteran NPC (level 10, experience 8100, boosted credits).
      */
     public function veteran(): static
     {

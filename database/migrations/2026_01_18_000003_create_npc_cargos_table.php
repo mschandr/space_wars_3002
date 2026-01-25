@@ -7,7 +7,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Create the `npc_cargos` table with its columns, foreign keys, and constraints.
+     *
+     * The table includes:
+     * - `id` primary key.
+     * - `npc_ship_id` and `mineral_id` foreign keys with cascade on delete.
+     * - `quantity` integer defaulting to 0.
+     * - `created_at` and `updated_at` timestamps.
+     * - a unique constraint on the combination of `npc_ship_id` and `mineral_id`.
      */
     public function up(): void
     {
@@ -23,7 +30,9 @@ return new class extends Migration
     }
 
     /**
-     * Reverse the migrations.
+     * Drop the npc_cargos table if it exists.
+     *
+     * Removes the npc_cargos table created by this migration to allow rollback.
      */
     public function down(): void
     {

@@ -28,7 +28,14 @@ class GalaxyCreationProgress implements ShouldBroadcast
     public string $timestamp;
 
     /**
-     * Create a new event instance.
+     * Initialize the event with galaxy identifier and progress details.
+     *
+     * @param int    $galaxyId  The ID of the galaxy being created.
+     * @param int    $step      The current creation step number.
+     * @param int    $percentage The completion percentage (0-100) of the current step.
+     * @param string $message   A human-readable message describing the current progress.
+     *
+     * The constructor also captures the event creation time as an ISO-8601 timestamp stored in `$timestamp`.
      */
     public function __construct(int $galaxyId, int $step, int $percentage, string $message)
     {
@@ -40,9 +47,9 @@ class GalaxyCreationProgress implements ShouldBroadcast
     }
 
     /**
-     * Get the channels the event should broadcast on.
+     * Specify the broadcast channels this event will be sent on.
      *
-     * @return array<int, Channel>
+     * @return array<int, Channel> An array of Channel instances the event will broadcast to.
      */
     public function broadcastOn(): array
     {
@@ -52,7 +59,9 @@ class GalaxyCreationProgress implements ShouldBroadcast
     }
 
     /**
-     * The event's broadcast name.
+     * Get the broadcast event name used when this event is emitted.
+     *
+     * @return string The broadcast event name 'progress'.
      */
     public function broadcastAs(): string
     {
@@ -60,7 +69,14 @@ class GalaxyCreationProgress implements ShouldBroadcast
     }
 
     /**
-     * Get the data to broadcast.
+     * Payload for the broadcasted event.
+     *
+     * @return array{galaxy_id:int, step:string, percentage:int, message:string, timestamp:string} Associative array containing:
+     *  - `galaxy_id`: Galaxy identifier.
+     *  - `step`: Current creation step as a string.
+     *  - `percentage`: Completion percentage (0-100).
+     *  - `message`: Human-readable status message.
+     *  - `timestamp`: ISO 8601 formatted timestamp.
      */
     public function broadcastWith(): array
     {

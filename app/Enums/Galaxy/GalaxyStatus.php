@@ -11,6 +11,11 @@ enum GalaxyStatus: int
     case SUSPENDED = 4;
     case PROCESSING = 5;
 
+    /**
+     * Get a human-readable label for the enum case.
+     *
+     * @return string The label corresponding to the current status: `Draft`, `Active`, `Inactive`, `Archived`, `Suspended`, or `Processing`.
+     */
     public function label(): string
     {
         return match ($this) {

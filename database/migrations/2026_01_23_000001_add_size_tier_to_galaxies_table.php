@@ -7,7 +7,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Add administrative generation and tracking columns to the `galaxies` table.
+     *
+     * Adds the following nullable columns:
+     * - `size_tier` (string, length 20): size tier such as "small", "medium", or "large".
+     * - `core_bounds` (JSON): object with `x_min`, `x_max`, `y_min`, `y_max` defining the civilized center.
+     * - `progress_status` (JSON): array of step objects with `step`, `name`, `percentage`, `status`, and `timestamp`.
+     * - `generation_started_at` (timestamp): generation start time.
+     * - `generation_completed_at` (timestamp): generation completion time.
      */
     public function up(): void
     {
@@ -30,7 +37,9 @@ return new class extends Migration
     }
 
     /**
-     * Reverse the migrations.
+     * Remove galaxy generation and tracking columns from the galaxies table.
+     *
+     * Drops the following columns: `size_tier`, `core_bounds`, `progress_status`, `generation_started_at`, and `generation_completed_at`.
      */
     public function down(): void
     {

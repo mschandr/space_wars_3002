@@ -54,7 +54,16 @@ class NpcGenerationService
     ];
 
     /**
-     * Generate NPCs for a galaxy
+     * Create and persist a batch of NPCs in the given galaxy.
+     *
+     * Generates $count NPCs, assigns each a starting location, archetype, and ship, and saves them inside a single database transaction.
+     *
+     * @param Galaxy $galaxy The galaxy in which to create NPCs.
+     * @param int $count Number of NPCs to generate.
+     * @param string $difficulty Difficulty level to apply to generated NPC attributes (e.g., "easy", "medium", "hard").
+     * @param array|null $archetypeDistribution Optional weighted distribution of archetypes; if null the service's default weights are used.
+     * @return \Illuminate\Support\Collection Collection of created Npc models.
+     * @throws \RuntimeException If no suitable starting locations or no ship blueprints are available.
      */
     public function generateNpcs(
         Galaxy $galaxy,
@@ -111,7 +120,16 @@ class NpcGenerationService
     }
 
     /**
-     * Create a single NPC
+     * Create a new NPC in the given galaxy with attributes derived from the archetype and difficulty.
+     *
+     * The NPC is persisted and initialized with credits, personality traits, status, and activity metadata.
+     *
+     * @param Galaxy $galaxy The galaxy where the NPC will be created.
+     * @param string $archetype The NPC archetype (e.g., 'trader', 'merchant', 'miner', 'explorer', 'pirate_hunter').
+     * @param string $difficulty Difficulty level affecting credits and stat scaling (e.g., 'easy', 'medium', 'hard').
+     * @param PointOfInterest $startingLocation The inhabited location where the NPC will start.
+     * @param int $index An index used to help generate a unique call sign.
+     * @return Npc The newly created Npc model.
      */
     public function createNpc(
         Galaxy $galaxy,
@@ -162,7 +180,12 @@ class NpcGenerationService
     }
 
     /**
-     * Create a ship for an NPC
+     * Create and persist an NpcShip configured for the given NPC using the provided ship blueprint.
+     *
+     * @param Npc $npc The NPC that will own the created ship.
+     * @param Ship $ship The ship blueprint to instantiate for the NPC.
+     * @param string $difficulty Difficulty key used to adjust ship stats.
+     * @return NpcShip The newly created NpcShip model.
      */
     public function createNpcShip(Npc $npc, Ship $ship, string $difficulty): NpcShip
     {
@@ -192,8 +215,15 @@ class NpcGenerationService
     }
 
     /**
-     * Generate a unique call sign for an NPC
-     */
+         * Produce a unique call sign for an NPC within the given galaxy.
+         *
+         * Generates a name from configured prefixes and suffixes, appending a numeric suffix after repeated collisions.
+         * Attempts up to 50 random candidates; if none are unique, returns a guaranteed unique fallback beginning with `NPC-`.
+         *
+         * @param Galaxy $galaxy The galaxy to ensure call sign uniqueness within.
+         * @param int $index An index used as part of the numeric suffix when collisions occur.
+         * @return string A unique call sign for the NPC.
+         */
     private function generateCallSign(Galaxy $galaxy, int $index): string
     {
         $maxAttempts = 50;
@@ -223,7 +253,13 @@ class NpcGenerationService
     }
 
     /**
-     * Get suitable starting locations (inhabited systems)
+     * Retrieve a randomized set of inhabited star system points of interest for a galaxy.
+     *
+     * The query returns up to the greater of the requested count or 50 items to provide variety.
+     *
+     * @param Galaxy $galaxy The galaxy to search within.
+     * @param int $count The desired number of starting locations; at minimum 50 locations will be returned.
+     * @return Collection A collection of PointOfInterest models representing inhabited star systems.
      */
     private function getStartingLocations(Galaxy $galaxy, int $count): Collection
     {
@@ -236,7 +272,10 @@ class NpcGenerationService
     }
 
     /**
-     * Select archetype based on weighted distribution
+     * Choose an NPC archetype according to a weighted distribution.
+     *
+     * @param int[] $weights Associative array mapping archetype names to integer weights.
+     * @return string The selected archetype; returns `'trader'` if selection cannot be determined.
      */
     private function selectArchetype(array $weights): string
     {
@@ -255,7 +294,13 @@ class NpcGenerationService
     }
 
     /**
-     * Select appropriate ship for archetype
+     * Choose a Ship for the given NPC archetype using configured class preferences.
+     *
+     * Searches the provided collection for a ship whose class matches the archetype's preferred classes; if none are found, falls back to a ship of class "scout" or the first ship in the collection.
+     *
+     * @param string $archetype The NPC archetype key used to look up preferred ship classes.
+     * @param \Illuminate\Support\Collection $availableShips Collection of Ship models available for assignment.
+     * @return \App\Models\Ship The selected Ship model (preference match, a "scout" fallback, or the first available ship). 
      */
     private function selectShipForArchetype(string $archetype, Collection $availableShips): Ship
     {
@@ -275,7 +320,10 @@ class NpcGenerationService
     }
 
     /**
-     * Generate random variance
+     * Produce a random variance value within the inclusive range [-$maxVariance, +$maxVariance].
+     *
+     * @param float $maxVariance The maximum absolute magnitude of the variance.
+     * @return float A random float between -$maxVariance and +$maxVariance.
      */
     private function randomVariance(float $maxVariance): float
     {
@@ -283,15 +331,38 @@ class NpcGenerationService
     }
 
     /**
-     * Clamp a value between min and max
-     */
+         * Clamp a number to the inclusive range [$min, $max].
+         *
+         * @param float $value The value to clamp.
+         * @param float $min The minimum allowed value (inclusive).
+         * @param float $max The maximum allowed value (inclusive).
+         * @return float The input constrained to be between `$min` and `$max`.
+         */
     private function clamp(float $value, float $min, float $max): float
     {
         return max($min, min($max, $value));
     }
 
     /**
-     * Get statistics about NPCs in a galaxy
+     * Compute aggregated statistics for NPCs in the given galaxy.
+     *
+     * @param Galaxy $galaxy The galaxy whose NPCs will be aggregated.
+     * @return array{
+     *   total:int,
+     *   by_archetype:array<string,int>,
+     *   by_difficulty:array<string,int>,
+     *   by_status:array<string,int>,
+     *   average_credits:float|null,
+     *   average_level:float|null,
+     *   total_credits:float|int
+     * } An associative array of aggregated metrics:
+     * - `total`: total number of NPCs.
+     * - `by_archetype`: counts keyed by archetype.
+     * - `by_difficulty`: counts keyed by difficulty.
+     * - `by_status`: counts keyed by status.
+     * - `average_credits`: average credits across NPCs, or `null` if none.
+     * - `average_level`: average level across NPCs, or `null` if none.
+     * - `total_credits`: sum of credits across all NPCs.
      */
     public function getNpcStatistics(Galaxy $galaxy): array
     {

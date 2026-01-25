@@ -9,7 +9,9 @@ use Illuminate\Validation\Rule;
 class AddNpcsRequest extends FormRequest
 {
     /**
-     * Determine if the user is authorized to make this request.
+     * Allow all requests to proceed to validation.
+     *
+     * @return bool `true` to allow the request, `false` to deny it.
      */
     public function authorize(): bool
     {
@@ -17,9 +19,9 @@ class AddNpcsRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Define validation rules for adding NPCs, covering count, difficulty, and optional per-archetype distribution.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string> Validation rules keyed by request field.
      */
     public function rules(): array
     {
@@ -36,7 +38,9 @@ class AddNpcsRequest extends FormRequest
     }
 
     /**
-     * Get custom messages for validator errors.
+     * Provide custom validation messages for this request's rules.
+     *
+     * @return array<string,string> Mapping of validation rule keys to error messages.
      */
     public function messages(): array
     {
@@ -48,7 +52,9 @@ class AddNpcsRequest extends FormRequest
     }
 
     /**
-     * Prepare the data for validation.
+     * Ensure default request values are present before validation.
+     *
+     * Sets the request's `difficulty` to `"medium"` when not provided.
      */
     protected function prepareForValidation(): void
     {
@@ -58,7 +64,9 @@ class AddNpcsRequest extends FormRequest
     }
 
     /**
-     * Get the archetype distribution, validated
+     * Retrieve the validated archetype distribution from the request.
+     *
+     * @return array|null Associative array mapping recognized archetype keys to their numeric values, or `null` if no valid distribution is present or all values sum to zero.
      */
     public function getArchetypeDistribution(): ?array
     {

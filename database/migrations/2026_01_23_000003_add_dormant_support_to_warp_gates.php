@@ -7,7 +7,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Add activation_requirements, discovered_by, and activated_at columns to the warp_gates table and create an index on (galaxy_id, status).
+     *
+     * activation_requirements: JSON storing activation rules as {type: 'sensor_level'|'item'|'credits', value: int|string, description: string}.
+     * discovered_by: JSON array of player IDs who discovered the gate.
+     * activated_at: timestamp when the gate was activated.
+     *
+     * @return void
      */
     public function up(): void
     {

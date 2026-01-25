@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Add region, is_fortified, and owner_id columns and a composite index to points_of_interest.
+     *
+     * Adds 'region' (string, 20) with default 'outer' after 'is_inhabited'; 'is_fortified' (boolean) with default false after 'region'; a nullable 'owner_id' foreign key referencing 'players' with on delete set null after 'is_fortified'; and a composite index on ['galaxy_id', 'region'].
      */
     public function up(): void
     {
@@ -28,7 +30,10 @@ return new class extends Migration
     }
 
     /**
-     * Reverse the migrations.
+     * Revert the schema changes applied to the points_of_interest table by this migration.
+     *
+     * Drops the composite index on `galaxy_id` and `region`, removes the foreign key on `owner_id`,
+     * and deletes the `region`, `is_fortified`, and `owner_id` columns.
      */
     public function down(): void
     {

@@ -21,6 +21,13 @@ class GalaxyCreationController extends BaseApiController
 
     private NpcGenerationService $npcGenerationService;
 
+    /**
+     * Initialize the controller with required services for galaxy and NPC management.
+     *
+     * @param GalaxyCreationService $galaxyCreationService Service responsible for creating and modifying galaxies.
+     * @param TieredGalaxyCreationService $tieredGalaxyCreationService Service responsible for creating tiered galaxies.
+     * @param NpcGenerationService $npcGenerationService Service responsible for NPC generation and statistics.
+     */
     public function __construct(
         GalaxyCreationService $galaxyCreationService,
         TieredGalaxyCreationService $tieredGalaxyCreationService,
@@ -32,17 +39,12 @@ class GalaxyCreationController extends BaseApiController
     }
 
     /**
-     * Create a new galaxy with all necessary components
+     * Create a new playable galaxy with stars, POIs, warp network, trading hubs, pirates, an optional mirror universe, and NPCs.
      *
-     * POST /api/galaxies/create
+     * Assigns the requesting user as owner for single-player or mixed game modes. Honors the `async` option and will auto-enable asynchronous creation when galaxy complexity (width * height * stars) exceeds a large threshold. Returns 201 on synchronous creation success or 202 when creation is started for background processing. On failure returns error responses with codes `GALAXY_CREATION_FAILED` or `GALAXY_CREATION_ERROR`.
      *
-     * Creates a complete, playable galaxy including:
-     * - Stars and Points of Interest
-     * - Warp gate network
-     * - Trading hubs with inventory
-     * - Pirate distribution
-     * - Mirror universe (optional)
-     * - NPC players (for single_player/mixed modes)
+     * @param CreateGalaxyRequest $request The validated request containing galaxy options.
+     * @return \Illuminate\Http\JsonResponse JSON response containing creation result or error information.
      */
     public function create(CreateGalaxyRequest $request): JsonResponse
     {
@@ -102,13 +104,16 @@ class GalaxyCreationController extends BaseApiController
     }
 
     /**
-     * Create a new tiered galaxy with core/outer regions
+     * Create a tiered galaxy composed of a civilized core and a frontier outer region.
      *
-     * POST /api/galaxies/create-tiered
+     * The request must include a `size_tier`. For `single_player` or `mixed` game modes the
+     * requesting user will be set as owner. The operation may run asynchronously when the
+     * `async` option is true or automatically for very large size tiers.
      *
-     * Creates a tiered galaxy with:
-     * - Civilized core (100% inhabited, fortified, trading posts)
-     * - Frontier outer region (0% inhabited, rich minerals, dormant gates)
+     * @param CreateGalaxyRequest $request Validated creation options (including `size_tier` and optional `async`).
+     * @return JsonResponse JSON response containing the creation result or an error payload;
+     *                     returns 201 when created synchronously, 202 when queued for background processing,
+     *                     and 4xx/5xx on validation or server errors.
      */
     public function createTiered(CreateGalaxyRequest $request): JsonResponse
     {
@@ -175,12 +180,21 @@ class GalaxyCreationController extends BaseApiController
     }
 
     /**
-     * Get galaxy creation status
-     *
-     * GET /api/galaxies/{uuid}/creation-status
-     *
-     * Returns progress status for galaxy creation (useful for async creation).
-     */
+         * Get the current creation progress and status for a galaxy identified by UUID.
+         *
+         * @param string $uuid The galaxy UUID.
+         * @return JsonResponse JSON object with:
+         *  - galaxy_id: integer galaxy primary key,
+         *  - galaxy_uuid: string galaxy UUID,
+         *  - galaxy_name: string|null galaxy name,
+         *  - status: string current generation status,
+         *  - size_tier: string|null size tier name,
+         *  - current_progress: int current progress percentage (0-100),
+         *  - is_complete: bool `true` if generation is complete, `false` otherwise,
+         *  - generation_started_at: string|null ISO 8601 start timestamp,
+         *  - generation_completed_at: string|null ISO 8601 completion timestamp,
+         *  - steps: array progress steps/details.
+         */
     public function creationStatus(string $uuid): JsonResponse
     {
         $galaxy = Galaxy::where('uuid', $uuid)->first();
@@ -207,9 +221,9 @@ class GalaxyCreationController extends BaseApiController
     }
 
     /**
-     * Get available size tiers and their configurations
+     * Provides available galaxy size tiers and their configuration options.
      *
-     * GET /api/galaxies/size-tiers
+     * @return \Illuminate\Http\JsonResponse JSON response with a `tiers` key containing an array of size tier option objects.
      */
     public function getSizeTiers(): JsonResponse
     {
@@ -219,11 +233,13 @@ class GalaxyCreationController extends BaseApiController
     }
 
     /**
-     * Add NPCs to an existing galaxy
+     * Add NPCs to a galaxy that permits NPCs.
      *
-     * POST /api/galaxies/{uuid}/npcs
+     * Accepts request inputs `count` (number of NPCs), `difficulty` (e.g., "easy", "medium", "hard"), and an archetype distribution.
      *
-     * Adds NPC players to a galaxy that allows NPCs (single_player or mixed mode)
+     * @param AddNpcsRequest $request Request containing `count`, optional `difficulty`, and archetype distribution.
+     * @param string $uuid The UUID of the target galaxy.
+     * @return JsonResponse JSON success response with creation details (includes `npcs_created`) on success, or an error response on failure.
      */
     public function addNpcs(AddNpcsRequest $request, string $uuid): JsonResponse
     {
@@ -271,9 +287,17 @@ class GalaxyCreationController extends BaseApiController
     }
 
     /**
-     * List NPCs in a galaxy
+     * Retrieve a list of NPCs in the specified galaxy.
      *
-     * GET /api/galaxies/{uuid}/npcs
+     * Supports optional query filters: `archetype`, `status`, and `difficulty`. Each filter, if present,
+     * restricts the result set to NPCs matching the provided value.
+     *
+     * @param \Illuminate\Http\Request $request Request containing optional query filters.
+     * @param string $uuid UUID of the galaxy to list NPCs for.
+     * @return \Illuminate\Http\JsonResponse JSON object with keys:
+     *         - `npcs`: array of NPC objects (uuid, call_sign, archetype, difficulty, level, credits, status, current_activity, location, ship),
+     *         - `total`: integer count of returned NPCs,
+     *         - `statistics`: aggregated NPC statistics for the galaxy.
      */
     public function listNpcs(Request $request, string $uuid): JsonResponse
     {
@@ -335,9 +359,10 @@ class GalaxyCreationController extends BaseApiController
     }
 
     /**
-     * Get details of a specific NPC
+     * Retrieve detailed information for an NPC identified by UUID.
      *
-     * GET /api/npcs/{uuid}
+     * @param string $uuid The UUID of the NPC to fetch.
+     * @return \Illuminate\Http\JsonResponse A JSON response containing the NPC's identifiers, archetype and description, difficulty, level, experience, credits, status, current activity, personality, combat and economy statistics, related galaxy info, current location (or null), active ship and its stats and cargo (or null), and `last_action_at`. Returns a 404 response if the NPC is not found.
      */
     public function showNpc(string $uuid): JsonResponse
     {
@@ -411,9 +436,12 @@ class GalaxyCreationController extends BaseApiController
     }
 
     /**
-     * Delete an NPC
+     * Delete an NPC identified by UUID.
      *
-     * DELETE /api/npcs/{uuid}
+     * Checks ownership for single-player galaxies and removes the NPC if permitted.
+     *
+     * @param string $uuid The NPC's UUID.
+     * @return JsonResponse JSON success response containing a `deleted` key with the NPC call sign and a message on success; returns a 404 response if the NPC is not found; returns a 403 response if the current user does not own the single-player galaxy containing the NPC.
      */
     public function destroyNpc(Request $request, string $uuid): JsonResponse
     {
@@ -438,10 +466,12 @@ class GalaxyCreationController extends BaseApiController
     }
 
     /**
-     * Get available archetypes and their configurations
-     *
-     * GET /api/npcs/archetypes
-     */
+         * Return available NPC archetypes and difficulty presets.
+         *
+         * @return \Illuminate\Http\JsonResponse JSON with keys:
+         *  - `archetypes`: array of objects each containing `name`, `description`, `default_aggression`, `default_risk_tolerance`, `default_trade_focus`
+         *  - `difficulties`: array of objects each containing `name`, `credits_multiplier`, `combat_skill_multiplier`, `decision_quality`
+         */
     public function getArchetypes(): JsonResponse
     {
         return $this->success([

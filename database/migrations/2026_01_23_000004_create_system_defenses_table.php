@@ -7,7 +7,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Create the system_defenses table with schema for defense units and related indexes.
+     *
+     * Creates columns: id, uuid (unique), poi_id (foreign key to points_of_interest with cascade on delete),
+     * defense_type, level (default 1), quantity (default 1), health (default 100), max_health (default 100),
+     * is_active (default true), attributes (JSON, nullable), and timestamps; adds composite indexes on
+     * (poi_id, defense_type) and (poi_id, is_active).
      */
     public function up(): void
     {
@@ -47,7 +52,7 @@ return new class extends Migration
     }
 
     /**
-     * Reverse the migrations.
+     * Drop the system_defenses table if it exists.
      */
     public function down(): void
     {

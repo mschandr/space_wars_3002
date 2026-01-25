@@ -16,7 +16,9 @@ enum SystemDefenseType: string
     case FIGHTER_PORT = 'fighter_port';
 
     /**
-     * Get base damage for this defense type.
+     * Base damage for the defense type.
+     *
+     * @return int The base damage value; 0 for defenses that do not deal damage (e.g., planetary shield).
      */
     public function getBaseDamage(): int
     {
@@ -30,7 +32,9 @@ enum SystemDefenseType: string
     }
 
     /**
-     * Get base health for this defense type.
+     * Provide the base health (hit points) for the defense type.
+     *
+     * @return int The base health value for the defense type.
      */
     public function getBaseHealth(): int
     {
@@ -44,7 +48,9 @@ enum SystemDefenseType: string
     }
 
     /**
-     * Get cooldown in combat rounds.
+     * Get the cooldown between attacks in combat rounds for this defense type.
+     *
+     * @return int The number of combat rounds to wait between attacks; `0` indicates the defense is always active.
      */
     public function getCooldown(): int
     {
@@ -58,7 +64,9 @@ enum SystemDefenseType: string
     }
 
     /**
-     * Get attack range in units.
+     * Get the attack or protection range for this defense type.
+     *
+     * @return int The range in units for the defense type; for PLANETARY_SHIELD this is the protection radius.
      */
     public function getRange(): int
     {
@@ -72,7 +80,9 @@ enum SystemDefenseType: string
     }
 
     /**
-     * Check if this defense can attack enemy ships.
+     * Indicates whether the defense type can engage enemy ships.
+     *
+     * @return bool `true` if the defense can attack enemy ships, `false` otherwise.
      */
     public function canAttack(): bool
     {
@@ -85,8 +95,10 @@ enum SystemDefenseType: string
         };
     }
 
-    /**
-     * Check if this defense provides passive protection.
+    / **
+     * Indicates whether the defense is a passive protection system.
+     *
+     * @return bool `true` if this defense is a planetary shield (passive), `false` otherwise.
      */
     public function isPassiveDefense(): bool
     {
@@ -108,7 +120,9 @@ enum SystemDefenseType: string
     }
 
     /**
-     * Get default fighter count for fighter ports.
+     * Default fighter count for this defense type.
+     *
+     * @return int The default fighter count: 1000 for FIGHTER_PORT, 0 otherwise.
      */
     public function getDefaultFighterCount(): int
     {
@@ -116,7 +130,9 @@ enum SystemDefenseType: string
     }
 
     /**
-     * Get human-readable label.
+     * Get the human-readable label for the defense type.
+     *
+     * @return string The human-readable label for the defense type.
      */
     public function label(): string
     {
@@ -130,7 +146,9 @@ enum SystemDefenseType: string
     }
 
     /**
-     * Get description for this defense type.
+     * Retrieve a one-line human-readable description for the defense type.
+     *
+     * @return string The description text for the current defense type.
      */
     public function description(): string
     {
@@ -144,7 +162,20 @@ enum SystemDefenseType: string
     }
 
     /**
-     * Get default attributes for this defense type.
+     * Compile the default attribute set for this defense type.
+     *
+     * The returned associative array includes base combat attributes and any
+     * type-specific fields:
+     * - `damage`: base damage value.
+     * - `range`: attack or protection range.
+     * - `cooldown`: rounds between actions.
+     * - `fighter_count`: default fighters (present only for FIGHTER_PORT).
+     * - `fighter_damage`: per-fighter damage (present only for FIGHTER_PORT).
+     * - `fighter_health`: per-fighter health (present only for FIGHTER_PORT).
+     * - `damage_reduction`: fractional damage reduction (present only for PLANETARY_SHIELD).
+     * - `recharge_rate`: shield recharge amount per round (present only for PLANETARY_SHIELD).
+     *
+     * @return array<string, int|float> Associative map of attribute names to their numeric values.
      */
     public function getDefaultAttributes(): array
     {

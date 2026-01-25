@@ -40,6 +40,12 @@ class WarpGate extends Model
         'activated_at' => 'datetime',
     ];
 
+    /**
+     * Register model event handlers for WarpGate.
+     *
+     * On creation, ensures the model has a UUID and, if both POI IDs are present while
+     * canonical source coordinates are not set, populates canonical coordinates from the POIs.
+     */
     protected static function boot()
     {
         parent::boot();
@@ -87,7 +93,9 @@ class WarpGate extends Model
     }
 
     /**
-     * Populate canonical coordinates from source/destination POIs.
+     * Populate this gate's source_x/source_y and dest_x/dest_y with canonical coordinates derived from its source and destination POIs.
+     *
+     * If the model has loaded sourcePoi/destinationPoi relations those are used; otherwise the POIs are loaded by ID. If both POIs exist their integer X/Y values are ordered canonically (smaller X, then smaller Y) and assigned to the source_* and dest_* attributes. If either POI is missing, no attributes are modified.
      */
     public function populateCanonicalCoordinates(): void
     {
@@ -109,6 +117,11 @@ class WarpGate extends Model
         }
     }
 
+    /**
+     * Get the galaxy this warp gate belongs to.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo The related Galaxy model.
+     */
     public function galaxy(): BelongsTo
     {
         return $this->belongsTo(Galaxy::class);
@@ -119,13 +132,22 @@ class WarpGate extends Model
         return $this->belongsTo(PointOfInterest::class, 'source_poi_id');
     }
 
+    /**
+     * Get the destination PointOfInterest associated with this warp gate.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo Relation to the destination PointOfInterest using `destination_poi_id`.
+     */
     public function destinationPoi(): BelongsTo
     {
         return $this->belongsTo(PointOfInterest::class, 'destination_poi_id');
     }
 
     /**
-     * Alias for sourcePoi (for backward compatibility)
+     * Get the source point of interest associated with this warp gate.
+     *
+     * Alias of sourcePoi maintained for backward compatibility.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo The related PointOfInterest model representing the source POI.
      */
     public function fromPoi(): BelongsTo
     {
@@ -133,13 +155,20 @@ class WarpGate extends Model
     }
 
     /**
-     * Alias for destinationPoi (for backward compatibility)
+     * Alias for the destination point-of-interest relationship for backward compatibility.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo The relation to the destination PointOfInterest model.
      */
     public function toPoi(): BelongsTo
     {
         return $this->belongsTo(PointOfInterest::class, 'destination_poi_id');
     }
 
+    /**
+     * Defines the one-to-one relationship to a WarpLanePirate associated with this warp gate.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne The HasOne relation for WarpLanePirate keyed by `warp_gate_id`.
+     */
     public function warpLanePirate(): HasOne
     {
         return $this->hasOne(WarpLanePirate::class, 'warp_gate_id');
@@ -178,7 +207,15 @@ class WarpGate extends Model
     }
 
     /**
-     * Check if player can detect this gate based on their sensor level
+     * Determine whether the given ship can detect this warp gate.
+     *
+     * Detection rules:
+     * - Visible gates are always detectable.
+     * - Mirror gates require the configured mirror sensor level.
+     * - Other hidden gates require the configured base sensor requirement adjusted by scanner bonus.
+     *
+     * @param PlayerShip $ship The player's ship whose sensor level is evaluated.
+     * @return bool `true` if the ship's sensors meet the gate's detection requirement, `false` otherwise.
      */
     public function canPlayerDetect(PlayerShip $ship): bool
     {
@@ -202,7 +239,9 @@ class WarpGate extends Model
     }
 
     /**
-     * Check if this gate is dormant.
+     * Determine whether the gate is in the dormant state.
+     *
+     * @return bool `true` if status equals 'dormant', `false` otherwise.
      */
     public function isDormant(): bool
     {
@@ -210,7 +249,9 @@ class WarpGate extends Model
     }
 
     /**
-     * Check if this gate is active.
+     * Determine whether the warp gate's status is active.
+     *
+     * @return bool `true` if the gate's status is `'active'`, `false` otherwise.
      */
     public function isActive(): bool
     {
@@ -218,15 +259,24 @@ class WarpGate extends Model
     }
 
     /**
-     * Check if this gate is destroyed.
-     */
+         * Determine whether the warp gate's status is `destroyed`.
+         *
+         * @return bool `true` if the gate's status equals 'destroyed', `false` otherwise.
+         */
     public function isDestroyed(): bool
     {
         return $this->status === 'destroyed';
     }
 
     /**
-     * Check if a player can activate this dormant gate.
+     * Determine whether the given player meets this gate's activation requirements.
+     *
+     * Returns false if the gate is not dormant; otherwise evaluates the gate's
+     * activation_requirements (supported types: `sensor_level`, `credits`, `item`)
+     * against the player's current state.
+     *
+     * @param Player $player The player attempting to activate the gate.
+     * @return bool `true` if the player can activate the gate, `false` otherwise.
      */
     public function canBeActivatedBy(Player $player): bool
     {
@@ -250,8 +300,12 @@ class WarpGate extends Model
     }
 
     /**
-     * Check if player has a required item.
-     */
+         * Determine whether the given player possesses a plan with the specified name.
+         *
+         * @param Player $player The player whose plans will be checked.
+         * @param string $itemName The name of the required item (plan) to look for.
+         * @return bool `true` if the player has a plan named `$itemName`, `false` otherwise.
+         */
     private function playerHasItem(Player $player, string $itemName): bool
     {
         // Check player's plans for the item
@@ -259,7 +313,9 @@ class WarpGate extends Model
     }
 
     /**
-     * Activate this dormant gate.
+     * Set the gate to active and record the activation time if it is currently dormant.
+     *
+     * Updates the model's `status` to `'active'`, sets `activated_at` to the current time, and persists the change.
      */
     public function activate(): void
     {
@@ -273,7 +329,11 @@ class WarpGate extends Model
     }
 
     /**
-     * Mark this gate as discovered by a player.
+     * Record that the given player discovered this warp gate.
+     *
+     * Adds the player's id to the gate's `discovered_by` array and persists the model only if the id was not already present.
+     *
+     * @param Player $player The player who discovered the gate.
      */
     public function markDiscoveredBy(Player $player): void
     {
@@ -287,15 +347,20 @@ class WarpGate extends Model
     }
 
     /**
-     * Check if a player has discovered this gate.
-     */
+         * Determine whether the given player has discovered this gate.
+         *
+         * @param Player $player The player to check.
+         * @return bool `true` if the player's id is recorded in `discovered_by`, `false` otherwise.
+         */
     public function isDiscoveredBy(Player $player): bool
     {
         return in_array($player->id, $this->discovered_by ?? []);
     }
 
     /**
-     * Get the activation requirement description.
+     * Return the human-readable description of the gate's activation requirements.
+     *
+     * @return string|null The `description` field from `activation_requirements` if present, or `null` when no requirements or no description is set.
      */
     public function getActivationDescription(): ?string
     {
@@ -307,16 +372,22 @@ class WarpGate extends Model
     }
 
     /**
-     * Query scope for dormant gates.
-     */
+         * Filter the query to only include gates with status 'dormant'.
+         *
+         * @param \Illuminate\Database\Eloquent\Builder $query The query builder.
+         * @return \Illuminate\Database\Eloquent\Builder The query builder constrained to gates with status 'dormant'.
+         */
     public function scopeDormant($query)
     {
         return $query->where('status', 'dormant');
     }
 
     /**
-     * Query scope for active gates.
-     */
+         * Modify the query to include only gates with status "active".
+         *
+         * @param \Illuminate\Database\Eloquent\Builder $query The query builder instance to modify.
+         * @return \Illuminate\Database\Eloquent\Builder The query builder filtered to active gates.
+         */
     public function scopeActiveGates($query)
     {
         return $query->where('status', 'active');
