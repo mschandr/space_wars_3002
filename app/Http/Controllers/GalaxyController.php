@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\GalaxyResource;
 use App\Models\Galaxy;
-use GalaxyResource;
 use Illuminate\Http\Request;
 
 class GalaxyController extends Controller

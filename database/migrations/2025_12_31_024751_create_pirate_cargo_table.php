@@ -24,7 +24,10 @@ return new class extends Migration
         });
 
         // Add check constraint: either mineral_id OR plan_id, not both
-        DB::statement('ALTER TABLE pirate_cargo ADD CONSTRAINT pirate_cargo_check CHECK ((mineral_id IS NOT NULL AND plan_id IS NULL) OR (mineral_id IS NULL AND plan_id IS NOT NULL))');
+        // SQLite doesn't support ALTER TABLE ADD CONSTRAINT
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE pirate_cargo ADD CONSTRAINT pirate_cargo_check CHECK ((mineral_id IS NOT NULL AND plan_id IS NULL) OR (mineral_id IS NULL AND plan_id IS NOT NULL))');
+        }
     }
 
     /**

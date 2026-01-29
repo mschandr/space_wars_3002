@@ -19,9 +19,12 @@ use App\Models\WarpLanePirate;
 use Database\Seeders\PirateFactionSeeder;
 use Database\Seeders\PrecursorShipSeeder;
 use Database\Seeders\ShipTypesSeeder;
+use Exception;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
+use Symfony\Component\Console\Output\BufferedOutput;
 
 class GalaxyCreationService
 {
@@ -62,6 +65,8 @@ class GalaxyCreationService
      *
      * @param  array  $options  Galaxy creation options
      * @return array Result with galaxy and statistics
+     *
+     * @throws \Throwable
      */
     public function createGalaxy(array $options): array
     {
@@ -305,7 +310,7 @@ class GalaxyCreationService
 
             return $result;
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             DB::rollBack();
 
             // Log detailed error in debug mode
@@ -321,6 +326,266 @@ class GalaxyCreationService
 
             throw $e;
         }
+    }
+
+    /**
+     * Get the current query count from the database connection
+     */
+    private function getQueryCount(): int
+    {
+        try {
+            $queryLog = DB::connection()->getQueryLog();
+
+            return is_array($queryLog) ? count($queryLog) : 0;
+        } catch (Exception $e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Log a debug entry
+     */
+    private function logDebug(string $type, string $message, array $context = []): void
+    {
+        if (! self::DEBUG_MODE) {
+            return;
+        }
+
+        $this->debugLog[] = [
+            'timestamp' => microtime(true),
+            'type' => $type,
+            'message' => $message,
+            'context' => $context,
+            'memory' => memory_get_usage(true),
+        ];
+    }
+
+    /**
+     * Format bytes to human-readable string
+     */
+    private function formatBytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $bytes = max($bytes, 0);
+        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+        $pow = min($pow, count($units) - 1);
+        $bytes /= pow(1024, $pow);
+
+        return round($bytes, 2).' '.$units[$pow];
+    }
+
+    /**
+     * Start timing a step
+     *
+     * @return array Timer context with start time and query count
+     */
+    private function startStepTimer(): array
+    {
+        return [
+            'start_time' => microtime(true),
+            'start_memory' => memory_get_usage(true),
+            'start_queries' => self::DEBUG_MODE ? $this->getQueryCount() : 0,
+        ];
+    }
+
+    /**
+     * Create the galaxy database record
+     */
+    private function createGalaxyRecord(
+        ?string $name,
+        int $width,
+        int $height,
+        string $gameMode,
+        ?int $ownerUserId
+    ): Galaxy {
+        return Galaxy::create([
+            'uuid' => Str::uuid(),
+            'name' => $name ?? Galaxy::generateUniqueName(),
+            'width' => $width,
+            'height' => $height,
+            'seed' => random_int(1, 999999),
+            'distribution_method' => GalaxyDistributionMethod::RANDOM_SCATTER,
+            'engine' => GalaxyRandomEngine::MT19937,
+            'status' => GalaxyStatus::DRAFT,
+            'turn_limit' => 0,
+            'is_public' => $gameMode === 'multiplayer',
+            'game_mode' => $gameMode,
+            'owner_user_id' => $ownerUserId,
+        ]);
+    }
+
+    /**
+     * Complete a step and add timing information
+     */
+    private function completeStep(array $step, array $timer, array $extra = []): array
+    {
+        $step['status'] = 'completed';
+
+        if (self::DEBUG_MODE) {
+            $duration = round(microtime(true) - $timer['start_time'], 4);
+            $memoryUsed = memory_get_usage(true) - $timer['start_memory'];
+            $queriesExecuted = $this->getQueryCount() - $timer['start_queries'];
+
+            $step['debug'] = [
+                'duration_seconds' => $duration,
+                'memory_delta' => $this->formatBytes($memoryUsed),
+                'queries_executed' => $queriesExecuted,
+            ];
+
+            $this->logDebug('step_complete', $step['name'], [
+                'step' => $step['step'],
+                'duration' => $duration,
+                'memory_delta' => $memoryUsed,
+                'queries' => $queriesExecuted,
+            ]);
+        }
+
+        return array_merge($step, $extra);
+    }
+
+    // =========================================================================
+    // DEBUG HELPER METHODS
+    // =========================================================================
+
+    /**
+     * Seed prerequisites if not already present
+     */
+    private function seedPrerequisites(Galaxy $galaxy): void
+    {
+        // Seed Minerals
+        if (Mineral::count() === 0) {
+            Artisan::call('db:seed', ['--class' => 'MineralSeeder']);
+        }
+
+        // Seed Ship Types
+        if (Ship::count() === 0) {
+            $seeder = new ShipTypesSeeder;
+            $seeder->run();
+            $seeder->generateShips($galaxy);
+        }
+
+        // Seed Upgrade Plans
+        if (Plan::count() === 0) {
+            Artisan::call('db:seed', ['--class' => 'PlansSeeder']);
+        }
+
+        // Seed Pirate Factions
+        if (PirateFaction::count() === 0) {
+            $seeder = new PirateFactionSeeder;
+            $seeder->run();
+            $seeder->generatePirateFactions($galaxy);
+        }
+
+        // Seed Pirate Captains
+        if (PirateCaptain::count() === 0) {
+            Artisan::call('db:seed', ['--class' => 'PirateCaptainSeeder']);
+        }
+    }
+
+    /**
+     * Run an Artisan command with optional debug output capture
+     */
+    private function runArtisanCommand(string $command, array $parameters): int
+    {
+        if (self::DEBUG_MODE && self::DEBUG_LOG_ARTISAN_OUTPUT) {
+            $output = new BufferedOutput;
+            $exitCode = Artisan::call($command, $parameters, $output);
+
+            $this->logDebug('artisan', $command, [
+                'parameters' => $parameters,
+                'exit_code' => $exitCode,
+                'output' => $output->fetch(),
+            ]);
+
+            return $exitCode;
+        }
+
+        return Artisan::call($command, $parameters);
+    }
+
+    /**
+     * Generate initial market events
+     */
+    private function generateMarketEvents(): void
+    {
+        $eventCount = random_int(3, 5);
+
+        for ($i = 0; $i < $eventCount; $i++) {
+            $this->marketEventGenerator->generateRandomEvent(1.0);
+        }
+    }
+
+    /**
+     * Gather statistics about the created galaxy
+     */
+    private function gatherStatistics(Galaxy $galaxy): array
+    {
+        $galaxy->refresh();
+
+        $starCount = $galaxy->pointsOfInterest()
+            ->where('type', PointOfInterestType::STAR)
+            ->count();
+
+        $inhabitedStars = $galaxy->pointsOfInterest()
+            ->stars()
+            ->inhabited()
+            ->count();
+
+        $uninhabitedStars = $galaxy->pointsOfInterest()
+            ->stars()
+            ->uninhabited()
+            ->count();
+
+        $poiCount = $galaxy->pointsOfInterest()->count();
+        $sectorCount = $galaxy->sectors()->count();
+        $gateCount = $galaxy->warpGates()->count();
+
+        $pirateCount = WarpLanePirate::whereHas('warpGate', function ($query) use ($galaxy) {
+            $query->where('galaxy_id', $galaxy->id);
+        })->count();
+
+        $tradingHubCount = TradingHub::whereHas('pointOfInterest', function ($query) use ($galaxy) {
+            $query->where('galaxy_id', $galaxy->id);
+        })->where('is_active', true)->count();
+
+        $marketEventCount = MarketEvent::where('is_active', true)
+            ->where('started_at', '<=', now())
+            ->count();
+
+        $npcCount = $galaxy->npcs()->count();
+
+        return [
+            'stars' => [
+                'total' => $starCount,
+                'inhabited' => $inhabitedStars,
+                'uninhabited' => $uninhabitedStars,
+            ],
+            'points_of_interest' => $poiCount,
+            'sectors' => $sectorCount,
+            'warp_gates' => $gateCount,
+            'trading_hubs' => $tradingHubCount,
+            'pirate_encounters' => $pirateCount,
+            'market_events' => $marketEventCount,
+            'npcs' => $npcCount,
+        ];
+    }
+
+    /**
+     * Get debug summary for the response
+     */
+    private function getDebugSummary(float $startTime): array
+    {
+        return [
+            'debug_mode' => true,
+            'total_duration_seconds' => round(microtime(true) - $startTime, 4),
+            'memory' => [
+                'current' => $this->formatBytes(memory_get_usage(true)),
+                'peak' => $this->formatBytes(memory_get_peak_usage(true)),
+            ],
+            'total_queries' => $this->getQueryCount() - $this->initialQueryCount,
+            'log_entries' => count($this->debugLog),
+            'log' => $this->debugLog,
+        ];
     }
 
     /**
@@ -471,137 +736,9 @@ class GalaxyCreationService
                 'execution_time_seconds' => $executionTime,
             ];
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             throw $e;
         }
-    }
-
-    /**
-     * Create the galaxy database record
-     */
-    private function createGalaxyRecord(
-        ?string $name,
-        int $width,
-        int $height,
-        string $gameMode,
-        ?int $ownerUserId
-    ): Galaxy {
-        return Galaxy::create([
-            'uuid' => Str::uuid(),
-            'name' => $name ?? Galaxy::generateUniqueName(),
-            'width' => $width,
-            'height' => $height,
-            'seed' => random_int(1, 999999),
-            'distribution_method' => GalaxyDistributionMethod::RANDOM_SCATTER,
-            'engine' => GalaxyRandomEngine::MT19937,
-            'status' => GalaxyStatus::DRAFT,
-            'turn_limit' => 0,
-            'is_public' => $gameMode === 'multiplayer',
-            'game_mode' => $gameMode,
-            'owner_user_id' => $ownerUserId,
-        ]);
-    }
-
-    /**
-     * Seed prerequisites if not already present
-     */
-    private function seedPrerequisites(Galaxy $galaxy): void
-    {
-        // Seed Minerals
-        if (Mineral::count() === 0) {
-            Artisan::call('db:seed', ['--class' => 'MineralSeeder']);
-        }
-
-        // Seed Ship Types
-        if (Ship::count() === 0) {
-            $seeder = new ShipTypesSeeder;
-            $seeder->run();
-            $seeder->generateShips($galaxy);
-        }
-
-        // Seed Upgrade Plans
-        if (Plan::count() === 0) {
-            Artisan::call('db:seed', ['--class' => 'PlansSeeder']);
-        }
-
-        // Seed Pirate Factions
-        if (PirateFaction::count() === 0) {
-            $seeder = new PirateFactionSeeder;
-            $seeder->run();
-            $seeder->generatePirateFactions($galaxy);
-        }
-
-        // Seed Pirate Captains
-        if (PirateCaptain::count() === 0) {
-            Artisan::call('db:seed', ['--class' => 'PirateCaptainSeeder']);
-        }
-    }
-
-    /**
-     * Generate initial market events
-     */
-    private function generateMarketEvents(): void
-    {
-        $eventCount = random_int(3, 5);
-
-        for ($i = 0; $i < $eventCount; $i++) {
-            $this->marketEventGenerator->generateRandomEvent(1.0);
-        }
-    }
-
-    /**
-     * Gather statistics about the created galaxy
-     */
-    private function gatherStatistics(Galaxy $galaxy): array
-    {
-        $galaxy->refresh();
-
-        $starCount = $galaxy->pointsOfInterest()
-            ->where('type', PointOfInterestType::STAR)
-            ->count();
-
-        $inhabitedStars = $galaxy->pointsOfInterest()
-            ->stars()
-            ->inhabited()
-            ->count();
-
-        $uninhabitedStars = $galaxy->pointsOfInterest()
-            ->stars()
-            ->uninhabited()
-            ->count();
-
-        $poiCount = $galaxy->pointsOfInterest()->count();
-        $sectorCount = $galaxy->sectors()->count();
-        $gateCount = $galaxy->warpGates()->count();
-
-        $pirateCount = WarpLanePirate::whereHas('warpGate', function ($query) use ($galaxy) {
-            $query->where('galaxy_id', $galaxy->id);
-        })->count();
-
-        $tradingHubCount = TradingHub::whereHas('pointOfInterest', function ($query) use ($galaxy) {
-            $query->where('galaxy_id', $galaxy->id);
-        })->where('is_active', true)->count();
-
-        $marketEventCount = MarketEvent::where('is_active', true)
-            ->where('started_at', '<=', now())
-            ->count();
-
-        $npcCount = $galaxy->npcs()->count();
-
-        return [
-            'stars' => [
-                'total' => $starCount,
-                'inhabited' => $inhabitedStars,
-                'uninhabited' => $uninhabitedStars,
-            ],
-            'points_of_interest' => $poiCount,
-            'sectors' => $sectorCount,
-            'warp_gates' => $gateCount,
-            'trading_hubs' => $tradingHubCount,
-            'pirate_encounters' => $pirateCount,
-            'market_events' => $marketEventCount,
-            'npcs' => $npcCount,
-        ];
     }
 
     /**
@@ -614,7 +751,7 @@ class GalaxyCreationService
         ?array $archetypeDistribution = null
     ): array {
         if (! $galaxy->allowsNpcs()) {
-            throw new \InvalidArgumentException('This galaxy does not allow NPCs. Change game_mode to single_player or mixed.');
+            throw new InvalidArgumentException('This galaxy does not allow NPCs. Change game_mode to single_player or mixed.');
         }
 
         $npcs = $this->npcGenerationService->generateNpcs(
@@ -636,138 +773,6 @@ class GalaxyCreationService
                 'location' => $npc->currentLocation?->name,
             ])->toArray(),
             'statistics' => $this->npcGenerationService->getNpcStatistics($galaxy),
-        ];
-    }
-
-    // =========================================================================
-    // DEBUG HELPER METHODS
-    // =========================================================================
-
-    /**
-     * Run an Artisan command with optional debug output capture
-     */
-    private function runArtisanCommand(string $command, array $parameters): int
-    {
-        if (self::DEBUG_MODE && self::DEBUG_LOG_ARTISAN_OUTPUT) {
-            $output = new \Symfony\Component\Console\Output\BufferedOutput;
-            $exitCode = Artisan::call($command, $parameters, $output);
-
-            $this->logDebug('artisan', $command, [
-                'parameters' => $parameters,
-                'exit_code' => $exitCode,
-                'output' => $output->fetch(),
-            ]);
-
-            return $exitCode;
-        }
-
-        return Artisan::call($command, $parameters);
-    }
-
-    /**
-     * Start timing a step
-     *
-     * @return array Timer context with start time and query count
-     */
-    private function startStepTimer(): array
-    {
-        return [
-            'start_time' => microtime(true),
-            'start_memory' => memory_get_usage(true),
-            'start_queries' => self::DEBUG_MODE ? $this->getQueryCount() : 0,
-        ];
-    }
-
-    /**
-     * Complete a step and add timing information
-     */
-    private function completeStep(array $step, array $timer, array $extra = []): array
-    {
-        $step['status'] = 'completed';
-
-        if (self::DEBUG_MODE) {
-            $duration = round(microtime(true) - $timer['start_time'], 4);
-            $memoryUsed = memory_get_usage(true) - $timer['start_memory'];
-            $queriesExecuted = $this->getQueryCount() - $timer['start_queries'];
-
-            $step['debug'] = [
-                'duration_seconds' => $duration,
-                'memory_delta' => $this->formatBytes($memoryUsed),
-                'queries_executed' => $queriesExecuted,
-            ];
-
-            $this->logDebug('step_complete', $step['name'], [
-                'step' => $step['step'],
-                'duration' => $duration,
-                'memory_delta' => $memoryUsed,
-                'queries' => $queriesExecuted,
-            ]);
-        }
-
-        return array_merge($step, $extra);
-    }
-
-    /**
-     * Log a debug entry
-     */
-    private function logDebug(string $type, string $message, array $context = []): void
-    {
-        if (! self::DEBUG_MODE) {
-            return;
-        }
-
-        $this->debugLog[] = [
-            'timestamp' => microtime(true),
-            'type' => $type,
-            'message' => $message,
-            'context' => $context,
-            'memory' => memory_get_usage(true),
-        ];
-    }
-
-    /**
-     * Get the current query count from the database connection
-     */
-    private function getQueryCount(): int
-    {
-        try {
-            $queryLog = DB::connection()->getQueryLog();
-
-            return is_array($queryLog) ? count($queryLog) : 0;
-        } catch (\Exception $e) {
-            return 0;
-        }
-    }
-
-    /**
-     * Format bytes to human-readable string
-     */
-    private function formatBytes(int $bytes): string
-    {
-        $units = ['B', 'KB', 'MB', 'GB'];
-        $bytes = max($bytes, 0);
-        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
-        $pow = min($pow, count($units) - 1);
-        $bytes /= pow(1024, $pow);
-
-        return round($bytes, 2).' '.$units[$pow];
-    }
-
-    /**
-     * Get debug summary for the response
-     */
-    private function getDebugSummary(float $startTime): array
-    {
-        return [
-            'debug_mode' => true,
-            'total_duration_seconds' => round(microtime(true) - $startTime, 4),
-            'memory' => [
-                'current' => $this->formatBytes(memory_get_usage(true)),
-                'peak' => $this->formatBytes(memory_get_peak_usage(true)),
-            ],
-            'total_queries' => $this->getQueryCount() - $this->initialQueryCount,
-            'log_entries' => count($this->debugLog),
-            'log' => $this->debugLog,
         ];
     }
 }

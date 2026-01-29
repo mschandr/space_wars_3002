@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Exploration\ScanLevel;
 use App\Enums\Galaxy\RegionType;
 use App\Enums\PointsOfInterest\PointOfInterestStatus;
 use App\Enums\PointsOfInterest\PointOfInterestType;
@@ -10,6 +11,7 @@ use App\Faker\Providers\BlackHoleNameProvider;
 use App\Faker\Providers\NebulaNameProvider;
 use App\Faker\Providers\PlanetNameProvider;
 use App\Faker\Providers\StarNameProvider;
+use App\Services\SystemScanService;
 use App\Traits\HasUuidAndVersion;
 use Assert\AssertionFailedException;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -431,5 +433,65 @@ class PointOfInterest extends Model
         }
 
         return $this->owner_id === $player->id;
+    }
+
+    /**
+     *--------------------------------------------------------------------------
+     * Scan-related Methods
+     *--------------------------------------------------------------------------
+     */
+
+    /**
+     * Get scan data for this POI at a specific level.
+     * Uses SystemScanService to generate filtered data.
+     *
+     * @param  int  $level  The scan level (1-9)
+     * @return array Scan data visible at this level
+     */
+    public function getScanDataForLevel(int $level): array
+    {
+        return app(SystemScanService::class)->getFilteredSystemData($this, $level);
+    }
+
+    /**
+     * Get the baseline scan level for this POI based on region.
+     *
+     * @return int Baseline scan level
+     */
+    public function getBaselineScanLevel(): int
+    {
+        return app(SystemScanService::class)->getBaselineScanLevel($this);
+    }
+
+    /**
+     * System scans for this POI.
+     */
+    public function systemScans(): HasMany
+    {
+        return $this->hasMany(\App\Models\SystemScan::class, 'poi_id');
+    }
+
+    /**
+     * Get scan display color for baseline level.
+     *
+     * @return string Hex color
+     */
+    public function getScanColor(): string
+    {
+        $level = $this->getBaselineScanLevel();
+
+        return ScanLevel::fromSensorLevel($level)->color();
+    }
+
+    /**
+     * Get scan display opacity for baseline level.
+     *
+     * @return float Opacity (0.0-1.0)
+     */
+    public function getScanOpacity(): float
+    {
+        $level = $this->getBaselineScanLevel();
+
+        return ScanLevel::fromSensorLevel($level)->opacity();
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\SystemScanService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -30,6 +31,7 @@ class Player extends Model
         'current_poi_id',
         'last_trading_hub_poi_id',
         'last_mirror_travel_at',
+        'last_accessed_at',
         'status',
     ];
 
@@ -42,6 +44,7 @@ class Player extends Model
         'combats_lost' => 'integer',
         'total_trade_volume' => 'decimal:2',
         'last_mirror_travel_at' => 'datetime',
+        'last_accessed_at' => 'datetime',
     ];
 
     protected static function boot()
@@ -121,6 +124,47 @@ class Player extends Model
         return $this->belongsToMany(PointOfInterest::class, 'player_star_charts', 'player_id', 'revealed_poi_id')
             ->withPivot('purchased_from_poi_id', 'price_paid', 'purchased_at')
             ->withTimestamps();
+    }
+
+    /**
+     * Get all system scans for this player.
+     */
+    public function systemScans(): HasMany
+    {
+        return $this->hasMany(SystemScan::class);
+    }
+
+    /**
+     * Get scanned systems with their scan data.
+     */
+    public function getScannedSystems(): \Illuminate\Support\Collection
+    {
+        return $this->systemScans()
+            ->with('pointOfInterest')
+            ->orderBy('scanned_at', 'desc')
+            ->get();
+    }
+
+    /**
+     * Get scan level for a specific POI.
+     *
+     * @param  PointOfInterest  $poi  The POI to check
+     * @return int The scan level (0 if not scanned)
+     */
+    public function getScanLevelFor(PointOfInterest $poi): int
+    {
+        return app(SystemScanService::class)->getScanLevelFor($this, $poi);
+    }
+
+    /**
+     * Check if player has scanned a POI.
+     *
+     * @param  PointOfInterest  $poi  The POI to check
+     * @return bool True if scanned
+     */
+    public function hasScanned(PointOfInterest $poi): bool
+    {
+        return $this->systemScans()->where('poi_id', $poi->id)->exists();
     }
 
     /**

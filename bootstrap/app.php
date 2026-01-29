@@ -13,6 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
+
+        $middleware->alias([
+            'player.access' => \App\Http\Middleware\UpdatePlayerLastAccess::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

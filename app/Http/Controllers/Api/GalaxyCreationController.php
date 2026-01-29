@@ -8,166 +8,98 @@ use App\Http\Requests\Api\CreateGalaxyRequest;
 use App\Models\Galaxy;
 use App\Models\Npc;
 use App\Services\GalaxyCreationService;
+use App\Services\GalaxyGeneration\GalaxyGenerationOrchestrator;
 use App\Services\NpcGenerationService;
-use App\Services\TieredGalaxyCreationService;
+use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 class GalaxyCreationController extends BaseApiController
 {
     private GalaxyCreationService $galaxyCreationService;
 
-    private TieredGalaxyCreationService $tieredGalaxyCreationService;
-
     private NpcGenerationService $npcGenerationService;
 
+    private GalaxyGenerationOrchestrator $orchestrator;
+
     public function __construct(
-        GalaxyCreationService $galaxyCreationService,
-        TieredGalaxyCreationService $tieredGalaxyCreationService,
-        NpcGenerationService $npcGenerationService
-    ) {
+        GalaxyCreationService        $galaxyCreationService,
+        NpcGenerationService         $npcGenerationService,
+        GalaxyGenerationOrchestrator $orchestrator
+    )
+    {
         $this->galaxyCreationService = $galaxyCreationService;
-        $this->tieredGalaxyCreationService = $tieredGalaxyCreationService;
-        $this->npcGenerationService = $npcGenerationService;
+        $this->npcGenerationService  = $npcGenerationService;
+        $this->orchestrator          = $orchestrator;
     }
 
     /**
-     * Create a new galaxy with all necessary components
+     * Create a galaxy using the optimized orchestrator pipeline.
      *
      * POST /api/galaxies/create
      *
-     * Creates a complete, playable galaxy including:
-     * - Stars and Points of Interest
-     * - Warp gate network
-     * - Trading hubs with inventory
-     * - Pirate distribution
-     * - Mirror universe (optional)
-     * - NPC players (for single_player/mixed modes)
+     * Uses the high-performance generator pipeline with:
+     * - Spatial indexing for O(1) neighbor lookups
+     * - Bulk database operations
+     * - Per-generator metrics
+     * - Tiered structure: civilized core + frontier outer region
      */
-    public function create(CreateGalaxyRequest $request): JsonResponse
+    public function createOptimized(CreateGalaxyRequest $request): JsonResponse
     {
-        // Galaxy creation can take a while - extend execution time to 2 minutes
-        set_time_limit(120);
+        set_time_limit(300);  // 5 minutes max
 
         try {
-            $options = $request->validatedWithDefaults();
-
-            // Add owner user ID for single player galaxies
-            if (in_array($options['game_mode'], ['single_player', 'mixed'])) {
-                $options['owner_user_id'] = $request->user()->id;
-            }
-
-            // Use async method if requested (recommended for large galaxies)
-            $useAsync = $options['async'] ?? false;
-
-            // Auto-enable async for large galaxies (width*height*stars > threshold)
-            $complexity = $options['width'] * $options['height'] * $options['stars'];
-            $asyncThreshold = 100_000_000; // ~500x500x400 or equivalent
-            if ($complexity > $asyncThreshold) {
-                $useAsync = true;
-            }
-
-            if ($useAsync) {
-                $result = $this->galaxyCreationService->createGalaxyAsync($options);
-
-                return $this->success(
-                    $result,
-                    'Galaxy creation started. Heavy operations processing in background.',
-                    202 // Accepted - processing will continue async
-                );
-            }
-
-            $result = $this->galaxyCreationService->createGalaxy($options);
-
-            return $this->success(
-                $result,
-                'Galaxy created successfully',
-                201
-            );
-        } catch (\RuntimeException $e) {
-            return $this->error(
-                $e->getMessage(),
-                'GALAXY_CREATION_FAILED',
-                null,
-                500
-            );
-        } catch (\Exception $e) {
-            return $this->error(
-                'An unexpected error occurred during galaxy creation: '.$e->getMessage(),
-                'GALAXY_CREATION_ERROR',
-                null,
-                500
-            );
-        }
-    }
-
-    /**
-     * Create a new tiered galaxy with core/outer regions
-     *
-     * POST /api/galaxies/create-tiered
-     *
-     * Creates a tiered galaxy with:
-     * - Civilized core (100% inhabited, fortified, trading posts)
-     * - Frontier outer region (0% inhabited, rich minerals, dormant gates)
-     */
-    public function createTiered(CreateGalaxyRequest $request): JsonResponse
-    {
-        set_time_limit(600);  // 10 minutes for large galaxies
-
-        try {
-            $options = $request->validatedWithDefaults();
             $sizeTier = $request->getSizeTier();
 
-            if (! $sizeTier) {
+            if (!$sizeTier) {
                 return $this->error(
-                    'size_tier is required for tiered galaxy creation',
+                    'size_tier is required for optimized galaxy creation',
                     'MISSING_SIZE_TIER',
                     ['valid_tiers' => GalaxySizeTier::toOptionsArray()],
                     422
                 );
             }
 
+            $options = $request->validatedWithDefaults();
+
             // Add owner user ID for single player galaxies
             if (in_array($options['game_mode'], ['single_player', 'mixed'])) {
                 $options['owner_user_id'] = $request->user()->id;
             }
 
-            // Use async method if requested
-            $useAsync = $options['async'] ?? false;
+            $result = $this->orchestrator->generate($sizeTier, $options);
 
-            // Auto-enable async for large galaxies
-            if ($sizeTier === GalaxySizeTier::LARGE) {
-                $useAsync = true;
-            }
-
-            if ($useAsync) {
-                $result = $this->tieredGalaxyCreationService->createTieredGalaxyAsync($sizeTier, $options);
-
-                return $this->success(
-                    $result,
-                    'Tiered galaxy creation started. Heavy operations processing in background.',
-                    202
+            if (!$result['success']) {
+                return $this->error(
+                    $result['error'] ?? 'Galaxy generation failed',
+                    'OPTIMIZED_GALAXY_CREATION_FAILED',
+                    ['metrics' => $result['metrics'] ?? null],
+                    500
                 );
             }
 
-            $result = $this->tieredGalaxyCreationService->createTieredGalaxy($sizeTier, $options);
-
             return $this->success(
-                $result,
-                'Tiered galaxy created successfully',
+                [
+                    'galaxy'     => $result['galaxy'],
+                    'statistics' => $result['statistics'],
+                    'metrics'    => $result['metrics'],
+                    'config'     => $result['config'],
+                ],
+                'Galaxy created successfully using optimized pipeline',
                 201
             );
-        } catch (\RuntimeException $e) {
+        } catch (RuntimeException $e) {
             return $this->error(
                 $e->getMessage(),
-                'TIERED_GALAXY_CREATION_FAILED',
+                'OPTIMIZED_GALAXY_CREATION_FAILED',
                 null,
                 500
             );
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return $this->error(
-                'An unexpected error occurred during tiered galaxy creation: '.$e->getMessage(),
-                'TIERED_GALAXY_CREATION_ERROR',
+                'An unexpected error occurred: ' . $e->getMessage(),
+                'OPTIMIZED_GALAXY_CREATION_ERROR',
                 null,
                 500
             );
@@ -185,24 +117,24 @@ class GalaxyCreationController extends BaseApiController
     {
         $galaxy = Galaxy::where('uuid', $uuid)->first();
 
-        if (! $galaxy) {
+        if (!$galaxy) {
             return $this->notFound('Galaxy not found');
         }
 
-        $progress = $galaxy->progress_status ?? [];
+        $progress        = $galaxy->progress_status ?? [];
         $currentProgress = $galaxy->getCurrentProgress();
 
         return $this->success([
-            'galaxy_id' => $galaxy->id,
-            'galaxy_uuid' => $galaxy->uuid,
-            'galaxy_name' => $galaxy->name,
-            'status' => $galaxy->status->value ?? $galaxy->status,
-            'size_tier' => $galaxy->size_tier?->value,
-            'current_progress' => $currentProgress,
-            'is_complete' => $currentProgress >= 100 || $galaxy->status->isPlayable(),
-            'generation_started_at' => $galaxy->generation_started_at?->toIso8601String(),
+            'galaxy_id'               => $galaxy->id,
+            'galaxy_uuid'             => $galaxy->uuid,
+            'galaxy_name'             => $galaxy->name,
+            'status'                  => $galaxy->status->value ?? $galaxy->status,
+            'size_tier'               => $galaxy->size_tier?->value,
+            'current_progress'        => $currentProgress,
+            'is_complete'             => $currentProgress >= 100 || $galaxy->status->isPlayable(),
+            'generation_started_at'   => $galaxy->generation_started_at?->toIso8601String(),
             'generation_completed_at' => $galaxy->generation_completed_at?->toIso8601String(),
-            'steps' => $progress,
+            'steps'                   => $progress,
         ]);
     }
 
@@ -229,12 +161,12 @@ class GalaxyCreationController extends BaseApiController
     {
         $galaxy = Galaxy::where('uuid', $uuid)->first();
 
-        if (! $galaxy) {
+        if (!$galaxy) {
             return $this->notFound('Galaxy not found');
         }
 
         // Check if galaxy allows NPCs
-        if (! $galaxy->allowsNpcs()) {
+        if (!$galaxy->allowsNpcs()) {
             return $this->error(
                 'This galaxy does not allow NPCs. Game mode must be single_player or mixed.',
                 'NPC_NOT_ALLOWED',
@@ -260,7 +192,7 @@ class GalaxyCreationController extends BaseApiController
                 $result,
                 "Successfully created {$result['npcs_created']} NPCs"
             );
-        } catch (\RuntimeException $e) {
+        } catch (RuntimeException $e) {
             return $this->error(
                 $e->getMessage(),
                 'NPC_CREATION_FAILED',
@@ -279,7 +211,7 @@ class GalaxyCreationController extends BaseApiController
     {
         $galaxy = Galaxy::where('uuid', $uuid)->first();
 
-        if (! $galaxy) {
+        if (!$galaxy) {
             return $this->notFound('Galaxy not found');
         }
 
@@ -303,33 +235,33 @@ class GalaxyCreationController extends BaseApiController
 
         $npcs = $query->get();
 
-        $data = $npcs->map(fn (Npc $npc) => [
-            'uuid' => $npc->uuid,
-            'call_sign' => $npc->call_sign,
-            'archetype' => $npc->archetype,
-            'difficulty' => $npc->difficulty,
-            'level' => $npc->level,
-            'credits' => (float) $npc->credits,
-            'status' => $npc->status,
+        $data = $npcs->map(fn(Npc $npc) => [
+            'uuid'             => $npc->uuid,
+            'call_sign'        => $npc->call_sign,
+            'archetype'        => $npc->archetype,
+            'difficulty'       => $npc->difficulty,
+            'level'            => $npc->level,
+            'credits'          => (float)$npc->credits,
+            'status'           => $npc->status,
             'current_activity' => $npc->current_activity,
-            'location' => $npc->currentLocation ? [
-                'id' => $npc->currentLocation->id,
+            'location'         => $npc->currentLocation ? [
+                'id'   => $npc->currentLocation->id,
                 'name' => $npc->currentLocation->name,
-                'x' => $npc->currentLocation->x,
-                'y' => $npc->currentLocation->y,
+                'x'    => $npc->currentLocation->x,
+                'y'    => $npc->currentLocation->y,
             ] : null,
-            'ship' => $npc->activeShip ? [
-                'uuid' => $npc->activeShip->uuid,
-                'name' => $npc->activeShip->name,
-                'class' => $npc->activeShip->ship?->class,
-                'hull' => $npc->activeShip->hull,
+            'ship'             => $npc->activeShip ? [
+                'uuid'     => $npc->activeShip->uuid,
+                'name'     => $npc->activeShip->name,
+                'class'    => $npc->activeShip->ship?->class,
+                'hull'     => $npc->activeShip->hull,
                 'max_hull' => $npc->activeShip->max_hull,
             ] : null,
         ]);
 
         return $this->success([
-            'npcs' => $data,
-            'total' => $npcs->count(),
+            'npcs'       => $data,
+            'total'      => $npcs->count(),
             'statistics' => $this->npcGenerationService->getNpcStatistics($galaxy),
         ]);
     }
@@ -345,68 +277,68 @@ class GalaxyCreationController extends BaseApiController
             ->with(['galaxy', 'currentLocation', 'activeShip.ship', 'activeShip.cargo.mineral'])
             ->first();
 
-        if (! $npc) {
+        if (!$npc) {
             return $this->notFound('NPC not found');
         }
 
         return $this->success([
-            'uuid' => $npc->uuid,
-            'call_sign' => $npc->call_sign,
-            'archetype' => $npc->archetype,
+            'uuid'                  => $npc->uuid,
+            'call_sign'             => $npc->call_sign,
+            'archetype'             => $npc->archetype,
             'archetype_description' => Npc::ARCHETYPES[$npc->archetype]['description'] ?? null,
-            'difficulty' => $npc->difficulty,
-            'level' => $npc->level,
-            'experience' => $npc->experience,
-            'credits' => (float) $npc->credits,
-            'status' => $npc->status,
-            'current_activity' => $npc->current_activity,
-            'personality' => [
-                'aggression' => $npc->aggression,
+            'difficulty'            => $npc->difficulty,
+            'level'                 => $npc->level,
+            'experience'            => $npc->experience,
+            'credits'               => (float)$npc->credits,
+            'status'                => $npc->status,
+            'current_activity'      => $npc->current_activity,
+            'personality'           => [
+                'aggression'     => $npc->aggression,
                 'risk_tolerance' => $npc->risk_tolerance,
-                'trade_focus' => $npc->trade_focus,
+                'trade_focus'    => $npc->trade_focus,
             ],
-            'combat_stats' => [
+            'combat_stats'          => [
                 'ships_destroyed' => $npc->ships_destroyed,
-                'combats_won' => $npc->combats_won,
-                'combats_lost' => $npc->combats_lost,
+                'combats_won'     => $npc->combats_won,
+                'combats_lost'    => $npc->combats_lost,
             ],
-            'economy_stats' => [
-                'total_trade_volume' => (float) $npc->total_trade_volume,
+            'economy_stats'         => [
+                'total_trade_volume' => (float)$npc->total_trade_volume,
             ],
-            'galaxy' => [
-                'id' => $npc->galaxy->id,
+            'galaxy'                => [
+                'id'   => $npc->galaxy->id,
                 'uuid' => $npc->galaxy->uuid,
                 'name' => $npc->galaxy->name,
             ],
-            'location' => $npc->currentLocation ? [
-                'id' => $npc->currentLocation->id,
-                'name' => $npc->currentLocation->name,
-                'x' => $npc->currentLocation->x,
-                'y' => $npc->currentLocation->y,
+            'location'              => $npc->currentLocation ? [
+                'id'           => $npc->currentLocation->id,
+                'name'         => $npc->currentLocation->name,
+                'x'            => $npc->currentLocation->x,
+                'y'            => $npc->currentLocation->y,
                 'is_inhabited' => $npc->currentLocation->is_inhabited,
             ] : null,
-            'ship' => $npc->activeShip ? [
-                'uuid' => $npc->activeShip->uuid,
-                'name' => $npc->activeShip->name,
-                'class' => $npc->activeShip->ship?->class,
+            'ship'                  => $npc->activeShip ? [
+                'uuid'   => $npc->activeShip->uuid,
+                'name'   => $npc->activeShip->name,
+                'class'  => $npc->activeShip->ship?->class,
                 'status' => $npc->activeShip->status,
-                'stats' => [
-                    'hull' => $npc->activeShip->hull,
-                    'max_hull' => $npc->activeShip->max_hull,
-                    'weapons' => $npc->activeShip->weapons,
-                    'cargo_hold' => $npc->activeShip->cargo_hold,
+                'stats'  => [
+                    'hull'          => $npc->activeShip->hull,
+                    'max_hull'      => $npc->activeShip->max_hull,
+                    'weapons'       => $npc->activeShip->weapons,
+                    'cargo_hold'    => $npc->activeShip->cargo_hold,
                     'current_cargo' => $npc->activeShip->current_cargo,
-                    'sensors' => $npc->activeShip->sensors,
-                    'warp_drive' => $npc->activeShip->warp_drive,
-                    'current_fuel' => $npc->activeShip->current_fuel,
-                    'max_fuel' => $npc->activeShip->max_fuel,
+                    'sensors'       => $npc->activeShip->sensors,
+                    'warp_drive'    => $npc->activeShip->warp_drive,
+                    'current_fuel'  => $npc->activeShip->current_fuel,
+                    'max_fuel'      => $npc->activeShip->max_fuel,
                 ],
-                'cargo' => $npc->activeShip->cargo->map(fn ($cargo) => [
-                    'mineral' => $cargo->mineral?->name,
+                'cargo'  => $npc->activeShip->cargo->map(fn($cargo) => [
+                    'mineral'  => $cargo->mineral?->name,
                     'quantity' => $cargo->quantity,
                 ])->toArray(),
             ] : null,
-            'last_action_at' => $npc->last_action_at?->toIso8601String(),
+            'last_action_at'        => $npc->last_action_at?->toIso8601String(),
         ]);
     }
 
@@ -419,7 +351,7 @@ class GalaxyCreationController extends BaseApiController
     {
         $npc = Npc::where('uuid', $uuid)->with('galaxy')->first();
 
-        if (! $npc) {
+        if (!$npc) {
             return $this->notFound('NPC not found');
         }
 
@@ -445,18 +377,18 @@ class GalaxyCreationController extends BaseApiController
     public function getArchetypes(): JsonResponse
     {
         return $this->success([
-            'archetypes' => collect(Npc::ARCHETYPES)->map(fn ($config, $name) => [
-                'name' => $name,
-                'description' => $config['description'],
-                'default_aggression' => $config['aggression'],
+            'archetypes'   => collect(Npc::ARCHETYPES)->map(fn($config, $name) => [
+                'name'                   => $name,
+                'description'            => $config['description'],
+                'default_aggression'     => $config['aggression'],
                 'default_risk_tolerance' => $config['risk_tolerance'],
-                'default_trade_focus' => $config['trade_focus'],
+                'default_trade_focus'    => $config['trade_focus'],
             ])->values(),
-            'difficulties' => collect(Npc::DIFFICULTY_MULTIPLIERS)->map(fn ($config, $name) => [
-                'name' => $name,
-                'credits_multiplier' => $config['credits'],
+            'difficulties' => collect(Npc::DIFFICULTY_MULTIPLIERS)->map(fn($config, $name) => [
+                'name'                    => $name,
+                'credits_multiplier'      => $config['credits'],
                 'combat_skill_multiplier' => $config['combat_skill'],
-                'decision_quality' => $config['decision_quality'],
+                'decision_quality'        => $config['decision_quality'],
             ])->values(),
         ]);
     }

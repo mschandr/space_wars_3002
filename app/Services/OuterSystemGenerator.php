@@ -362,10 +362,12 @@ class OuterSystemGenerator
         $params = array_merge($params, $ids);
         $idPlaceholders = implode(',', array_fill(0, count($ids), '?'));
 
+        $nowFunction = DB::getDriverName() === 'sqlite' ? "datetime('now')" : 'NOW()';
+
         DB::statement(
             'UPDATE points_of_interest
              SET mineral_deposits = CASE '.implode(' ', $cases)." END,
-                 updated_at = NOW()
+                 updated_at = {$nowFunction}
              WHERE id IN ({$idPlaceholders})",
             $params
         );

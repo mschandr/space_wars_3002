@@ -12,7 +12,7 @@ use App\Models\Sector;
 use App\Models\Ship;
 use App\Models\TradingHub;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
@@ -21,14 +21,10 @@ use Tests\TestCase;
  * Tests all documented API endpoints to ensure they respond correctly.
  * This test validates the API contract as documented in API_GALAXY_CREATION.md
  * and other API documentation.
- *
- * Note: Uses DatabaseTransactions instead of RefreshDatabase to avoid
- * deleting existing database data. Each test runs in a transaction that
- * is rolled back after the test completes.
  */
 class FullApiEndpointTest extends TestCase
 {
-    use DatabaseTransactions;
+    use RefreshDatabase;
 
     private User $user;
 
@@ -147,12 +143,27 @@ class FullApiEndpointTest extends TestCase
     // GALAXY ENDPOINTS (PUBLIC)
     // =========================================================================
 
-    public function test_list_galaxies(): void
+    public function test_list_galaxies_requires_auth(): void
     {
         $response = $this->getJson('/api/galaxies');
 
+        $response->assertStatus(401);
+    }
+
+    public function test_list_galaxies(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->getJson('/api/galaxies');
+
         $response->assertStatus(200)
-            ->assertJsonPath('success', true);
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'my_games',
+                    'open_games',
+                ],
+            ]);
     }
 
     public function test_get_galaxy_details(): void
@@ -201,9 +212,7 @@ class FullApiEndpointTest extends TestCase
     public function test_create_galaxy_requires_authentication(): void
     {
         $response = $this->postJson('/api/galaxies/create', [
-            'width' => 200,
-            'height' => 200,
-            'stars' => 100,
+            'size_tier' => 'small',
             'game_mode' => 'multiplayer',
         ]);
 
@@ -214,22 +223,28 @@ class FullApiEndpointTest extends TestCase
     {
         $response = $this->actingAs($this->user)
             ->postJson('/api/galaxies/create', [
-                'width' => 200,
-                'height' => 200,
-                'stars' => 100,
+                'size_tier' => 'small',
                 'game_mode' => 'invalid_mode',
             ]);
 
         $response->assertStatus(422);
     }
 
-    public function test_create_galaxy_validation_rejects_small_dimensions(): void
+    public function test_create_galaxy_validation_rejects_invalid_size_tier(): void
     {
         $response = $this->actingAs($this->user)
             ->postJson('/api/galaxies/create', [
-                'width' => 50,
-                'height' => 200,
-                'stars' => 100,
+                'size_tier' => 'extra_large',
+                'game_mode' => 'multiplayer',
+            ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_create_galaxy_validation_requires_size_tier_or_dimensions(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/galaxies/create', [
                 'game_mode' => 'multiplayer',
             ]);
 

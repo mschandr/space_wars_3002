@@ -12,8 +12,10 @@ use App\Faker\Providers\GalaxyNameProvider;
 use App\Traits\HasUuidAndVersion;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Galaxy extends Model
 {
@@ -22,34 +24,35 @@ class Galaxy extends Model
     protected $fillable = [
         'galaxy_uuid', 'name', 'description', 'width', 'height', 'seed', 'distribution_method',
         'spacing_factor', 'engine', 'turn_limit', 'status', 'version', 'is_public', 'config',
-        'game_mode', 'owner_user_id', 'size_tier', 'core_bounds', 'progress_status',
+        'game_mode', 'max_players', 'owner_user_id', 'size_tier', 'sector', 'core_bounds', 'progress_status',
         'generation_started_at', 'generation_completed_at',
     ];
 
     protected $casts = [
-        'status' => GalaxyStatus::class,
-        'distribution_method' => GalaxyDistributionMethod::class,
-        'engine' => GalaxyRandomEngine::class,
-        'size_tier' => GalaxySizeTier::class,
-        'config' => 'array',
-        'core_bounds' => 'array',
-        'progress_status' => 'array',
-        'generation_started_at' => 'datetime',
+        'status'                  => GalaxyStatus::class,
+        'distribution_method'     => GalaxyDistributionMethod::class,
+        'engine'                  => GalaxyRandomEngine::class,
+        'size_tier'               => GalaxySizeTier::class,
+        'sector'                  => Sector::class,
+        'config'                  => 'array',
+        'core_bounds'             => 'array',
+        'progress_status'         => 'array',
+        'generation_started_at'   => 'datetime',
         'generation_completed_at' => 'datetime',
     ];
 
     public static function createGalaxy(array $galaxyData): self
     {
         $attributes = [
-            'width' => $galaxyData['width'],
-            'height' => $galaxyData['height'],
-            'seed' => $galaxyData['seed'],
+            'width'               => $galaxyData['width'],
+            'height'              => $galaxyData['height'],
+            'seed'                => $galaxyData['seed'],
             'distribution_method' => $galaxyData['distribution_method'],
-            'engine' => $galaxyData['engine'],
-            'status' => GalaxyStatus::DRAFT,
-            'turn_limit' => $galaxyData['turn_limit'] ?? 0,
-            'description' => $galaxyData['description'] ?? null,
-            'is_public' => $galaxyData['is_public'] ?? false,
+            'engine'              => $galaxyData['engine'],
+            'status'              => GalaxyStatus::DRAFT,
+            'turn_limit'          => $galaxyData['turn_limit'] ?? 0,
+            'description'         => $galaxyData['description'] ?? null,
+            'is_public'           => $galaxyData['is_public'] ?? false,
         ];
 
         if (config('game_config.feature.persist_data')) {
@@ -85,32 +88,33 @@ class Galaxy extends Model
 
         if (self::where('name', $name)->exists()) {
             foreach (GalaxySuffixes::$suffixes as $suffix) {
-                $candidate = $base.$suffix;
-                if (! self::where('name', $candidate)->exists()) {
+                $candidate = $base . $suffix;
+                if (!self::where('name', $candidate)->exists()) {
                     return $candidate;
                 }
             }
 
             $i = 2;
             do {
-                $candidate = $base.' '.RomanNumerals::romanize($i);
+                $candidate = $base . ' ' . RomanNumerals::romanize($i);
                 $i++;
             } while (self::where('name', $candidate)->exists());
-
             return $candidate;
         }
-
         return $name;
-    }
-
-    public function pointsOfInterest(): HasMany
-    {
-        return $this->hasMany(PointOfInterest::class);
     }
 
     public function warpGates(): HasMany
     {
         return $this->hasMany(WarpGate::class);
+    }
+
+    /**
+     * @return HasOne
+     */
+    public function sizeTier(): HasOne
+    {
+        return $this->HasOne(GalaxySizeTier::class)->label('size_tier');
     }
 
     public function sectors(): HasMany
@@ -131,6 +135,11 @@ class Galaxy extends Model
     public function npcs(): HasMany
     {
         return $this->hasMany(Npc::class);
+    }
+
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
     }
 
     /**
@@ -186,22 +195,22 @@ class Galaxy extends Model
     /**
      * Apply mirror multiplier to a value
      *
-     * @param  float  $baseValue  The base value to multiply
-     * @param  string  $type  Type of multiplier: resource, price, pirate_difficulty, rare_spawn
+     * @param float $baseValue The base value to multiply
+     * @param string $type Type of multiplier: resource, price, pirate_difficulty, rare_spawn
      */
     public function applyMirrorMultiplier(float $baseValue, string $type): float
     {
-        if (! $this->isMirrorUniverse()) {
+        if (!$this->isMirrorUniverse()) {
             return $baseValue;
         }
 
-        $modifiers = $this->getMirrorModifiers();
+        $modifiers  = $this->getMirrorModifiers();
         $multiplier = match ($type) {
-            'resource' => $modifiers['resource_multiplier'] ?? 1.0,
-            'price' => $modifiers['price_boost'] ?? 1.0,
+            'resource'          => $modifiers['resource_multiplier'] ?? 1.0,
+            'price'             => $modifiers['price_boost'] ?? 1.0,
             'pirate_difficulty' => $modifiers['pirate_difficulty_boost'] ?? 1.0,
-            'rare_spawn' => $modifiers['rare_mineral_spawn_rate'] ?? 1.0,
-            default => 1.0,
+            'rare_spawn'        => $modifiers['rare_mineral_spawn_rate'] ?? 1.0,
+            default             => 1.0,
         };
 
         return $baseValue * $multiplier;
@@ -212,13 +221,13 @@ class Galaxy extends Model
      */
     public function getMirrorModifiers(): array
     {
-        if (! $this->isMirrorUniverse()) {
+        if (!$this->isMirrorUniverse()) {
             return [];
         }
 
         return $this->config['mirror_modifiers'] ?? [
-            'resource_multiplier' => 2.0,
-            'price_boost' => 1.5,
+            'resource_multiplier'     => 2.0,
+            'price_boost'             => 1.5,
             'pirate_difficulty_boost' => 2.0,
             'rare_mineral_spawn_rate' => 3.0,
         ];
@@ -237,7 +246,7 @@ class Galaxy extends Model
      */
     public function isInCoreRegion(float $x, float $y): bool
     {
-        if (! $this->core_bounds) {
+        if (!$this->core_bounds) {
             return false;
         }
 
@@ -255,12 +264,12 @@ class Galaxy extends Model
         $progress = $this->progress_status ?? [];
 
         $progress[$step] = [
-            'step' => $step,
-            'name' => $name,
+            'step'       => $step,
+            'name'       => $name,
             'percentage' => $percentage,
-            'status' => $status,
-            'message' => $message,
-            'timestamp' => now()->toIso8601String(),
+            'status'     => $status,
+            'message'    => $message,
+            'timestamp'  => now()->toIso8601String(),
         ];
 
         $this->progress_status = $progress;
@@ -287,6 +296,11 @@ class Galaxy extends Model
     public function corePointsOfInterest(): HasMany
     {
         return $this->pointsOfInterest()->where('region', 'core');
+    }
+
+    public function pointsOfInterest(): HasMany
+    {
+        return $this->hasMany(PointOfInterest::class);
     }
 
     /**

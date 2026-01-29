@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PointsOfInterest\PointOfInterestType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,13 +27,13 @@ class Sector extends Model
     ];
 
     protected $casts = [
-        'attributes' => 'array',
-        'grid_x' => 'integer',
-        'grid_y' => 'integer',
-        'x_min' => 'float',
-        'x_max' => 'float',
-        'y_min' => 'float',
-        'y_max' => 'float',
+        'attributes'   => 'array',
+        'grid_x'       => 'integer',
+        'grid_y'       => 'integer',
+        'x_min'        => 'float',
+        'x_max'        => 'float',
+        'y_min'        => 'float',
+        'y_max'        => 'float',
         'danger_level' => 'integer',
     ];
 
@@ -45,45 +46,12 @@ class Sector extends Model
     }
 
     /**
-     * Get all POIs in this sector
-     */
-    public function pointsOfInterest(): HasMany
-    {
-        return $this->hasMany(PointOfInterest::class);
-    }
-
-    /**
      * Check if coordinates are within this sector
      */
     public function containsCoordinates(float $x, float $y): bool
     {
         return $x >= $this->x_min && $x <= $this->x_max &&
-               $y >= $this->y_min && $y <= $this->y_max;
-    }
-
-    /**
-     * Get sector statistics
-     */
-    public function getStats(): array
-    {
-        $stars = $this->pointsOfInterest()
-            ->where('type', \App\Enums\PointsOfInterest\PointOfInterestType::STAR)
-            ->count();
-
-        $totalPois = $this->pointsOfInterest()->count();
-
-        // Count pirates in this sector
-        $pirates = \App\Models\WarpLanePirate::whereHas('warpGate', function ($query) {
-            $query->whereHas('sourcePoi', function ($q) {
-                $q->where('sector_id', $this->id);
-            });
-        })->where('is_active', true)->count();
-
-        return [
-            'star_count' => $stars,
-            'poi_count' => $totalPois,
-            'pirate_count' => $pirates,
-        ];
+            $y >= $this->y_min && $y <= $this->y_max;
     }
 
     /**
@@ -91,7 +59,7 @@ class Sector extends Model
      */
     public function getDangerLevel(): string
     {
-        $stats = $this->getStats();
+        $stats       = $this->getStats();
         $pirateRatio = $stats['star_count'] > 0
             ? $stats['pirate_count'] / $stats['star_count']
             : 0;
@@ -104,6 +72,39 @@ class Sector extends Model
         }
 
         return 'low';
+    }
+
+    /**
+     * Get sector statistics
+     */
+    public function getStats(): array
+    {
+        $stars = $this->pointsOfInterest()
+            ->where('type', PointOfInterestType::STAR)
+            ->count();
+
+        $totalPOIs = $this->pointsOfInterest()->count();
+
+        // Count pirates in this sector
+        $pirates = WarpLanePirate::whereHas('warpGate', function ($query) {
+            $query->whereHas('sourcePoi', function ($q) {
+                $q->where('sector_id', $this->id);
+            });
+        })->where('is_active', true)->count();
+
+        return [
+            'star_count'   => $stars,
+            'poi_count'    => $totalPOIs,
+            'pirate_count' => $pirates,
+        ];
+    }
+
+    /**
+     * Get all POIs in this sector
+     */
+    public function pointsOfInterest(): HasMany
+    {
+        return $this->hasMany(PointOfInterest::class);
     }
 
     /**

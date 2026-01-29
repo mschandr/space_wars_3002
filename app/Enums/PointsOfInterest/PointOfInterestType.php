@@ -25,6 +25,7 @@ enum PointOfInterestType: int
     case SUPER_MASSIVE_BLACK_HOLE = 19;
     case TERRESTRIAL = 20;
     case EMPTY_SPACE = 21;
+    case DERELICT = 22;
 
     /** Labels for display */
     public function label(): string
@@ -51,6 +52,7 @@ enum PointOfInterestType: int
             self::SUPER_MASSIVE_BLACK_HOLE => 'Super Massive Black Hole',
             self::TERRESTRIAL => 'Terrestrial',
             self::EMPTY_SPACE => 'Empty Space',
+            self::DERELICT => 'Derelict Vessel',
         };
     }
 
