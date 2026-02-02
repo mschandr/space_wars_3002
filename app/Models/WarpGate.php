@@ -6,6 +6,7 @@ use App\Enums\WarpGate\GateType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
@@ -143,6 +144,14 @@ class WarpGate extends Model
     public function warpLanePirate(): HasOne
     {
         return $this->hasOne(WarpLanePirate::class, 'warp_gate_id');
+    }
+
+    /**
+     * Get all players who have knowledge of this warp gate.
+     */
+    public function knownByPlayers(): HasMany
+    {
+        return $this->hasMany(PilotLaneKnowledge::class);
     }
 
     public function calculateDistance(): float

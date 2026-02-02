@@ -8,7 +8,6 @@ use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
 use App\Models\WarpGate;
-use App\Services\SystemScanService;
 
 /**
  * Travel Service
@@ -136,6 +135,10 @@ class TravelService
         }
 
         $player->save();
+
+        // Discover the warp lane (fog of war - bidirectional discovery)
+        $laneKnowledgeService = app(LaneKnowledgeService::class);
+        $laneKnowledgeService->discoverLaneBidirectional($player, $gate, 'travel');
 
         // Award XP
         $xpEarned = $this->calculateTravelXP($distance);

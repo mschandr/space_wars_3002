@@ -12,8 +12,6 @@ export type GalaxySizeTier = 'small' | 'medium' | 'large' | 'massive';
 
 export type GameMode = 'multiplayer' | 'single_player' | 'mixed';
 
-export type NpcDifficulty = 'easy' | 'medium' | 'hard' | 'expert';
-
 export interface CreateOptimizedGalaxyRequest {
   /** Galaxy size tier (required) */
   size_tier: GalaxySizeTier;
@@ -30,11 +28,12 @@ export interface CreateOptimizedGalaxyRequest {
   /** Skip precursor content (gate + ship) */
   skip_precursors?: boolean;
 
-  /** Number of NPCs for single_player/mixed modes (0-100) */
-  npc_count?: number;
-
-  /** NPC difficulty level */
-  npc_difficulty?: NpcDifficulty;
+  // Note: NPC configuration (npc_count, npc_difficulty) is NOT accepted.
+  // NPC counts are determined automatically based on galaxy size tier:
+  // - small: 5 NPCs (easy)
+  // - medium: 10 NPCs (medium)
+  // - large: 15 NPCs (hard)
+  // - massive: 25 NPCs (expert)
 }
 
 // ============================================================================
@@ -239,6 +238,179 @@ export function getTierConfig(tier: GalaxySizeTier): SizeTierOption | undefined 
 }
 
 // ============================================================================
+// GALAXY MEMBERSHIP TYPES
+// ============================================================================
+
+/**
+ * Player information returned by membership endpoints
+ */
+export interface PlayerInfo {
+  uuid: string;
+  call_sign: string;
+  credits: number;
+  experience: number;
+  level: number;
+  status: 'active' | 'destroyed' | 'inactive';
+  galaxy: {
+    uuid: string;
+    name: string;
+  };
+  location: {
+    uuid: string;
+    name: string;
+    x: number;
+    y: number;
+  } | null;
+  ship: {
+    uuid: string;
+    name: string;
+    class: string;
+  } | null;
+}
+
+/**
+ * Request body for POST /api/galaxies/{uuid}/join
+ */
+export interface JoinGalaxyRequest {
+  /** Call sign for new player (required only when creating) */
+  call_sign: string;
+}
+
+/**
+ * Response from GET /api/galaxies/{uuid}/my-player (success)
+ */
+export interface GetMyPlayerSuccessResponse {
+  success: true;
+  message: string;
+  data: PlayerInfo;
+}
+
+/**
+ * Response from GET /api/galaxies/{uuid}/my-player (not found)
+ */
+export interface GetMyPlayerNotFoundResponse {
+  success: false;
+  message: string;
+  error: {
+    code: 'NO_PLAYER_IN_GALAXY';
+    details: {
+      galaxy_uuid: string;
+    };
+  };
+}
+
+export type GetMyPlayerResponse =
+  | GetMyPlayerSuccessResponse
+  | GetMyPlayerNotFoundResponse;
+
+/**
+ * Response from POST /api/galaxies/{uuid}/join (success)
+ */
+export interface JoinGalaxySuccessResponse {
+  success: true;
+  message: string;
+  data: {
+    player: PlayerInfo;
+    /** true if player was created, false if already existed */
+    created: boolean;
+  };
+}
+
+/**
+ * Error codes for join galaxy endpoint
+ */
+export type JoinGalaxyErrorCode =
+  | 'GALAXY_NOT_ACTIVE'
+  | 'GALAXY_FULL'
+  | 'SINGLE_PLAYER_GALAXY'
+  | 'DUPLICATE_CALL_SIGN'
+  | 'NO_STARTING_LOCATION'
+  | 'JOIN_FAILED';
+
+/**
+ * Response from POST /api/galaxies/{uuid}/join (error)
+ */
+export interface JoinGalaxyErrorResponse {
+  success: false;
+  message: string;
+  error: {
+    code: JoinGalaxyErrorCode;
+    details?: {
+      max_players?: number;
+      current_players?: number;
+      status?: string;
+    };
+  };
+}
+
+export type JoinGalaxyResponse =
+  | JoinGalaxySuccessResponse
+  | JoinGalaxyErrorResponse;
+
+// ============================================================================
+// GALAXY MEMBERSHIP HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Check if user has a player in a galaxy
+ * @returns Player info if exists, null if not
+ */
+export async function checkPlayerInGalaxy(
+  galaxyUuid: string,
+  token: string
+): Promise<PlayerInfo | null> {
+  const response = await fetch(`/api/galaxies/${galaxyUuid}/my-player`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json',
+    },
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  const result: GetMyPlayerResponse = await response.json();
+
+  if (result.success) {
+    return result.data;
+  }
+
+  return null;
+}
+
+/**
+ * Join a galaxy - idempotent operation
+ * Returns existing player or creates new one
+ */
+export async function joinGalaxy(
+  galaxyUuid: string,
+  callSign: string,
+  token: string
+): Promise<{ player: PlayerInfo; created: boolean }> {
+  const response = await fetch(`/api/galaxies/${galaxyUuid}/join`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({ call_sign: callSign }),
+  });
+
+  const result: JoinGalaxyResponse = await response.json();
+
+  if (!result.success) {
+    const error = new Error(result.message);
+    (error as any).code = result.error.code;
+    (error as any).details = result.error.details;
+    throw error;
+  }
+
+  return result.data;
+}
+
+// ============================================================================
 // EXAMPLE USAGE
 // ============================================================================
 
@@ -272,7 +444,7 @@ async function createGalaxy(
   return response.json();
 }
 
-// Usage
+// Usage - Create Galaxy
 const result = await createGalaxy('massive', 'multiplayer');
 
 if (result.success) {
@@ -281,5 +453,42 @@ if (result.success) {
   console.log(`Generation time: ${result.data.metrics.total_elapsed_seconds}s`);
 } else {
   console.error(`Error: ${result.message}`);
+}
+
+// Usage - Check Player Membership
+const existingPlayer = await checkPlayerInGalaxy(galaxyUuid, token);
+if (existingPlayer) {
+  console.log(`You have a player: ${existingPlayer.call_sign}`);
+} else {
+  console.log('You need to join this galaxy first');
+}
+
+// Usage - Join Galaxy (idempotent)
+try {
+  const { player, created } = await joinGalaxy(galaxyUuid, 'MyCallSign', token);
+
+  if (created) {
+    console.log(`Welcome aboard, ${player.call_sign}!`);
+  } else {
+    console.log(`Welcome back, ${player.call_sign}!`);
+  }
+
+  // Navigate to game
+  router.push(`/game/${galaxyUuid}`);
+
+} catch (error) {
+  switch (error.code) {
+    case 'GALAXY_FULL':
+      alert('This galaxy is full!');
+      break;
+    case 'DUPLICATE_CALL_SIGN':
+      alert('That call sign is taken. Try another.');
+      break;
+    case 'SINGLE_PLAYER_GALAXY':
+      alert('This is a private galaxy.');
+      break;
+    default:
+      alert('Failed to join galaxy');
+  }
 }
 */

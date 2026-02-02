@@ -13,6 +13,7 @@ use App\Services\GalaxyGeneration\Data\GenerationMetrics;
 use App\Services\GalaxyGeneration\Data\GenerationResult;
 use App\Services\GalaxyGeneration\Generators\DefenseNetworkGenerator;
 use App\Services\GalaxyGeneration\Generators\MineralDepositGenerator;
+use App\Services\GalaxyGeneration\Generators\MirrorUniverseGenerator;
 use App\Services\GalaxyGeneration\Generators\PlanetarySystemGenerator;
 use App\Services\GalaxyGeneration\Generators\PrecursorContentGenerator;
 use App\Services\GalaxyGeneration\Generators\SectorGridGenerator;
@@ -51,6 +52,7 @@ final class GalaxyGenerationOrchestrator
         DefenseNetworkGenerator::class,
         TradingInfrastructureGenerator::class,
         PrecursorContentGenerator::class,
+        MirrorUniverseGenerator::class,    // Must run after PrecursorContentGenerator
     ];
 
     private array $results = [];
@@ -246,7 +248,7 @@ final class GalaxyGenerationOrchestrator
      */
     private function gatherStatistics(Galaxy $galaxy): array
     {
-        return [
+        $stats = [
             'total_pois' => $galaxy->pointsOfInterest()->count(),
             'total_stars' => $galaxy->pointsOfInterest()->stars()->count(),
             'core_stars' => $galaxy->corePointsOfInterest()->stars()->count(),
@@ -259,5 +261,20 @@ final class GalaxyGenerationOrchestrator
             'trading_hubs' => $galaxy->tradingHubs()->count(),
             'sectors' => $galaxy->sectors()->count(),
         ];
+
+        // Include mirror galaxy info if it exists
+        $mirrorGalaxy = $galaxy->getPairedGalaxy();
+        if ($mirrorGalaxy) {
+            $stats['mirror_universe'] = [
+                'id' => $mirrorGalaxy->id,
+                'uuid' => $mirrorGalaxy->uuid,
+                'name' => $mirrorGalaxy->name,
+                'total_stars' => $mirrorGalaxy->pointsOfInterest()->stars()->count(),
+                'warp_gates' => $mirrorGalaxy->warpGates()->count(),
+                'trading_hubs' => $mirrorGalaxy->tradingHubs()->count(),
+            ];
+        }
+
+        return $stats;
     }
 }

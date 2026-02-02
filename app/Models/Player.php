@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Str;
 
 class Player extends Model
@@ -33,6 +32,7 @@ class Player extends Model
         'last_mirror_travel_at',
         'last_accessed_at',
         'status',
+        'settings',
     ];
 
     protected $casts = [
@@ -45,6 +45,7 @@ class Player extends Model
         'total_trade_volume' => 'decimal:2',
         'last_mirror_travel_at' => 'datetime',
         'last_accessed_at' => 'datetime',
+        'settings' => 'array',
     ];
 
     protected static function boot()
@@ -132,6 +133,43 @@ class Player extends Model
     public function systemScans(): HasMany
     {
         return $this->hasMany(SystemScan::class);
+    }
+
+    /**
+     * Get all lane knowledge for this player.
+     */
+    public function laneKnowledge(): HasMany
+    {
+        return $this->hasMany(PilotLaneKnowledge::class);
+    }
+
+    /**
+     * Check if player knows about a specific warp gate.
+     */
+    public function knowsLane(WarpGate $gate): bool
+    {
+        return $this->laneKnowledge()->where('warp_gate_id', $gate->id)->exists();
+    }
+
+    /**
+     * Discover a warp gate (add to lane knowledge).
+     *
+     * @param  WarpGate  $gate  The warp gate to discover
+     * @param  string  $method  The discovery method (travel, scan, chart, intel, spawn)
+     * @return PilotLaneKnowledge|null The created record, or null if already known
+     */
+    public function discoverLane(WarpGate $gate, string $method = 'travel'): ?PilotLaneKnowledge
+    {
+        if ($this->knowsLane($gate)) {
+            return null;
+        }
+
+        return $this->laneKnowledge()->create([
+            'warp_gate_id' => $gate->id,
+            'discovered_at' => now(),
+            'discovery_method' => $method,
+            'pirate_risk_known' => false,
+        ]);
     }
 
     /**

@@ -886,6 +886,291 @@ Returns detailed information about a specific sector.
 
 ---
 
+## Galaxy Membership
+
+These endpoints manage player membership within galaxies.
+
+### Check Player in Galaxy
+
+```
+GET /api/galaxies/{uuid}/my-player
+```
+
+**Authentication:** Required (Bearer token)
+
+Check if the authenticated user has a player in a specific galaxy.
+
+**Response (200 OK):** User has a player in this galaxy
+
+```json
+{
+  "success": true,
+  "message": "Player found",
+  "data": {
+    "uuid": "player-uuid-here",
+    "call_sign": "StarCaptain",
+    "credits": 15000,
+    "experience": 2500,
+    "level": 5,
+    "status": "active",
+    "galaxy": {
+      "uuid": "galaxy-uuid",
+      "name": "Andromeda Nexus"
+    },
+    "location": {
+      "uuid": "poi-uuid",
+      "name": "Alpha Centauri",
+      "x": 2500,
+      "y": 2500
+    },
+    "ship": {
+      "uuid": "ship-uuid",
+      "name": "StarCaptain's Scout",
+      "class": "scout"
+    }
+  }
+}
+```
+
+**Error Response (404 Not Found):** User has no player in this galaxy
+
+```json
+{
+  "success": false,
+  "message": "You do not have a player in this galaxy",
+  "error": {
+    "code": "NO_PLAYER_IN_GALAXY",
+    "details": {
+      "galaxy_uuid": "galaxy-uuid-here"
+    }
+  }
+}
+```
+
+**Use Cases:**
+- Check membership before showing galaxy-specific UI
+- Determine whether to show "Join" or "Play" button
+- Validate player context before API calls
+
+---
+
+### Join Galaxy
+
+```
+POST /api/galaxies/{uuid}/join
+```
+
+**Authentication:** Required (Bearer token)
+
+**Idempotent endpoint** - Returns existing player or creates a new one. This is the recommended way to handle "create player if not exists" logic.
+
+**Request Body:**
+
+```json
+{
+  "call_sign": "StarCaptain"
+}
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `call_sign` | string | Conditional | Required only when creating a new player. Max 50 characters. |
+
+**Response (200 OK):** Player already exists (returns existing player)
+
+```json
+{
+  "success": true,
+  "message": "Player already exists in this galaxy",
+  "data": {
+    "player": {
+      "uuid": "player-uuid-here",
+      "call_sign": "StarCaptain",
+      "credits": 15000,
+      "experience": 2500,
+      "level": 5,
+      "status": "active",
+      "galaxy": {
+        "uuid": "galaxy-uuid",
+        "name": "Andromeda Nexus"
+      },
+      "location": {
+        "uuid": "poi-uuid",
+        "name": "Alpha Centauri",
+        "x": 2500,
+        "y": 2500
+      },
+      "ship": {
+        "uuid": "ship-uuid",
+        "name": "StarCaptain's Scout",
+        "class": "scout"
+      }
+    },
+    "created": false
+  }
+}
+```
+
+**Response (201 Created):** New player created
+
+```json
+{
+  "success": true,
+  "message": "Successfully joined galaxy",
+  "data": {
+    "player": {
+      "uuid": "new-player-uuid",
+      "call_sign": "NewPilot",
+      "credits": 10000,
+      "experience": 0,
+      "level": 1,
+      "status": "active",
+      "galaxy": {
+        "uuid": "galaxy-uuid",
+        "name": "Andromeda Nexus"
+      },
+      "location": {
+        "uuid": "poi-uuid",
+        "name": "Starting System",
+        "x": 1500,
+        "y": 1500
+      },
+      "ship": {
+        "uuid": "ship-uuid",
+        "name": "NewPilot's Scout",
+        "class": "scout"
+      }
+    },
+    "created": true
+  }
+}
+```
+
+**Error Responses:**
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `GALAXY_NOT_ACTIVE` | Galaxy is not accepting new players (draft/archived) |
+| 400 | `GALAXY_FULL` | Galaxy has reached maximum player capacity |
+| 403 | `SINGLE_PLAYER_GALAXY` | Non-owner trying to join a single-player galaxy |
+| 422 | `DUPLICATE_CALL_SIGN` | Call sign already taken in this galaxy |
+| 422 | Validation | Missing or invalid `call_sign` when creating |
+| 500 | `NO_STARTING_LOCATION` | No inhabited systems to spawn player |
+
+**Example Error (Galaxy Full):**
+
+```json
+{
+  "success": false,
+  "message": "Galaxy has reached maximum player capacity",
+  "error": {
+    "code": "GALAXY_FULL",
+    "details": {
+      "max_players": 100,
+      "current_players": 100
+    }
+  }
+}
+```
+
+**Example Error (Duplicate Call Sign):**
+
+```json
+{
+  "success": false,
+  "message": "Call sign already exists in this galaxy",
+  "error": {
+    "code": "DUPLICATE_CALL_SIGN"
+  }
+}
+```
+
+### Frontend Integration
+
+```typescript
+interface JoinGalaxyResponse {
+  player: Player;
+  created: boolean;
+}
+
+/**
+ * Join a galaxy - idempotent operation
+ * Returns existing player or creates new one
+ */
+async function joinGalaxy(
+  galaxyUuid: string,
+  callSign: string,
+  token: string
+): Promise<JoinGalaxyResponse> {
+  const response = await fetch(`/api/galaxies/${galaxyUuid}/join`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ call_sign: callSign }),
+  });
+
+  const result = await response.json();
+
+  if (!result.success) {
+    throw new Error(result.error?.code || 'JOIN_FAILED');
+  }
+
+  return result.data;
+}
+
+// Usage example
+async function handlePlayButton(galaxyUuid: string, callSign: string) {
+  try {
+    const { player, created } = await joinGalaxy(galaxyUuid, callSign, token);
+
+    if (created) {
+      showToast('Welcome to the galaxy, pilot!');
+    } else {
+      showToast('Welcome back, ' + player.call_sign + '!');
+    }
+
+    // Navigate to game view
+    router.push(`/game/${galaxyUuid}`);
+
+  } catch (error) {
+    switch (error.message) {
+      case 'GALAXY_FULL':
+        showError('This galaxy is full. Try another one.');
+        break;
+      case 'DUPLICATE_CALL_SIGN':
+        showError('That call sign is taken. Choose another.');
+        break;
+      case 'SINGLE_PLAYER_GALAXY':
+        showError('This is a private single-player galaxy.');
+        break;
+      default:
+        showError('Failed to join galaxy.');
+    }
+  }
+}
+```
+
+### Idempotency
+
+The `/join` endpoint is idempotent:
+- Calling it multiple times with different `call_sign` values returns the same player
+- The `call_sign` is only used on first creation
+- Safe to call on every "Play" button click without duplicate player creation
+
+```typescript
+// First call - creates player with "Pilot1"
+const result1 = await joinGalaxy(uuid, "Pilot1", token);
+// result1.created === true, result1.player.call_sign === "Pilot1"
+
+// Second call - returns existing player, ignores new call_sign
+const result2 = await joinGalaxy(uuid, "Pilot2", token);
+// result2.created === false, result2.player.call_sign === "Pilot1"
+```
+
+---
+
 ## Quick Reference
 
 | Endpoint | Method | Auth | Description |
@@ -895,6 +1180,8 @@ Returns detailed information about a specific sector.
 | `/api/galaxies/{uuid}` | GET | No | Galaxy details (hydrated) |
 | `/api/galaxies/{uuid}/map` | GET | Optional | Galaxy map data |
 | `/api/galaxies/{uuid}/statistics` | GET | No | Galaxy statistics |
+| `/api/galaxies/{uuid}/my-player` | GET | **Yes** | Check if user has player in galaxy |
+| `/api/galaxies/{uuid}/join` | POST | **Yes** | Join galaxy (get or create player) |
 | `/api/galaxies/create` | POST | **Yes** | Create new galaxy |
 | `/api/galaxies/size-tiers` | GET | **Yes** | Get available size tiers |
 | `/api/sectors/{uuid}` | GET | No | Sector information |

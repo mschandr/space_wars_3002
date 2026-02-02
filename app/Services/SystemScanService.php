@@ -359,6 +359,57 @@ class SystemScanService
     }
 
     /**
+     * Ensure a player has at least a minimum scan level for a POI.
+     *
+     * Creates a new scan if none exists, or upgrades if current level is lower.
+     * Used for spawn locations and other auto-discovered systems.
+     *
+     * @param  Player  $player  The player
+     * @param  PointOfInterest  $poi  The system to scan
+     * @param  int  $minScanLevel  Minimum scan level to ensure (default 1)
+     * @return SystemScan The scan record
+     */
+    public function ensureMinimumScan(Player $player, PointOfInterest $poi, int $minScanLevel = 1): SystemScan
+    {
+        $existingScan = $this->getScan($player, $poi);
+
+        // If no scan exists, create one
+        if (! $existingScan) {
+            $scanData = $this->generateScanData($poi, 1, $minScanLevel);
+
+            $scan = SystemScan::create([
+                'player_id' => $player->id,
+                'poi_id' => $poi->id,
+                'scan_level' => $minScanLevel,
+                'scan_data' => $scanData,
+                'scanned_at' => now(),
+            ]);
+
+            $this->clearCache($player->id);
+
+            return $scan;
+        }
+
+        // If existing scan is below minimum, upgrade it
+        if ($existingScan->scan_level < $minScanLevel) {
+            $newScanData = $this->generateScanData($poi, $existingScan->scan_level + 1, $minScanLevel);
+            $mergedData = array_merge($existingScan->scan_data ?? [], $newScanData);
+
+            $existingScan->update([
+                'scan_level' => $minScanLevel,
+                'scan_data' => $mergedData,
+                'scanned_at' => now(),
+            ]);
+
+            $this->clearCache($player->id);
+
+            return $existingScan->fresh();
+        }
+
+        return $existingScan;
+    }
+
+    /**
      * Get effective sensor level for a ship.
      *
      * @param  \App\Models\PlayerShip  $ship  The ship

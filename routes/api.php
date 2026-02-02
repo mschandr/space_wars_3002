@@ -8,7 +8,10 @@ use App\Http\Controllers\Api\ColonyController;
 use App\Http\Controllers\Api\CombatController;
 use App\Http\Controllers\Api\GalaxyController;
 use App\Http\Controllers\Api\GalaxyCreationController;
+use App\Http\Controllers\Api\GalaxySettingsController;
 use App\Http\Controllers\Api\LeaderboardController;
+use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\MapSummaryController;
 use App\Http\Controllers\Api\MarketEventController;
 use App\Http\Controllers\Api\MiningController;
 use App\Http\Controllers\Api\MirrorUniverseController;
@@ -17,6 +20,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PirateFactionController;
 use App\Http\Controllers\Api\PlansShopController;
 use App\Http\Controllers\Api\PlayerController;
+use App\Http\Controllers\Api\PlayerSettingsController;
 use App\Http\Controllers\Api\PlayerStatusController;
 use App\Http\Controllers\Api\PvPCombatController;
 use App\Http\Controllers\Api\ScanController;
@@ -117,6 +121,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('creation-status', [GalaxyCreationController::class, 'creationStatus']);
         Route::post('npcs', [GalaxyCreationController::class, 'addNpcs']);
         Route::get('npcs', [GalaxyCreationController::class, 'listNpcs']);
+
+        // Player membership routes
+        Route::get('my-player', [GalaxyController::class, 'getMyPlayer']);
+        Route::post('join', [GalaxyController::class, 'join']);
+
+        // Map summaries (lightweight data for rendering)
+        Route::get('map-summaries', [MapSummaryController::class, 'index']);
+
+        // Galaxy settings (owner only)
+        Route::patch('settings', [GalaxySettingsController::class, 'update']);
     });
 
     // NPC management routes
@@ -124,6 +138,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('archetypes', [GalaxyCreationController::class, 'getArchetypes']);
         Route::get('{uuid}', [GalaxyCreationController::class, 'showNpc']);
         Route::delete('{uuid}', [GalaxyCreationController::class, 'destroyNpc']);
+    });
+
+    // Location information routes
+    Route::prefix('location')->group(function () {
+        Route::post('current/{uuid?}', [LocationController::class, 'current'])
+            ->where('uuid', '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
     });
 
     // Player management routes
@@ -139,6 +159,9 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('{uuid}/status', [PlayerStatusController::class, 'status']);
             Route::get('{uuid}/stats', [PlayerStatusController::class, 'stats']);
             Route::post('{uuid}/set-active', [PlayerController::class, 'setActive']);
+
+            // Player settings (owner only)
+            Route::patch('{uuid}/settings', [PlayerSettingsController::class, 'update']);
         });
     });
 

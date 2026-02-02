@@ -24,14 +24,13 @@ class GalaxyCreationController extends BaseApiController
     private GalaxyGenerationOrchestrator $orchestrator;
 
     public function __construct(
-        GalaxyCreationService        $galaxyCreationService,
-        NpcGenerationService         $npcGenerationService,
+        GalaxyCreationService $galaxyCreationService,
+        NpcGenerationService $npcGenerationService,
         GalaxyGenerationOrchestrator $orchestrator
-    )
-    {
+    ) {
         $this->galaxyCreationService = $galaxyCreationService;
-        $this->npcGenerationService  = $npcGenerationService;
-        $this->orchestrator          = $orchestrator;
+        $this->npcGenerationService = $npcGenerationService;
+        $this->orchestrator = $orchestrator;
     }
 
     /**
@@ -50,9 +49,19 @@ class GalaxyCreationController extends BaseApiController
         set_time_limit(300);  // 5 minutes max
 
         try {
+            // Reject NPC parameters - these are set automatically based on size_tier
+            if ($request->hasNpcParameters()) {
+                return $this->error(
+                    'NPC configuration is not available in this version. NPC counts are determined automatically based on galaxy size.',
+                    'NPC_CONFIG_DISABLED',
+                    null,
+                    400
+                );
+            }
+
             $sizeTier = $request->getSizeTier();
 
-            if (!$sizeTier) {
+            if (! $sizeTier) {
                 return $this->error(
                     'size_tier is required for optimized galaxy creation',
                     'MISSING_SIZE_TIER',
@@ -63,6 +72,11 @@ class GalaxyCreationController extends BaseApiController
 
             $options = $request->validatedWithDefaults();
 
+            // Set sensible NPC defaults based on size_tier
+            $npcDefaults = $this->getNpcDefaultsForTier($sizeTier);
+            $options['npc_count'] = $npcDefaults['count'];
+            $options['npc_difficulty'] = $npcDefaults['difficulty'];
+
             // Add owner user ID for single player galaxies
             if (in_array($options['game_mode'], ['single_player', 'mixed'])) {
                 $options['owner_user_id'] = $request->user()->id;
@@ -70,7 +84,7 @@ class GalaxyCreationController extends BaseApiController
 
             $result = $this->orchestrator->generate($sizeTier, $options);
 
-            if (!$result['success']) {
+            if (! $result['success']) {
                 return $this->error(
                     $result['error'] ?? 'Galaxy generation failed',
                     'OPTIMIZED_GALAXY_CREATION_FAILED',
@@ -79,13 +93,19 @@ class GalaxyCreationController extends BaseApiController
                 );
             }
 
+            $responseData = [
+                'galaxy' => $result['galaxy'],
+                'statistics' => $result['statistics'],
+                'config' => $result['config'],
+            ];
+
+            // Only include detailed generation metrics for admin users
+            if ($this->isAdmin($request)) {
+                $responseData['metrics'] = $result['metrics'];
+            }
+
             return $this->success(
-                [
-                    'galaxy'     => $result['galaxy'],
-                    'statistics' => $result['statistics'],
-                    'metrics'    => $result['metrics'],
-                    'config'     => $result['config'],
-                ],
+                $responseData,
                 'Galaxy created successfully using optimized pipeline',
                 201
             );
@@ -98,7 +118,7 @@ class GalaxyCreationController extends BaseApiController
             );
         } catch (Exception $e) {
             return $this->error(
-                'An unexpected error occurred: ' . $e->getMessage(),
+                'An unexpected error occurred: '.$e->getMessage(),
                 'OPTIMIZED_GALAXY_CREATION_ERROR',
                 null,
                 500
@@ -117,24 +137,24 @@ class GalaxyCreationController extends BaseApiController
     {
         $galaxy = Galaxy::where('uuid', $uuid)->first();
 
-        if (!$galaxy) {
+        if (! $galaxy) {
             return $this->notFound('Galaxy not found');
         }
 
-        $progress        = $galaxy->progress_status ?? [];
+        $progress = $galaxy->progress_status ?? [];
         $currentProgress = $galaxy->getCurrentProgress();
 
         return $this->success([
-            'galaxy_id'               => $galaxy->id,
-            'galaxy_uuid'             => $galaxy->uuid,
-            'galaxy_name'             => $galaxy->name,
-            'status'                  => $galaxy->status->value ?? $galaxy->status,
-            'size_tier'               => $galaxy->size_tier?->value,
-            'current_progress'        => $currentProgress,
-            'is_complete'             => $currentProgress >= 100 || $galaxy->status->isPlayable(),
-            'generation_started_at'   => $galaxy->generation_started_at?->toIso8601String(),
+            'galaxy_id' => $galaxy->id,
+            'galaxy_uuid' => $galaxy->uuid,
+            'galaxy_name' => $galaxy->name,
+            'status' => $galaxy->status->value ?? $galaxy->status,
+            'size_tier' => $galaxy->size_tier?->value,
+            'current_progress' => $currentProgress,
+            'is_complete' => $currentProgress >= 100 || $galaxy->status->isPlayable(),
+            'generation_started_at' => $galaxy->generation_started_at?->toIso8601String(),
             'generation_completed_at' => $galaxy->generation_completed_at?->toIso8601String(),
-            'steps'                   => $progress,
+            'steps' => $progress,
         ]);
     }
 
@@ -161,12 +181,12 @@ class GalaxyCreationController extends BaseApiController
     {
         $galaxy = Galaxy::where('uuid', $uuid)->first();
 
-        if (!$galaxy) {
+        if (! $galaxy) {
             return $this->notFound('Galaxy not found');
         }
 
         // Check if galaxy allows NPCs
-        if (!$galaxy->allowsNpcs()) {
+        if (! $galaxy->allowsNpcs()) {
             return $this->error(
                 'This galaxy does not allow NPCs. Game mode must be single_player or mixed.',
                 'NPC_NOT_ALLOWED',
@@ -211,7 +231,7 @@ class GalaxyCreationController extends BaseApiController
     {
         $galaxy = Galaxy::where('uuid', $uuid)->first();
 
-        if (!$galaxy) {
+        if (! $galaxy) {
             return $this->notFound('Galaxy not found');
         }
 
@@ -235,33 +255,33 @@ class GalaxyCreationController extends BaseApiController
 
         $npcs = $query->get();
 
-        $data = $npcs->map(fn(Npc $npc) => [
-            'uuid'             => $npc->uuid,
-            'call_sign'        => $npc->call_sign,
-            'archetype'        => $npc->archetype,
-            'difficulty'       => $npc->difficulty,
-            'level'            => $npc->level,
-            'credits'          => (float)$npc->credits,
-            'status'           => $npc->status,
+        $data = $npcs->map(fn (Npc $npc) => [
+            'uuid' => $npc->uuid,
+            'call_sign' => $npc->call_sign,
+            'archetype' => $npc->archetype,
+            'difficulty' => $npc->difficulty,
+            'level' => $npc->level,
+            'credits' => (float) $npc->credits,
+            'status' => $npc->status,
             'current_activity' => $npc->current_activity,
-            'location'         => $npc->currentLocation ? [
-                'id'   => $npc->currentLocation->id,
+            'location' => $npc->currentLocation ? [
+                'id' => $npc->currentLocation->id,
                 'name' => $npc->currentLocation->name,
-                'x'    => $npc->currentLocation->x,
-                'y'    => $npc->currentLocation->y,
+                'x' => $npc->currentLocation->x,
+                'y' => $npc->currentLocation->y,
             ] : null,
-            'ship'             => $npc->activeShip ? [
-                'uuid'     => $npc->activeShip->uuid,
-                'name'     => $npc->activeShip->name,
-                'class'    => $npc->activeShip->ship?->class,
-                'hull'     => $npc->activeShip->hull,
+            'ship' => $npc->activeShip ? [
+                'uuid' => $npc->activeShip->uuid,
+                'name' => $npc->activeShip->name,
+                'class' => $npc->activeShip->ship?->class,
+                'hull' => $npc->activeShip->hull,
                 'max_hull' => $npc->activeShip->max_hull,
             ] : null,
         ]);
 
         return $this->success([
-            'npcs'       => $data,
-            'total'      => $npcs->count(),
+            'npcs' => $data,
+            'total' => $npcs->count(),
             'statistics' => $this->npcGenerationService->getNpcStatistics($galaxy),
         ]);
     }
@@ -277,68 +297,68 @@ class GalaxyCreationController extends BaseApiController
             ->with(['galaxy', 'currentLocation', 'activeShip.ship', 'activeShip.cargo.mineral'])
             ->first();
 
-        if (!$npc) {
+        if (! $npc) {
             return $this->notFound('NPC not found');
         }
 
         return $this->success([
-            'uuid'                  => $npc->uuid,
-            'call_sign'             => $npc->call_sign,
-            'archetype'             => $npc->archetype,
+            'uuid' => $npc->uuid,
+            'call_sign' => $npc->call_sign,
+            'archetype' => $npc->archetype,
             'archetype_description' => Npc::ARCHETYPES[$npc->archetype]['description'] ?? null,
-            'difficulty'            => $npc->difficulty,
-            'level'                 => $npc->level,
-            'experience'            => $npc->experience,
-            'credits'               => (float)$npc->credits,
-            'status'                => $npc->status,
-            'current_activity'      => $npc->current_activity,
-            'personality'           => [
-                'aggression'     => $npc->aggression,
+            'difficulty' => $npc->difficulty,
+            'level' => $npc->level,
+            'experience' => $npc->experience,
+            'credits' => (float) $npc->credits,
+            'status' => $npc->status,
+            'current_activity' => $npc->current_activity,
+            'personality' => [
+                'aggression' => $npc->aggression,
                 'risk_tolerance' => $npc->risk_tolerance,
-                'trade_focus'    => $npc->trade_focus,
+                'trade_focus' => $npc->trade_focus,
             ],
-            'combat_stats'          => [
+            'combat_stats' => [
                 'ships_destroyed' => $npc->ships_destroyed,
-                'combats_won'     => $npc->combats_won,
-                'combats_lost'    => $npc->combats_lost,
+                'combats_won' => $npc->combats_won,
+                'combats_lost' => $npc->combats_lost,
             ],
-            'economy_stats'         => [
-                'total_trade_volume' => (float)$npc->total_trade_volume,
+            'economy_stats' => [
+                'total_trade_volume' => (float) $npc->total_trade_volume,
             ],
-            'galaxy'                => [
-                'id'   => $npc->galaxy->id,
+            'galaxy' => [
+                'id' => $npc->galaxy->id,
                 'uuid' => $npc->galaxy->uuid,
                 'name' => $npc->galaxy->name,
             ],
-            'location'              => $npc->currentLocation ? [
-                'id'           => $npc->currentLocation->id,
-                'name'         => $npc->currentLocation->name,
-                'x'            => $npc->currentLocation->x,
-                'y'            => $npc->currentLocation->y,
+            'location' => $npc->currentLocation ? [
+                'id' => $npc->currentLocation->id,
+                'name' => $npc->currentLocation->name,
+                'x' => $npc->currentLocation->x,
+                'y' => $npc->currentLocation->y,
                 'is_inhabited' => $npc->currentLocation->is_inhabited,
             ] : null,
-            'ship'                  => $npc->activeShip ? [
-                'uuid'   => $npc->activeShip->uuid,
-                'name'   => $npc->activeShip->name,
-                'class'  => $npc->activeShip->ship?->class,
+            'ship' => $npc->activeShip ? [
+                'uuid' => $npc->activeShip->uuid,
+                'name' => $npc->activeShip->name,
+                'class' => $npc->activeShip->ship?->class,
                 'status' => $npc->activeShip->status,
-                'stats'  => [
-                    'hull'          => $npc->activeShip->hull,
-                    'max_hull'      => $npc->activeShip->max_hull,
-                    'weapons'       => $npc->activeShip->weapons,
-                    'cargo_hold'    => $npc->activeShip->cargo_hold,
+                'stats' => [
+                    'hull' => $npc->activeShip->hull,
+                    'max_hull' => $npc->activeShip->max_hull,
+                    'weapons' => $npc->activeShip->weapons,
+                    'cargo_hold' => $npc->activeShip->cargo_hold,
                     'current_cargo' => $npc->activeShip->current_cargo,
-                    'sensors'       => $npc->activeShip->sensors,
-                    'warp_drive'    => $npc->activeShip->warp_drive,
-                    'current_fuel'  => $npc->activeShip->current_fuel,
-                    'max_fuel'      => $npc->activeShip->max_fuel,
+                    'sensors' => $npc->activeShip->sensors,
+                    'warp_drive' => $npc->activeShip->warp_drive,
+                    'current_fuel' => $npc->activeShip->current_fuel,
+                    'max_fuel' => $npc->activeShip->max_fuel,
                 ],
-                'cargo'  => $npc->activeShip->cargo->map(fn($cargo) => [
-                    'mineral'  => $cargo->mineral?->name,
+                'cargo' => $npc->activeShip->cargo->map(fn ($cargo) => [
+                    'mineral' => $cargo->mineral?->name,
                     'quantity' => $cargo->quantity,
                 ])->toArray(),
             ] : null,
-            'last_action_at'        => $npc->last_action_at?->toIso8601String(),
+            'last_action_at' => $npc->last_action_at?->toIso8601String(),
         ]);
     }
 
@@ -351,7 +371,7 @@ class GalaxyCreationController extends BaseApiController
     {
         $npc = Npc::where('uuid', $uuid)->with('galaxy')->first();
 
-        if (!$npc) {
+        if (! $npc) {
             return $this->notFound('NPC not found');
         }
 
@@ -377,19 +397,48 @@ class GalaxyCreationController extends BaseApiController
     public function getArchetypes(): JsonResponse
     {
         return $this->success([
-            'archetypes'   => collect(Npc::ARCHETYPES)->map(fn($config, $name) => [
-                'name'                   => $name,
-                'description'            => $config['description'],
-                'default_aggression'     => $config['aggression'],
+            'archetypes' => collect(Npc::ARCHETYPES)->map(fn ($config, $name) => [
+                'name' => $name,
+                'description' => $config['description'],
+                'default_aggression' => $config['aggression'],
                 'default_risk_tolerance' => $config['risk_tolerance'],
-                'default_trade_focus'    => $config['trade_focus'],
+                'default_trade_focus' => $config['trade_focus'],
             ])->values(),
-            'difficulties' => collect(Npc::DIFFICULTY_MULTIPLIERS)->map(fn($config, $name) => [
-                'name'                    => $name,
-                'credits_multiplier'      => $config['credits'],
+            'difficulties' => collect(Npc::DIFFICULTY_MULTIPLIERS)->map(fn ($config, $name) => [
+                'name' => $name,
+                'credits_multiplier' => $config['credits'],
                 'combat_skill_multiplier' => $config['combat_skill'],
-                'decision_quality'        => $config['decision_quality'],
+                'decision_quality' => $config['decision_quality'],
             ])->values(),
         ]);
+    }
+
+    /**
+     * Get sensible NPC defaults based on galaxy size tier.
+     *
+     * Larger galaxies get more NPCs at higher difficulty.
+     */
+    private function getNpcDefaultsForTier(GalaxySizeTier $tier): array
+    {
+        return match ($tier) {
+            GalaxySizeTier::SMALL => ['count' => 5, 'difficulty' => 'easy'],
+            GalaxySizeTier::MEDIUM => ['count' => 10, 'difficulty' => 'medium'],
+            GalaxySizeTier::LARGE => ['count' => 15, 'difficulty' => 'hard'],
+            GalaxySizeTier::MASSIVE => ['count' => 25, 'difficulty' => 'expert'],
+        };
+    }
+
+    /**
+     * Check if the current user is an admin.
+     *
+     * Admin is defined as user_id == 1 AND email == "mark.dhas@gmail.com"
+     */
+    private function isAdmin(Request $request): bool
+    {
+        $user = $request->user();
+
+        return $user
+            && $user->id === 1
+            && $user->email === 'mark.dhas@gmail.com';
     }
 }

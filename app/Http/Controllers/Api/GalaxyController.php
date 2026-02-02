@@ -3,18 +3,26 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\Galaxy\GalaxyStatus;
+use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Http\Resources\GalaxyDehydratedResource;
 use App\Http\Resources\GalaxyResource;
+use App\Http\Resources\PlayerResource;
 use App\Models\Colony;
 use App\Models\CombatSession;
 use App\Models\Galaxy;
 use App\Models\Player;
+use App\Models\PlayerShip;
 use App\Models\PvPChallenge;
 use App\Models\Sector;
+use App\Models\Ship;
 use App\Models\WarpLanePirate;
+use App\Services\LaneKnowledgeService;
+use App\Services\StarChartService;
 use App\Services\SystemScanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class GalaxyController extends BaseApiController
 {
@@ -392,5 +400,264 @@ class GalaxyController extends BaseApiController
         ];
 
         return $this->success($sectorData, 'Sector information retrieved successfully');
+    }
+
+    /**
+     * Get the authenticated user's player in this galaxy.
+     *
+     * GET /api/galaxies/{uuid}/my-player
+     *
+     * Returns the player if exists, 404 otherwise.
+     * Use this to check if user has a player in a specific galaxy.
+     */
+    public function getMyPlayer(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return $this->error('Authentication required', 'UNAUTHENTICATED', null, 401);
+        }
+
+        $galaxy = Galaxy::where('uuid', $uuid)->first();
+        if (! $galaxy) {
+            return $this->notFound('Galaxy not found');
+        }
+
+        $player = Player::where('user_id', $user->id)
+            ->where('galaxy_id', $galaxy->id)
+            ->with(['galaxy', 'currentLocation', 'activeShip.ship'])
+            ->first();
+
+        if (! $player) {
+            return $this->error(
+                'You do not have a player in this galaxy',
+                'NO_PLAYER_IN_GALAXY',
+                ['galaxy_uuid' => $uuid],
+                404
+            );
+        }
+
+        return $this->success(
+            new PlayerResource($player),
+            'Player found'
+        );
+    }
+
+    /**
+     * Join a galaxy - get existing player or create new one.
+     *
+     * POST /api/galaxies/{uuid}/join
+     *
+     * This is an idempotent operation:
+     * - If user already has a player in this galaxy, returns it
+     * - If not, creates a new player with the provided call_sign
+     *
+     * Request body (only required if creating):
+     * - call_sign: string (required for new players)
+     */
+    public function join(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user) {
+            return $this->error('Authentication required', 'UNAUTHENTICATED', null, 401);
+        }
+
+        $galaxy = Galaxy::where('uuid', $uuid)->first();
+        if (! $galaxy) {
+            return $this->notFound('Galaxy not found');
+        }
+
+        // Check if user already has a player in this galaxy
+        $existingPlayer = Player::where('user_id', $user->id)
+            ->where('galaxy_id', $galaxy->id)
+            ->with(['galaxy', 'currentLocation', 'activeShip.ship'])
+            ->first();
+
+        if ($existingPlayer) {
+            return $this->success([
+                'player' => new PlayerResource($existingPlayer),
+                'created' => false,
+            ], 'Player already exists in this galaxy');
+        }
+
+        // Validate request for new player creation
+        try {
+            $validated = $request->validate([
+                'call_sign' => ['required', 'string', 'max:50'],
+            ]);
+        } catch (ValidationException $e) {
+            return $this->validationError($e->errors());
+        }
+
+        // Check if galaxy is accepting new players
+        if ($galaxy->status !== GalaxyStatus::ACTIVE) {
+            return $this->error(
+                'Galaxy is not accepting new players',
+                'GALAXY_NOT_ACTIVE',
+                ['status' => $galaxy->status->value],
+                400
+            );
+        }
+
+        // Check player cap
+        $maxPlayers = $galaxy->max_players ?? self::DEFAULT_MAX_PLAYERS;
+        $currentPlayerCount = $galaxy->players()->where('status', 'active')->count();
+        if ($currentPlayerCount >= $maxPlayers) {
+            return $this->error(
+                'Galaxy has reached maximum player capacity',
+                'GALAXY_FULL',
+                ['max_players' => $maxPlayers, 'current_players' => $currentPlayerCount],
+                400
+            );
+        }
+
+        // Check game mode restrictions
+        if ($galaxy->game_mode === 'single_player' && $galaxy->owner_user_id !== $user->id) {
+            return $this->error(
+                'This is a single-player galaxy',
+                'SINGLE_PLAYER_GALAXY',
+                null,
+                403
+            );
+        }
+
+        // Check if call sign is unique within this galaxy
+        $existingCallSign = Player::where('galaxy_id', $galaxy->id)
+            ->where('call_sign', $validated['call_sign'])
+            ->first();
+
+        if ($existingCallSign) {
+            return $this->error(
+                'Call sign already exists in this galaxy',
+                'DUPLICATE_CALL_SIGN',
+                null,
+                422
+            );
+        }
+
+        DB::beginTransaction();
+        try {
+            // Find a random inhabited starting location
+            $startingLocation = $galaxy->pointsOfInterest()
+                ->where('type', PointOfInterestType::STAR)
+                ->where('is_inhabited', true)
+                ->inRandomOrder()
+                ->first();
+
+            if (! $startingLocation) {
+                DB::rollBack();
+
+                return $this->error(
+                    'No suitable starting location found in galaxy',
+                    'NO_STARTING_LOCATION'
+                );
+            }
+
+            // Get starting credits from config
+            $startingCredits = config('game_config.ships.starting_credits', 10000);
+
+            // Create player
+            $player = Player::create([
+                'user_id' => $user->id,
+                'galaxy_id' => $galaxy->id,
+                'call_sign' => $validated['call_sign'],
+                'credits' => $startingCredits,
+                'experience' => 0,
+                'level' => 1,
+                'current_poi_id' => $startingLocation->id,
+                'status' => 'active',
+            ]);
+
+            // Give player a starting ship (Scout class)
+            $scoutShip = Ship::where('class', 'scout')->first();
+            if ($scoutShip) {
+                PlayerShip::create([
+                    'player_id' => $player->id,
+                    'ship_id' => $scoutShip->id,
+                    'name' => "{$player->call_sign}'s Scout",
+                    'current_fuel' => $scoutShip->base_max_fuel ?? 100,
+                    'max_fuel' => $scoutShip->base_max_fuel ?? 100,
+                    'hull' => $scoutShip->base_hull ?? 100,
+                    'max_hull' => $scoutShip->base_hull ?? 100,
+                    'weapons' => $scoutShip->base_weapons ?? 10,
+                    'cargo_hold' => $scoutShip->base_cargo ?? 100,
+                    'sensors' => $scoutShip->base_sensors ?? 1,
+                    'warp_drive' => $scoutShip->base_warp_drive ?? 1,
+                    'is_active' => true,
+                    'status' => 'operational',
+                ]);
+            }
+
+            // === SPAWN DISCOVERY ===
+
+            // Ensure spawn system has a name
+            if (empty($startingLocation->name)) {
+                $startingLocation->name = $this->generateSystemName($startingLocation);
+                $startingLocation->save();
+            }
+
+            // Create minimum scan for spawn location (level 1)
+            $scanService = app(SystemScanService::class);
+            $scanService->ensureMinimumScan($player, $startingLocation, 1);
+
+            // Discover outgoing lanes from spawn
+            $laneKnowledgeService = app(LaneKnowledgeService::class);
+            $laneKnowledgeService->discoverOutgoingGates($player, $startingLocation->id, 'spawn');
+
+            // Grant spawn location star chart (free)
+            DB::table('player_star_charts')->insert([
+                'player_id' => $player->id,
+                'revealed_poi_id' => $startingLocation->id,
+                'purchased_from_poi_id' => $startingLocation->id,
+                'price_paid' => 0.00,
+                'purchased_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Grant starting charts for nearby inhabited systems
+            $starChartService = app(StarChartService::class);
+            $starChartService->grantStartingCharts($player);
+
+            DB::commit();
+
+            $player->load(['galaxy', 'currentLocation', 'activeShip.ship']);
+
+            return $this->success([
+                'player' => new PlayerResource($player),
+                'created' => true,
+            ], 'Successfully joined galaxy', 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return $this->error(
+                'Failed to join galaxy: '.$e->getMessage(),
+                'JOIN_FAILED'
+            );
+        }
+    }
+
+    /**
+     * Generate a name for a system that doesn't have one.
+     *
+     * @param  \App\Models\PointOfInterest  $poi  The POI to name
+     * @return string Generated name
+     */
+    private function generateSystemName(\App\Models\PointOfInterest $poi): string
+    {
+        // Use coordinates as a fallback
+        $x = (int) $poi->x;
+        $y = (int) $poi->y;
+
+        // Generate a phonetic name based on coordinates
+        $prefixes = ['Al', 'Be', 'Ca', 'De', 'El', 'Fa', 'Ga', 'Ha', 'In', 'Jo', 'Ka', 'La', 'Ma', 'Na', 'Ol', 'Pa', 'Qu', 'Ra', 'Sa', 'Ta'];
+        $middles = ['ra', 'ri', 'ro', 'ta', 'ti', 'na', 'ni', 'sa', 'si', 'ma'];
+        $suffixes = ['nis', 'ria', 'tis', 'ron', 'lan', 'dar', 'nis', 'per', 'tar', 'ion'];
+
+        $prefixIndex = ($x + $y) % count($prefixes);
+        $middleIndex = abs($x - $y) % count($middles);
+        $suffixIndex = ($x * $y) % count($suffixes);
+
+        return $prefixes[$prefixIndex].$middles[$middleIndex].$suffixes[$suffixIndex];
     }
 }

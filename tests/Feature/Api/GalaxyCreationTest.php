@@ -56,11 +56,7 @@ class GalaxyCreationTest extends TestCase
                         'warp_gates',
                         'sectors',
                     ],
-                    'metrics' => [
-                        'total_elapsed_ms',
-                        'total_elapsed_seconds',
-                        'generators',
-                    ],
+                    // Note: 'metrics' is only included for admin users (user_id=1, email=mark.dhas@gmail.com)
                     'config' => [
                         'tier',
                         'game_mode',
@@ -73,6 +69,9 @@ class GalaxyCreationTest extends TestCase
             ->assertJsonPath('data.config.game_mode', 'multiplayer')
             ->assertJsonPath('data.config.dimensions.width', 500)
             ->assertJsonPath('data.config.dimensions.height', 500);
+
+        // Non-admin users should NOT receive metrics
+        $this->assertArrayNotHasKey('metrics', $response->json('data'));
     }
 
     public function test_can_create_medium_galaxy(): void
@@ -307,8 +306,13 @@ class GalaxyCreationTest extends TestCase
             ->assertJsonPath('data.is_complete', true);
     }
 
-    public function test_generation_metrics_are_returned(): void
+    public function test_generation_metrics_are_returned_for_admin(): void
     {
+        // Admin is defined as user_id=1 AND email=mark.dhas@gmail.com
+        // $this->user was created with id=1 in setUp(), so just update the email
+        $this->user->email = 'mark.dhas@gmail.com';
+        $this->user->save();
+
         $response = $this->actingAs($this->user)
             ->postJson('/api/galaxies/create', [
                 'size_tier' => 'small',
@@ -319,6 +323,9 @@ class GalaxyCreationTest extends TestCase
 
         $response->assertStatus(201);
         $metrics = $response->json('data.metrics');
+
+        // Admin should receive metrics
+        $this->assertNotNull($metrics, 'Admin users should receive metrics');
 
         // Should have total timing
         $this->assertArrayHasKey('total_elapsed_ms', $metrics);
@@ -331,5 +338,35 @@ class GalaxyCreationTest extends TestCase
         $this->assertArrayHasKey('planetary_systems', $generators);
         $this->assertArrayHasKey('sector_grid', $generators);
         $this->assertArrayHasKey('warp_gate_network', $generators);
+    }
+
+    public function test_generation_metrics_are_hidden_for_non_admin(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/galaxies/create', [
+                'size_tier' => 'small',
+                'game_mode' => 'multiplayer',
+                'skip_mirror' => true,
+                'skip_precursors' => true,
+            ]);
+
+        $response->assertStatus(201);
+        $metrics = $response->json('data.metrics');
+
+        // Non-admin users should NOT receive metrics
+        $this->assertNull($metrics, 'Non-admin users should not receive metrics');
+    }
+
+    public function test_npc_config_is_rejected(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/galaxies/create', [
+                'size_tier' => 'small',
+                'game_mode' => 'multiplayer',
+                'npc_count' => 10,
+            ]);
+
+        $response->assertStatus(400)
+            ->assertJsonPath('error.code', 'NPC_CONFIG_DISABLED');
     }
 }
