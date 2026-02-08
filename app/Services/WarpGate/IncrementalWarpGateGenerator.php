@@ -218,7 +218,6 @@ class IncrementalWarpGateGenerator
 
             foreach ($chunk as $pair) {
                 $uuid = (string) Str::uuid();
-                $fuelCost = max(1, (int) ceil($pair['distance'] / 2));
 
                 $rows[] = [
                     'uuid' => $uuid,
@@ -230,7 +229,6 @@ class IncrementalWarpGateGenerator
                     'dest_x' => $pair['dest_x'],
                     'dest_y' => $pair['dest_y'],
                     'distance' => $pair['distance'],
-                    'fuel_cost' => $fuelCost,
                     'is_hidden' => false,
                     'status' => 'active',
                     'created_at' => $now,

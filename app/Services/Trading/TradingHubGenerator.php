@@ -10,6 +10,7 @@ use App\Models\PointOfInterest;
 use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class TradingHubGenerator
 {
@@ -47,15 +48,201 @@ class TradingHubGenerator
         // Find POIs where multiple gates meet
         $hubLocations = $this->identifyHubLocations($galaxy);
 
+        if ($hubLocations->isEmpty()) {
+            return $hubs;
+        }
+
+        // Pre-load all POIs once for proximity calculations (memory optimization)
+        // Only load coordinates, type, and attributes (for mineral production data)
+        $allPois = $galaxy->pointsOfInterest()
+            ->select(['id', 'galaxy_id', 'x', 'y', 'type', 'attributes'])
+            ->get();
+
+        // Pre-load minerals once
+        $minerals = Mineral::all();
+
+        // PRE-COMPUTE mineral sources ONCE (massive performance optimization)
+        // Instead of filtering 15,750 POIs × 26 minerals × 1,000 hubs = 409M iterations
+        // We filter 15,750 POIs × 26 minerals = 409,500 iterations (once)
+        $mineralSources = $this->precomputeMineralSources($allPois, $minerals);
+
+        // Create all hubs first (without stocking)
         foreach ($hubLocations as $location) {
             $hub = $this->createTradingHub($location);
             $hubs->push($hub);
-
-            // Stock the hub with minerals
-            $this->stockHub($hub);
         }
 
+        // Batch stock all hubs with pre-computed data
+        $this->batchStockHubs($hubs, $minerals, $allPois, $mineralSources);
+
+        // Free memory
+        unset($allPois, $minerals, $mineralSources);
+
         return $hubs;
+    }
+
+    /**
+     * Pre-compute which POIs produce each mineral (runs once, not per-hub).
+     *
+     * @return array<string, Collection> Map of mineral symbol => POIs that produce it
+     */
+    private function precomputeMineralSources(Collection $allPois, Collection $minerals): array
+    {
+        $sources = [];
+
+        foreach ($minerals as $mineral) {
+            $sources[$mineral->symbol] = MineralSourceMapper::getPoisProducingMineral($allPois, $mineral->symbol);
+        }
+
+        return $sources;
+    }
+
+    /**
+     * Stock all hubs using pre-computed mineral sources and batch inserts.
+     */
+    private function batchStockHubs(
+        Collection $hubs,
+        Collection $minerals,
+        Collection $allPois,
+        array $mineralSources
+    ): void {
+        if ($minerals->isEmpty() || $hubs->isEmpty()) {
+            return;
+        }
+
+        $inventoryRows = [];
+        $inventoriesToUpdate = [];
+
+        foreach ($hubs as $hub) {
+            $hubPoi = $hub->pointOfInterest;
+
+            foreach ($minerals as $mineral) {
+                // Use pre-computed sources instead of filtering all POIs each time
+                $producingPois = $mineralSources[$mineral->symbol] ?? collect();
+
+                // Calculate proximity data using pre-computed sources
+                $proximityData = $this->calculateProximityWithSources($hubPoi, $mineral, $producingPois);
+                $nearestDistance = $proximityData['nearest_distance'];
+
+                // Decide if this hub stocks this mineral
+                if (! ProximityPricingService::shouldStockMineral($hub, $mineral, $nearestDistance)) {
+                    continue;
+                }
+
+                // Determine initial quantity
+                $quantity = $this->determineInitialQuantity($hub, $mineral, $nearestDistance);
+
+                $inventoryRows[] = [
+                    'trading_hub_id' => $hub->id,
+                    'mineral_id' => $mineral->id,
+                    'quantity' => $quantity,
+                    'current_price' => 0,
+                    'buy_price' => 0,
+                    'sell_price' => 0,
+                    'demand_level' => $proximityData['demand_level'],
+                    'supply_level' => $proximityData['supply_level'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+        }
+
+        // Batch insert all inventory rows (1 query instead of thousands)
+        if (! empty($inventoryRows)) {
+            foreach (array_chunk($inventoryRows, 1000) as $chunk) {
+                \Illuminate\Support\Facades\DB::table('trading_hub_inventories')->insert($chunk);
+            }
+
+            // Update pricing for all inventories (this triggers the pricing calculation)
+            // Use chunked updates to avoid memory issues
+            TradingHubInventory::whereIn('trading_hub_id', $hubs->pluck('id'))
+                ->chunk(500, function ($inventories) {
+                    foreach ($inventories as $inventory) {
+                        $inventory->updatePricing();
+                    }
+                });
+        }
+    }
+
+    /**
+     * Calculate proximity data using pre-computed mineral sources.
+     * This avoids re-filtering all POIs for each hub/mineral combination.
+     */
+    private function calculateProximityWithSources(
+        PointOfInterest $hubPoi,
+        Mineral $mineral,
+        Collection $producingPois
+    ): array {
+        if ($producingPois->isEmpty()) {
+            return [
+                'demand_level' => 90,
+                'supply_level' => 10,
+                'nearest_distance' => null,
+            ];
+        }
+
+        // Find nearest source
+        $nearestDistance = PHP_FLOAT_MAX;
+
+        foreach ($producingPois as $poi) {
+            $dx = $poi->x - $hubPoi->x;
+            $dy = $poi->y - $hubPoi->y;
+            $distance = sqrt($dx * $dx + $dy * $dy);
+
+            if ($distance < $nearestDistance) {
+                $nearestDistance = $distance;
+            }
+        }
+
+        // Calculate supply based on distance
+        $supply = $this->calculateSupplyFromDistance($nearestDistance);
+
+        // Calculate demand based on rarity and hub type
+        $demand = $this->calculateDemandFromRarity($mineral);
+
+        return [
+            'demand_level' => $demand,
+            'supply_level' => $supply,
+            'nearest_distance' => $nearestDistance,
+        ];
+    }
+
+    /**
+     * Calculate supply level from distance to nearest source.
+     */
+    private function calculateSupplyFromDistance(float $distance): int
+    {
+        if ($distance < 1.0) {
+            return (int) (100 - ($distance * 20));
+        } elseif ($distance < 3.0) {
+            return (int) (80 - (($distance - 1) * 10));
+        } elseif ($distance < 6.0) {
+            return (int) (60 - (($distance - 3) * 6.67));
+        } elseif ($distance < 10.0) {
+            return (int) (40 - (($distance - 6) * 5));
+        } else {
+            return max(5, (int) (20 - (($distance - 10) * 1)));
+        }
+    }
+
+    /**
+     * Calculate demand based on mineral rarity.
+     */
+    private function calculateDemandFromRarity(Mineral $mineral): int
+    {
+        $baseDemand = match ($mineral->rarity->value) {
+            'abundant' => 30,
+            'common' => 40,
+            'uncommon' => 50,
+            'rare' => 60,
+            'very_rare' => 70,
+            'epic' => 80,
+            'legendary' => 90,
+            'mythic' => 95,
+        };
+
+        // Add randomness
+        return max(10, min(100, $baseDemand + mt_rand(-5, 5)));
     }
 
     /**
@@ -230,55 +417,6 @@ class TradingHubGenerator
         }
 
         return $services;
-    }
-
-    /**
-     * Stock a trading hub with minerals
-     */
-    private function stockHub(TradingHub $hub): void
-    {
-        $minerals = Mineral::all();
-
-        if ($minerals->isEmpty()) {
-            return;
-        }
-
-        // Get all POIs in the galaxy for proximity calculations
-        $allPois = $hub->pointOfInterest->galaxy->pointsOfInterest;
-
-        foreach ($minerals as $mineral) {
-            // Calculate proximity-based levels
-            $proximityData = ProximityPricingService::calculateProximityBasedLevels(
-                $hub,
-                $mineral,
-                $allPois
-            );
-
-            $nearestDistance = $proximityData['nearest_distance'];
-
-            // Decide if this hub stocks this mineral based on proximity
-            if (! ProximityPricingService::shouldStockMineral($hub, $mineral, $nearestDistance)) {
-                continue;
-            }
-
-            // Determine initial quantity based on proximity
-            $quantity = $this->determineInitialQuantity($hub, $mineral, $nearestDistance);
-
-            // Create inventory entry
-            $inventory = TradingHubInventory::create([
-                'trading_hub_id' => $hub->id,
-                'mineral_id' => $mineral->id,
-                'quantity' => $quantity,
-                'current_price' => 0,
-                'buy_price' => 0,
-                'sell_price' => 0,
-                'demand_level' => $proximityData['demand_level'],
-                'supply_level' => $proximityData['supply_level'],
-            ]);
-
-            // Update pricing based on supply/demand
-            $inventory->updatePricing();
-        }
     }
 
     /**

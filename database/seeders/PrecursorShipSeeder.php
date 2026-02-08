@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Galaxy;
 use App\Models\PointOfInterest;
 use App\Models\PrecursorShip;
+use App\Services\PrecursorRumorService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -82,7 +83,7 @@ class PrecursorShipSeeder extends Seeder
         }
 
         // Create the Precursor Ship
-        PrecursorShip::create([
+        $precursorShip = PrecursorShip::create([
             'uuid' => Str::uuid(),
             'galaxy_id' => $galaxy->id,
             'x' => $x,
@@ -103,6 +104,14 @@ class PrecursorShipSeeder extends Seeder
 
         if ($this->command) {
             $this->command->info("🛸 Precursor Ship hidden at ({$x}, {$y}) in galaxy '{$galaxy->name}'");
+        }
+
+        // Generate rumors at all ship yards (they all think they know where it is... they're all wrong)
+        $rumorService = app(PrecursorRumorService::class);
+        $rumorCount = $rumorService->generateRumorsForGalaxy($galaxy);
+
+        if ($this->command && $rumorCount > 0) {
+            $this->command->info("   └─ Generated {$rumorCount} (wrong) rumors at ship yards");
         }
     }
 

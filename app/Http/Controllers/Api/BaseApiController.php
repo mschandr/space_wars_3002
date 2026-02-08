@@ -2,12 +2,31 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Traits\FindsByUuid;
+use App\Http\Controllers\Api\Traits\ResolvesPlayer;
+use App\Http\Controllers\Api\Traits\ResolvesShip;
 use App\Http\Controllers\Controller;
+use App\Models\PointOfInterest;
+use App\Models\TradingHub;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 
+/**
+ * Base API Controller
+ *
+ * Provides common functionality for all API controllers:
+ * - Standardized JSON response methods (success, error, notFound, etc.)
+ * - UUID-based resource lookup helpers (FindsByUuid trait)
+ * - Player resolution with authorization (ResolvesPlayer trait)
+ * - Ship resolution with authorization (ResolvesShip trait)
+ * - Trading hub lookup helper
+ */
 class BaseApiController extends Controller
 {
+    use FindsByUuid;
+    use ResolvesPlayer;
+    use ResolvesShip;
+
     /**
      * Return a successful JSON response
      */
@@ -121,5 +140,48 @@ class BaseApiController extends Controller
         if ($player->user_id !== $user->id) {
             abort(403, 'Unauthorized access to this player');
         }
+    }
+
+    /**
+     * Return error response from a resource validation result.
+     *
+     * Works with ResourceValidatorService results.
+     *
+     * @param  array{valid: bool, message: string|null, code: string|null}  $result
+     * @return JsonResponse|null Returns null if valid, JsonResponse if invalid
+     */
+    protected function failIfInvalid(array $result): ?JsonResponse
+    {
+        if ($result['valid']) {
+            return null;
+        }
+
+        return $this->error(
+            $result['message'] ?? 'Validation failed',
+            $result['code'] ?? 'VALIDATION_FAILED',
+            null,
+            400
+        );
+    }
+
+    /**
+     * Find a trading hub by UUID (supports both TradingHub UUID and POI UUID).
+     *
+     * This centralized helper reduces code duplication across controllers
+     * and can be cached for improved performance.
+     */
+    protected function findTradingHub(string $uuid): ?TradingHub
+    {
+        // First try direct trading hub lookup
+        $tradingHub = TradingHub::where('uuid', $uuid)->first();
+
+        if ($tradingHub) {
+            return $tradingHub;
+        }
+
+        // Try POI UUID lookup
+        $poi = PointOfInterest::where('uuid', $uuid)->with('tradingHub')->first();
+
+        return $poi?->tradingHub;
     }
 }

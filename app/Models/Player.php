@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
+use App\Services\SystemScanService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Str;
 
 class Player extends Model
@@ -30,7 +30,9 @@ class Player extends Model
         'current_poi_id',
         'last_trading_hub_poi_id',
         'last_mirror_travel_at',
+        'last_accessed_at',
         'status',
+        'settings',
     ];
 
     protected $casts = [
@@ -42,6 +44,8 @@ class Player extends Model
         'combats_lost' => 'integer',
         'total_trade_volume' => 'decimal:2',
         'last_mirror_travel_at' => 'datetime',
+        'last_accessed_at' => 'datetime',
+        'settings' => 'array',
     ];
 
     protected static function boot()
@@ -121,6 +125,84 @@ class Player extends Model
         return $this->belongsToMany(PointOfInterest::class, 'player_star_charts', 'player_id', 'revealed_poi_id')
             ->withPivot('purchased_from_poi_id', 'price_paid', 'purchased_at')
             ->withTimestamps();
+    }
+
+    /**
+     * Get all system scans for this player.
+     */
+    public function systemScans(): HasMany
+    {
+        return $this->hasMany(SystemScan::class);
+    }
+
+    /**
+     * Get all lane knowledge for this player.
+     */
+    public function laneKnowledge(): HasMany
+    {
+        return $this->hasMany(PilotLaneKnowledge::class);
+    }
+
+    /**
+     * Check if player knows about a specific warp gate.
+     */
+    public function knowsLane(WarpGate $gate): bool
+    {
+        return $this->laneKnowledge()->where('warp_gate_id', $gate->id)->exists();
+    }
+
+    /**
+     * Discover a warp gate (add to lane knowledge).
+     *
+     * @param  WarpGate  $gate  The warp gate to discover
+     * @param  string  $method  The discovery method (travel, scan, chart, intel, spawn)
+     * @return PilotLaneKnowledge|null The created record, or null if already known
+     */
+    public function discoverLane(WarpGate $gate, string $method = 'travel'): ?PilotLaneKnowledge
+    {
+        if ($this->knowsLane($gate)) {
+            return null;
+        }
+
+        return $this->laneKnowledge()->create([
+            'warp_gate_id' => $gate->id,
+            'discovered_at' => now(),
+            'discovery_method' => $method,
+            'pirate_risk_known' => false,
+        ]);
+    }
+
+    /**
+     * Get scanned systems with their scan data.
+     */
+    public function getScannedSystems(): \Illuminate\Support\Collection
+    {
+        return $this->systemScans()
+            ->with('pointOfInterest')
+            ->orderBy('scanned_at', 'desc')
+            ->get();
+    }
+
+    /**
+     * Get scan level for a specific POI.
+     *
+     * @param  PointOfInterest  $poi  The POI to check
+     * @return int The scan level (0 if not scanned)
+     */
+    public function getScanLevelFor(PointOfInterest $poi): int
+    {
+        return app(SystemScanService::class)->getScanLevelFor($this, $poi);
+    }
+
+    /**
+     * Check if player has scanned a POI.
+     *
+     * @param  PointOfInterest  $poi  The POI to check
+     * @return bool True if scanned
+     */
+    public function hasScanned(PointOfInterest $poi): bool
+    {
+        return $this->systemScans()->where('poi_id', $poi->id)->exists();
     }
 
     /**

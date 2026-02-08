@@ -11,6 +11,7 @@ use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -46,15 +47,22 @@ class TradingController extends BaseApiController
         $currentLocation = $player->currentLocation;
         $radius = $validated['radius'] ?? ($player->activeShip->sensors ?? 1) * 100;
 
+        // Use bounding box pre-filter to reduce spatial calculations
+        // This allows the database to use indexes before doing expensive math
+        $x = $currentLocation->x;
+        $y = $currentLocation->y;
+
         $hubs = TradingHub::query()
             ->where('is_active', true)
-            ->whereHas('pointOfInterest', function ($query) use ($currentLocation, $radius) {
+            ->whereHas('pointOfInterest', function ($query) use ($currentLocation, $radius, $x, $y) {
                 $query->where('galaxy_id', $currentLocation->galaxy_id)
-                    ->whereRaw("SQRT(POW(x - ?, 2) + POW(y - ?, 2)) <= ?", [
-                        $currentLocation->x,
-                        $currentLocation->y,
-                        $radius,
-                    ]);
+                    // Bounding box filter (can use indexes)
+                    ->where('x', '>=', $x - $radius)
+                    ->where('x', '<=', $x + $radius)
+                    ->where('y', '>=', $y - $radius)
+                    ->where('y', '<=', $y + $radius)
+                    // Precise circular distance (on remaining candidates)
+                    ->whereRaw('SQRT(POW(x - ?, 2) + POW(y - ?, 2)) <= ?', [$x, $y, $radius]);
             })
             ->with('pointOfInterest')
             ->get();
@@ -113,12 +121,15 @@ class TradingController extends BaseApiController
      * List all minerals
      *
      * GET /api/minerals
+     *
+     * Minerals are static game data, so we cache them for 1 hour.
      */
     public function listMinerals(): JsonResponse
     {
-        $minerals = Mineral::all();
+        $minerals = Cache::remember('minerals:all', 3600, function () {
+            return Mineral::all();
+        });
 
         return $this->success(MineralResource::collection($minerals));
     }
 }
-

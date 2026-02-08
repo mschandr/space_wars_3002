@@ -30,9 +30,8 @@ class CreateGalaxyRequest extends FormRequest
             'height' => ['required_without:size_tier', 'integer', 'min:100', 'max:3000'],
             'stars' => ['required_without:size_tier', 'integer', 'min:50', 'max:10000'],
             'grid_size' => ['nullable', 'integer', 'min:5', 'max:50'],
-            'game_mode' => ['required', Rule::in(['multiplayer', 'single_player', 'mixed'])],
-            'npc_count' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'npc_difficulty' => ['nullable', Rule::in(['easy', 'medium', 'hard', 'expert'])],
+            'game_mode' => ['required', Rule::in(['multiplayer', 'single_player'])],
+            // NPC parameters removed - sensible defaults are applied based on size_tier
             'skip_mirror' => ['nullable', 'boolean'],
             'skip_pirates' => ['nullable', 'boolean'],
             'skip_precursors' => ['nullable', 'boolean'],
@@ -56,8 +55,7 @@ class CreateGalaxyRequest extends FormRequest
             'stars.min' => 'Galaxy must have at least 50 stars.',
             'stars.max' => 'Galaxy cannot have more than 10000 stars.',
             'stars.required_without' => 'Star count is required when not using a size tier.',
-            'game_mode.in' => 'Game mode must be one of: multiplayer, single_player, mixed.',
-            'npc_difficulty.in' => 'NPC difficulty must be one of: easy, medium, hard, expert.',
+            'game_mode.in' => 'Game mode must be one of: multiplayer, single_player.',
             'size_tier.in' => 'Size tier must be one of: small, medium, large.',
         ];
     }
@@ -71,8 +69,6 @@ class CreateGalaxyRequest extends FormRequest
 
         return array_merge([
             'grid_size' => 10,
-            'npc_count' => 0,
-            'npc_difficulty' => 'medium',
             'skip_mirror' => false,
             'skip_pirates' => false,
             'skip_precursors' => false,
@@ -109,16 +105,17 @@ class CreateGalaxyRequest extends FormRequest
         // Set defaults
         $this->merge([
             'grid_size' => $this->grid_size ?? 10,
-            'npc_count' => $this->npc_count ?? 0,
-            'npc_difficulty' => $this->npc_difficulty ?? 'medium',
             'skip_mirror' => $this->skip_mirror ?? false,
             'skip_pirates' => $this->skip_pirates ?? false,
             'skip_precursors' => $this->skip_precursors ?? false,
         ]);
+    }
 
-        // Auto-set npc_count for single_player if not specified
-        if ($this->game_mode === 'single_player' && ($this->npc_count ?? 0) < 1) {
-            $this->merge(['npc_count' => 5]);
-        }
+    /**
+     * Check if NPC parameters are present in the request.
+     */
+    public function hasNpcParameters(): bool
+    {
+        return $this->has('npc_count') || $this->has('npc_difficulty');
     }
 }

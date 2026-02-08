@@ -8,166 +8,116 @@ use App\Http\Requests\Api\CreateGalaxyRequest;
 use App\Models\Galaxy;
 use App\Models\Npc;
 use App\Services\GalaxyCreationService;
+use App\Services\GalaxyGeneration\GalaxyGenerationOrchestrator;
 use App\Services\NpcGenerationService;
-use App\Services\TieredGalaxyCreationService;
+use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 class GalaxyCreationController extends BaseApiController
 {
     private GalaxyCreationService $galaxyCreationService;
 
-    private TieredGalaxyCreationService $tieredGalaxyCreationService;
-
     private NpcGenerationService $npcGenerationService;
+
+    private GalaxyGenerationOrchestrator $orchestrator;
 
     public function __construct(
         GalaxyCreationService $galaxyCreationService,
-        TieredGalaxyCreationService $tieredGalaxyCreationService,
-        NpcGenerationService $npcGenerationService
+        NpcGenerationService $npcGenerationService,
+        GalaxyGenerationOrchestrator $orchestrator
     ) {
         $this->galaxyCreationService = $galaxyCreationService;
-        $this->tieredGalaxyCreationService = $tieredGalaxyCreationService;
         $this->npcGenerationService = $npcGenerationService;
+        $this->orchestrator = $orchestrator;
     }
 
     /**
-     * Create a new galaxy with all necessary components
+     * Create a galaxy using the optimized orchestrator pipeline.
      *
      * POST /api/galaxies/create
      *
-     * Creates a complete, playable galaxy including:
-     * - Stars and Points of Interest
-     * - Warp gate network
-     * - Trading hubs with inventory
-     * - Pirate distribution
-     * - Mirror universe (optional)
-     * - NPC players (for single_player/mixed modes)
+     * Uses the high-performance generator pipeline with:
+     * - Spatial indexing for O(1) neighbor lookups
+     * - Bulk database operations
+     * - Per-generator metrics
+     * - Tiered structure: civilized core + frontier outer region
      */
-    public function create(CreateGalaxyRequest $request): JsonResponse
+    public function createOptimized(CreateGalaxyRequest $request): JsonResponse
     {
-        // Galaxy creation can take a while - extend execution time to 2 minutes
-        set_time_limit(120);
+        set_time_limit(300);  // 5 minutes max
 
         try {
-            $options = $request->validatedWithDefaults();
-
-            // Add owner user ID for single player galaxies
-            if (in_array($options['game_mode'], ['single_player', 'mixed'])) {
-                $options['owner_user_id'] = $request->user()->id;
-            }
-
-            // Use async method if requested (recommended for large galaxies)
-            $useAsync = $options['async'] ?? false;
-
-            // Auto-enable async for large galaxies (width*height*stars > threshold)
-            $complexity = $options['width'] * $options['height'] * $options['stars'];
-            $asyncThreshold = 100_000_000; // ~500x500x400 or equivalent
-            if ($complexity > $asyncThreshold) {
-                $useAsync = true;
-            }
-
-            if ($useAsync) {
-                $result = $this->galaxyCreationService->createGalaxyAsync($options);
-
-                return $this->success(
-                    $result,
-                    'Galaxy creation started. Heavy operations processing in background.',
-                    202 // Accepted - processing will continue async
+            // Reject NPC parameters - these are set automatically based on size_tier
+            if ($request->hasNpcParameters()) {
+                return $this->error(
+                    'NPC configuration is not available in this version. NPC counts are determined automatically based on galaxy size.',
+                    'NPC_CONFIG_DISABLED',
+                    null,
+                    400
                 );
             }
 
-            $result = $this->galaxyCreationService->createGalaxy($options);
-
-            return $this->success(
-                $result,
-                'Galaxy created successfully',
-                201
-            );
-        } catch (\RuntimeException $e) {
-            return $this->error(
-                $e->getMessage(),
-                'GALAXY_CREATION_FAILED',
-                null,
-                500
-            );
-        } catch (\Exception $e) {
-            return $this->error(
-                'An unexpected error occurred during galaxy creation: '.$e->getMessage(),
-                'GALAXY_CREATION_ERROR',
-                null,
-                500
-            );
-        }
-    }
-
-    /**
-     * Create a new tiered galaxy with core/outer regions
-     *
-     * POST /api/galaxies/create-tiered
-     *
-     * Creates a tiered galaxy with:
-     * - Civilized core (100% inhabited, fortified, trading posts)
-     * - Frontier outer region (0% inhabited, rich minerals, dormant gates)
-     */
-    public function createTiered(CreateGalaxyRequest $request): JsonResponse
-    {
-        set_time_limit(600);  // 10 minutes for large galaxies
-
-        try {
-            $options = $request->validatedWithDefaults();
             $sizeTier = $request->getSizeTier();
 
             if (! $sizeTier) {
                 return $this->error(
-                    'size_tier is required for tiered galaxy creation',
+                    'size_tier is required for optimized galaxy creation',
                     'MISSING_SIZE_TIER',
                     ['valid_tiers' => GalaxySizeTier::toOptionsArray()],
                     422
                 );
             }
 
-            // Add owner user ID for single player galaxies
-            if (in_array($options['game_mode'], ['single_player', 'mixed'])) {
-                $options['owner_user_id'] = $request->user()->id;
-            }
+            $options = $request->validatedWithDefaults();
 
-            // Use async method if requested
-            $useAsync = $options['async'] ?? false;
+            // Set sensible NPC defaults based on size_tier - NPCs are always generated
+            $npcDefaults = $this->getNpcDefaultsForTier($sizeTier);
+            $options['npc_count'] = $npcDefaults['count'];
+            $options['npc_difficulty'] = $npcDefaults['difficulty'];
 
-            // Auto-enable async for large galaxies
-            if ($sizeTier === GalaxySizeTier::LARGE) {
-                $useAsync = true;
-            }
+            // Set owner for tracking purposes
+            $options['owner_user_id'] = $request->user()->id;
 
-            if ($useAsync) {
-                $result = $this->tieredGalaxyCreationService->createTieredGalaxyAsync($sizeTier, $options);
+            $result = $this->orchestrator->generate($sizeTier, $options);
 
-                return $this->success(
-                    $result,
-                    'Tiered galaxy creation started. Heavy operations processing in background.',
-                    202
+            if (! $result['success']) {
+                return $this->error(
+                    $result['error'] ?? 'Galaxy generation failed',
+                    'OPTIMIZED_GALAXY_CREATION_FAILED',
+                    ['metrics' => $result['metrics'] ?? null],
+                    500
                 );
             }
 
-            $result = $this->tieredGalaxyCreationService->createTieredGalaxy($sizeTier, $options);
+            $responseData = [
+                'galaxy' => $result['galaxy'],
+                'statistics' => $result['statistics'],
+                'config' => $result['config'],
+            ];
+
+            // Only include detailed generation metrics for admin users
+            if ($this->isAdmin($request)) {
+                $responseData['metrics'] = $result['metrics'];
+            }
 
             return $this->success(
-                $result,
-                'Tiered galaxy created successfully',
+                $responseData,
+                'Galaxy created successfully using optimized pipeline',
                 201
             );
-        } catch (\RuntimeException $e) {
+        } catch (RuntimeException $e) {
             return $this->error(
                 $e->getMessage(),
-                'TIERED_GALAXY_CREATION_FAILED',
+                'OPTIMIZED_GALAXY_CREATION_FAILED',
                 null,
                 500
             );
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return $this->error(
-                'An unexpected error occurred during tiered galaxy creation: '.$e->getMessage(),
-                'TIERED_GALAXY_CREATION_ERROR',
+                'An unexpected error occurred: '.$e->getMessage(),
+                'OPTIMIZED_GALAXY_CREATION_ERROR',
                 null,
                 500
             );
@@ -233,20 +183,7 @@ class GalaxyCreationController extends BaseApiController
             return $this->notFound('Galaxy not found');
         }
 
-        // Check if galaxy allows NPCs
-        if (! $galaxy->allowsNpcs()) {
-            return $this->error(
-                'This galaxy does not allow NPCs. Game mode must be single_player or mixed.',
-                'NPC_NOT_ALLOWED',
-                ['game_mode' => $galaxy->game_mode],
-                422
-            );
-        }
-
-        // Check ownership for single_player galaxies
-        if ($galaxy->isSinglePlayer() && $galaxy->owner_user_id !== $request->user()->id) {
-            return $this->forbidden('You do not own this galaxy');
-        }
+        // All galaxies now support NPCs - no game mode check needed
 
         try {
             $result = $this->galaxyCreationService->addNpcsToGalaxy(
@@ -260,7 +197,7 @@ class GalaxyCreationController extends BaseApiController
                 $result,
                 "Successfully created {$result['npcs_created']} NPCs"
             );
-        } catch (\RuntimeException $e) {
+        } catch (RuntimeException $e) {
             return $this->error(
                 $e->getMessage(),
                 'NPC_CREATION_FAILED',
@@ -423,8 +360,8 @@ class GalaxyCreationController extends BaseApiController
             return $this->notFound('NPC not found');
         }
 
-        // Check ownership for single_player galaxies
-        if ($npc->galaxy->isSinglePlayer() && $npc->galaxy->owner_user_id !== $request->user()->id) {
+        // Check ownership - only the galaxy owner can delete NPCs
+        if ($npc->galaxy->owner_user_id && $npc->galaxy->owner_user_id !== $request->user()->id) {
             return $this->forbidden('You do not own this galaxy');
         }
 
@@ -459,5 +396,34 @@ class GalaxyCreationController extends BaseApiController
                 'decision_quality' => $config['decision_quality'],
             ])->values(),
         ]);
+    }
+
+    /**
+     * Get sensible NPC defaults based on galaxy size tier.
+     *
+     * Larger galaxies get more NPCs at higher difficulty.
+     */
+    private function getNpcDefaultsForTier(GalaxySizeTier $tier): array
+    {
+        return match ($tier) {
+            GalaxySizeTier::SMALL => ['count' => 5, 'difficulty' => 'easy'],
+            GalaxySizeTier::MEDIUM => ['count' => 10, 'difficulty' => 'medium'],
+            GalaxySizeTier::LARGE => ['count' => 15, 'difficulty' => 'hard'],
+            GalaxySizeTier::MASSIVE => ['count' => 25, 'difficulty' => 'expert'],
+        };
+    }
+
+    /**
+     * Check if the current user is an admin.
+     *
+     * Admin is defined as user_id == 1 AND email == "mark.dhas@gmail.com"
+     */
+    private function isAdmin(Request $request): bool
+    {
+        $user = $request->user();
+
+        return $user
+            && $user->id === 1
+            && $user->email === 'mark.dhas@gmail.com';
     }
 }

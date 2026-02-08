@@ -136,11 +136,21 @@ class TravelService
 
         $player->save();
 
+        // Discover the warp lane (fog of war - bidirectional discovery)
+        $laneKnowledgeService = app(LaneKnowledgeService::class);
+        $laneKnowledgeService->discoverLaneBidirectional($player, $gate, 'travel');
+
         // Award XP
         $xpEarned = $this->calculateTravelXP($distance);
         $oldLevel = $player->level;
         $player->addExperience($xpEarned);
         $newLevel = $player->level;
+
+        // Auto-scan destination if enabled
+        $scanResult = null;
+        if (config('game_config.scanning.auto_scan_on_arrival', true)) {
+            $scanResult = $this->autoScanDestination($player, $destination);
+        }
 
         return [
             'success' => true,
@@ -155,6 +165,7 @@ class TravelService
             'leveled_up' => $newLevel > $oldLevel,
             'mirror_gate' => $mirrorGate,
             'universe' => $player->isInMirrorUniverse() ? 'mirror' : 'prime',
+            'scan' => $scanResult,
         ];
     }
 
@@ -325,6 +336,12 @@ class TravelService
         $player->addExperience($xpEarned);
         $newLevel = $player->level;
 
+        // Auto-scan destination if enabled
+        $scanResult = null;
+        if (config('game_config.scanning.auto_scan_on_arrival', true)) {
+            $scanResult = $this->autoScanDestination($player, $targetPoi);
+        }
+
         return [
             'success' => true,
             'message' => 'Direct jump successful',
@@ -338,6 +355,7 @@ class TravelService
             'new_level' => $newLevel,
             'leveled_up' => $newLevel > $oldLevel,
             'jump_type' => 'direct',
+            'scan' => $scanResult,
         ];
     }
 
@@ -373,5 +391,42 @@ class TravelService
             'is_hidden' => false,
             'attributes' => [],
         ]);
+    }
+
+    /**
+     * Auto-scan destination on arrival
+     *
+     * @param  Player  $player  The player
+     * @param  PointOfInterest  $destination  The destination POI
+     * @return array|null Scan result or null if scan failed
+     */
+    private function autoScanDestination(Player $player, PointOfInterest $destination): ?array
+    {
+        try {
+            // Populate system details on first access (lazy generation)
+            $populationService = app(SystemPopulationService::class);
+            $populationService->ensurePopulated($destination);
+
+            $scanService = app(SystemScanService::class);
+            $result = $scanService->scanSystem($player, $destination);
+
+            if ($result['success']) {
+                return [
+                    'scan_level' => $result['scan_level'],
+                    'cached' => $result['cached'] ?? false,
+                    'new_discoveries' => $result['new_discoveries'] ?? [],
+                    'can_reveal_more' => $result['can_reveal_more'] ?? false,
+                ];
+            }
+        } catch (\Throwable $e) {
+            // Log but don't fail the travel
+            \Log::warning('Auto-scan failed on arrival', [
+                'player_id' => $player->id,
+                'destination_id' => $destination->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return null;
     }
 }

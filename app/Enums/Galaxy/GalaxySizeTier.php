@@ -2,63 +2,91 @@
 
 namespace App\Enums\Galaxy;
 
+use App\Models\Galaxy;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
 /**
  * Galaxy size tiers define the overall dimensions and star counts.
  *
- * | Size   | Outer Bounds | Core Bounds | Core Stars | Outer Stars | Total |
- * |--------|-------------|-------------|------------|-------------|-------|
- * | Small  | 500×500     | 250×250     | 100        | 150         | 250   |
- * | Medium | 1500×1500   | 750×750     | 300        | 450         | 750   |
- * | Large  | 2500×2500   | 1250×1250   | 500        | 750         | 1250  |
+ * | Size    | Outer Bounds | Core Bounds | Core Stars | Outer Stars | Total |
+ * |---------|--------------|-------------|------------|-------------|-------|
+ * | Small   | 500×500      | 250×250     | 100        | 150         | 250   |
+ * | Medium  | 1500×1500    | 750×750     | 300        | 450         | 750   |
+ * | Large   | 2500×2500    | 1250×1250   | 500        | 750         | 1250  |
+ * | Massive | 5000×5000    | 2500×2500   | 1000       | 1500        | 2500  | <- purely for testing
  *
- * Formulas:
- * - Core bounds = outer_size / 2
- * - Core stars = outer_size / 5
- * - Outer stars = (outer_size / 2) - core_stars
+ * Massive tier uses two-phase generation:
+ * - Phase 1: Core region (2500×2500 centered) with 1000 civilized stars
+ * - Phase 2: Outer frontier (5000×5000) with 1500 colony worlds
  */
 enum GalaxySizeTier: string
 {
-    case SMALL = 'small';
-    case MEDIUM = 'medium';
-    case LARGE = 'large';
+    case SMALL   = 'small';
+    case MEDIUM  = 'medium';
+    case LARGE   = 'large';
+    case MASSIVE = 'massive';
 
     /**
-     * Get the outer bounds (width/height) for this tier.
+     * Get all tiers including secret ones (for admin/internal use).
      */
-    public function getOuterBounds(): int
+    public static function toFullOptionsArray(): array
     {
-        return match ($this) {
-            self::SMALL => 500,
-            self::MEDIUM => 1500,
-            self::LARGE => 2500,
-        };
+        $options   = self::toOptionsArray();
+        $options[] = [
+            'value'        => 'massive',
+            'label'        => 'Massive Galaxy (5000×5000)',
+            'outer_bounds' => 5000,
+            'core_bounds'  => 2500,
+            'core_stars'   => 1000,
+            'outer_stars'  => 1500,
+            'total_stars'  => 2500,
+            'secret'       => true,
+        ];
+
+        return $options;
+    }
+
+    public function Galaxies(): HasMany
+    {
+        return $this->HasMany(Galaxy::class);
     }
 
     /**
-     * Get the core bounds (width/height) for this tier.
-     * Formula: outer_size / 2
+     * Get all public tiers as options array for API responses.
+     * Returns static pre-computed values for performance.
+     * Note: Secret tiers (MASSIVE) are excluded from public listing.
      */
-    public function getCoreBounds(): int
+    public static function toOptionsArray(): array
     {
-        return (int) ($this->getOuterBounds() / 2);
-    }
-
-    /**
-     * Get the number of stars in the core region.
-     * Formula: outer_size / 5
-     */
-    public function getCoreStars(): int
-    {
-        return (int) ($this->getOuterBounds() / 5);
-    }
-
-    /**
-     * Get the number of stars in the outer (frontier) region.
-     * Formula: (outer_size / 2) - core_stars
-     */
-    public function getOuterStars(): int
-    {
-        return (int) (($this->getOuterBounds() / 2) - $this->getCoreStars());
+        return [
+            [
+                'value'        => 'small',
+                'label'        => 'Small Galaxy (500×500)',
+                'outer_bounds' => 500,
+                'core_bounds'  => 250,
+                'core_stars'   => 100,
+                'outer_stars'  => 150,
+                'total_stars'  => 250,
+            ],
+            [
+                'value'        => 'medium',
+                'label'        => 'Medium Galaxy (1500×1500)',
+                'outer_bounds' => 1500,
+                'core_bounds'  => 750,
+                'core_stars'   => 300,
+                'outer_stars'  => 450,
+                'total_stars'  => 750,
+            ],
+            [
+                'value'        => 'large',
+                'label'        => 'Large Galaxy (2500×2500)',
+                'outer_bounds' => 2500,
+                'core_bounds'  => 1250,
+                'core_stars'   => 500,
+                'outer_stars'  => 750,
+                'total_stars'  => 1250,
+            ],
+        ];
     }
 
     /**
@@ -70,21 +98,73 @@ enum GalaxySizeTier: string
     }
 
     /**
+     * Get the number of stars in the core region.
+     */
+    public function getCoreStars(): int
+    {
+        return match ($this) {
+            self::SMALL   => 100,
+            self::MEDIUM  => 300,
+            self::LARGE   => 500,
+            self::MASSIVE => 1000,
+        };
+    }
+
+    /**
+     * Get the number of stars in the outer (frontier) region.
+     */
+    public function getOuterStars(): int
+    {
+        return match ($this) {
+            self::SMALL   => 150,
+            self::MEDIUM  => 450,
+            self::LARGE   => 750,
+            self::MASSIVE => 1500,
+        };
+    }
+
+    /**
      * Get the core region bounds as an array.
      * The core is centered in the galaxy.
      */
     public function getCoreBoundsArray(): array
     {
         $outerSize = $this->getOuterBounds();
-        $coreSize = $this->getCoreBounds();
-        $offset = ($outerSize - $coreSize) / 2;
+        $coreSize  = $this->getCoreBounds();
+        $offset    = ($outerSize - $coreSize) / 2;
 
         return [
-            'x_min' => (int) $offset,
-            'x_max' => (int) ($offset + $coreSize),
-            'y_min' => (int) $offset,
-            'y_max' => (int) ($offset + $coreSize),
+            'x_min' => (int)$offset,
+            'x_max' => (int)($offset + $coreSize),
+            'y_min' => (int)$offset,
+            'y_max' => (int)($offset + $coreSize),
         ];
+    }
+
+    /**
+     * Get the outer bounds (width/height) for this tier.
+     */
+    public function getOuterBounds(): int
+    {
+        return match ($this) {
+            self::SMALL   => 500,
+            self::MEDIUM  => 1500,
+            self::LARGE   => 2500,
+            self::MASSIVE => 5000,
+        };
+    }
+
+    /**
+     * Get the core bounds (width/height) for this tier.
+     */
+    public function getCoreBounds(): int
+    {
+        return match ($this) {
+            self::SMALL   => 250,
+            self::MEDIUM  => 750,
+            self::LARGE   => 1250,
+            self::MASSIVE => 2500,  // 2500x2500 core centered in 5000x5000 galaxy
+        };
     }
 
     /**
@@ -93,9 +173,10 @@ enum GalaxySizeTier: string
     public function getRecommendedGridSize(): int
     {
         return match ($this) {
-            self::SMALL => 10,
-            self::MEDIUM => 15,
-            self::LARGE => 20,
+            self::SMALL   => 10,
+            self::MEDIUM  => 15,
+            self::LARGE   => 20,
+            self::MASSIVE => 25,
         };
     }
 
@@ -105,7 +186,7 @@ enum GalaxySizeTier: string
      */
     public function getWarpGateAdjacency(): int
     {
-        return (int) ($this->getOuterBounds() / 15);
+        return (int)($this->getOuterBounds() / 15);
     }
 
     /**
@@ -114,46 +195,18 @@ enum GalaxySizeTier: string
     public function label(): string
     {
         return match ($this) {
-            self::SMALL => 'Small Galaxy (500×500)',
-            self::MEDIUM => 'Medium Galaxy (1500×1500)',
-            self::LARGE => 'Large Galaxy (2500×2500)',
+            self::SMALL   => 'Small Galaxy (500×500)',
+            self::MEDIUM  => 'Medium Galaxy (1500×1500)',
+            self::LARGE   => 'Large Galaxy (2500×2500)',
+            self::MASSIVE => 'Massive Galaxy (5000×5000)',
         };
     }
 
     /**
-     * Get all tiers as options array for API responses.
-     * Returns static pre-computed values for performance.
+     * Check if this tier is hidden from public selection.
      */
-    public static function toOptionsArray(): array
+    public function isSecret(): bool
     {
-        return [
-            [
-                'value' => 'small',
-                'label' => 'Small Galaxy (500×500)',
-                'outer_bounds' => 500,
-                'core_bounds' => 250,
-                'core_stars' => 100,
-                'outer_stars' => 150,
-                'total_stars' => 250,
-            ],
-            [
-                'value' => 'medium',
-                'label' => 'Medium Galaxy (1500×1500)',
-                'outer_bounds' => 1500,
-                'core_bounds' => 750,
-                'core_stars' => 300,
-                'outer_stars' => 450,
-                'total_stars' => 750,
-            ],
-            [
-                'value' => 'large',
-                'label' => 'Large Galaxy (2500×2500)',
-                'outer_bounds' => 2500,
-                'core_bounds' => 1250,
-                'core_stars' => 500,
-                'outer_stars' => 750,
-                'total_stars' => 1250,
-            ],
-        ];
+        return $this === self::MASSIVE;
     }
 }

@@ -265,7 +265,7 @@ class GalaxyExpandCommand extends Command
                 }
 
                 // Create bidirectional warp gates
-                $fuelCost = (int) ceil($data['distance'] / 2);
+                $distance = $data['distance'];
 
                 // Gate 1: New -> Existing
                 $gate1 = WarpGate::create([
@@ -273,7 +273,11 @@ class GalaxyExpandCommand extends Command
                     'galaxy_id' => $this->galaxy->id,
                     'source_poi_id' => $newStar->id,
                     'destination_poi_id' => $targetStar->id,
-                    'fuel_cost' => $fuelCost,
+                    'source_x' => $newStar->x,
+                    'source_y' => $newStar->y,
+                    'dest_x' => $targetStar->x,
+                    'dest_y' => $targetStar->y,
+                    'distance' => $distance,
                     'is_hidden' => false,
                     'status' => 'active',
                 ]);
@@ -284,7 +288,11 @@ class GalaxyExpandCommand extends Command
                     'galaxy_id' => $this->galaxy->id,
                     'source_poi_id' => $targetStar->id,
                     'destination_poi_id' => $newStar->id,
-                    'fuel_cost' => $fuelCost,
+                    'source_x' => $targetStar->x,
+                    'source_y' => $targetStar->y,
+                    'dest_x' => $newStar->x,
+                    'dest_y' => $newStar->y,
+                    'distance' => $distance,
                     'is_hidden' => false,
                     'status' => 'active',
                 ]);
@@ -292,7 +300,7 @@ class GalaxyExpandCommand extends Command
                 $this->newGates[] = $gate1;
                 $this->newGates[] = $gate2;
 
-                $this->line("  ✓ Connected {$newStar->name} ↔ {$targetStar->name} (fuel: {$fuelCost})");
+                $this->line("  ✓ Connected {$newStar->name} ↔ {$targetStar->name} (distance: {$distance})");
             }
         }
 

@@ -6,6 +6,7 @@ use App\Enums\WarpGate\GateType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
@@ -145,6 +146,14 @@ class WarpGate extends Model
         return $this->hasOne(WarpLanePirate::class, 'warp_gate_id');
     }
 
+    /**
+     * Get all players who have knowledge of this warp gate.
+     */
+    public function knownByPlayers(): HasMany
+    {
+        return $this->hasMany(PilotLaneKnowledge::class);
+    }
+
     public function calculateDistance(): float
     {
         $source = $this->sourcePoi;
@@ -158,6 +167,22 @@ class WarpGate extends Model
         $dy = $destination->y - $source->y;
 
         return sqrt($dx * $dx + $dy * $dy);
+    }
+
+    /**
+     * Get the fuel cost for traveling through this gate.
+     * Computed dynamically from distance.
+     */
+    public function getFuelCostAttribute(): int
+    {
+        if ($this->distance !== null && $this->distance > 0) {
+            return max(1, (int) ceil($this->distance / 2));
+        }
+
+        // Fallback to calculating from POIs if distance not stored
+        $calculatedDistance = $this->calculateDistance();
+
+        return max(1, (int) ceil($calculatedDistance / 2));
     }
 
     public function isAccessible(): bool

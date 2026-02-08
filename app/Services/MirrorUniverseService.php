@@ -47,7 +47,7 @@ class MirrorUniverseService
             'height' => $primeGalaxy->height,
             'seed' => $primeGalaxy->seed, // CRITICAL: Same seed = same structure
             'distribution_method' => $primeGalaxy->distribution_method,
-            'spacing_factor' => $primeGalaxy->spacing_factor,
+            'spacing_factor' => $primeGalaxy->spacing_factor ?? 1.0,
             'engine' => $primeGalaxy->engine,
             'turn_limit' => $primeGalaxy->turn_limit,
             'status' => GalaxyStatus::DRAFT,

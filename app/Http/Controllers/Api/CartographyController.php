@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Models\Player;
 use App\Models\PointOfInterest;
 use App\Models\StellarCartographer;
-use App\Models\TradingHub;
 use App\Services\StarChartService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,9 +51,13 @@ class CartographyController extends BaseApiController
      */
     public function getCartographer(string $uuid): JsonResponse
     {
-        $tradingHub = TradingHub::where('uuid', $uuid)
-            ->with('pointOfInterest')
-            ->firstOrFail();
+        $tradingHub = $this->findTradingHub($uuid);
+
+        if (! $tradingHub) {
+            return $this->notFound('Trading hub not found');
+        }
+
+        $tradingHub->load('pointOfInterest');
 
         $cartographer = StellarCartographer::where('poi_id', $tradingHub->poi_id)
             ->with('pointOfInterest')
@@ -176,7 +179,7 @@ class CartographyController extends BaseApiController
             'base_price' => $basePrice,
             'multiplier' => $multiplier,
             'markup' => $cartographer?->markup_multiplier ?? 1.0,
-            'formula' => "base_price × (multiplier ^ (unknown_count - 1)) × markup",
+            'formula' => 'base_price × (multiplier ^ (unknown_count - 1)) × markup',
             'can_afford' => $player->credits >= $price,
             'player_credits' => $player->credits,
         ]);

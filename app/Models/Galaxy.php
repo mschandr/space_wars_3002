@@ -12,8 +12,10 @@ use App\Faker\Providers\GalaxyNameProvider;
 use App\Traits\HasUuidAndVersion;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Galaxy extends Model
 {
@@ -22,7 +24,7 @@ class Galaxy extends Model
     protected $fillable = [
         'galaxy_uuid', 'name', 'description', 'width', 'height', 'seed', 'distribution_method',
         'spacing_factor', 'engine', 'turn_limit', 'status', 'version', 'is_public', 'config',
-        'game_mode', 'owner_user_id', 'size_tier', 'core_bounds', 'progress_status',
+        'game_mode', 'max_players', 'owner_user_id', 'size_tier', 'sector', 'core_bounds', 'progress_status',
         'generation_started_at', 'generation_completed_at',
     ];
 
@@ -31,6 +33,7 @@ class Galaxy extends Model
         'distribution_method' => GalaxyDistributionMethod::class,
         'engine' => GalaxyRandomEngine::class,
         'size_tier' => GalaxySizeTier::class,
+        'sector' => Sector::class,
         'config' => 'array',
         'core_bounds' => 'array',
         'progress_status' => 'array',
@@ -103,14 +106,14 @@ class Galaxy extends Model
         return $name;
     }
 
-    public function pointsOfInterest(): HasMany
-    {
-        return $this->hasMany(PointOfInterest::class);
-    }
-
     public function warpGates(): HasMany
     {
         return $this->hasMany(WarpGate::class);
+    }
+
+    public function sizeTier(): HasOne
+    {
+        return $this->HasOne(GalaxySizeTier::class)->label('size_tier');
     }
 
     public function sectors(): HasMany
@@ -133,6 +136,11 @@ class Galaxy extends Model
         return $this->hasMany(Npc::class);
     }
 
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
     /**
      * Check if this is a single-player galaxy
      */
@@ -151,10 +159,11 @@ class Galaxy extends Model
 
     /**
      * Check if this galaxy allows NPCs
+     * All galaxies now support NPCs.
      */
     public function allowsNpcs(): bool
     {
-        return in_array($this->game_mode, ['single_player', 'mixed']);
+        return true;
     }
 
     /**
@@ -181,6 +190,27 @@ class Galaxy extends Model
     public function isMirrorUniverse(): bool
     {
         return ($this->config['is_mirror'] ?? false) === true;
+    }
+
+    /**
+     * Scope to exclude mirror universe galaxies from queries.
+     * Mirror universes should not appear in galaxy listings - they are accessed via gates.
+     */
+    public function scopeExcludeMirrors($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('config')
+                ->orWhereRaw("JSON_EXTRACT(config, '$.is_mirror') IS NULL")
+                ->orWhereRaw("JSON_EXTRACT(config, '$.is_mirror') = false");
+        });
+    }
+
+    /**
+     * Scope to only include mirror universe galaxies.
+     */
+    public function scopeOnlyMirrors($query)
+    {
+        return $query->whereRaw("JSON_EXTRACT(config, '$.is_mirror') = true");
     }
 
     /**
@@ -287,6 +317,11 @@ class Galaxy extends Model
     public function corePointsOfInterest(): HasMany
     {
         return $this->pointsOfInterest()->where('region', 'core');
+    }
+
+    public function pointsOfInterest(): HasMany
+    {
+        return $this->hasMany(PointOfInterest::class);
     }
 
     /**

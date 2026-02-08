@@ -2,9 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Http\Resources\PointOfInterestResource;
-use App\Models\Player;
 use App\Models\PointOfInterest;
 use App\Models\WarpGate;
 use App\Services\TravelService;
@@ -14,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Handles player travel and movement
+ *
+ * Uses ResolvesPlayer trait from BaseApiController for player lookup.
  */
 class TravelController extends BaseApiController
 {
@@ -28,11 +28,14 @@ class TravelController extends BaseApiController
      */
     public function listWarpGates(string $locationUuid): JsonResponse
     {
-        $location = PointOfInterest::where('uuid', $locationUuid)->first();
+        // Use trait method for UUID lookup
+        $result = $this->findByUuidOrNotFound(PointOfInterest::class, $locationUuid, 'Location not found');
 
-        if (! $location) {
-            return $this->notFound('Location not found');
+        if ($result instanceof JsonResponse) {
+            return $result;
         }
+
+        $location = $result;
 
         $gates = WarpGate::where('source_poi_id', $location->id)
             ->where('is_hidden', false)
@@ -71,18 +74,14 @@ class TravelController extends BaseApiController
             return $this->validationError($e->errors());
         }
 
-        $player = Player::where('uuid', $uuid)
-            ->where('user_id', $request->user()->id)
-            ->with(['activeShip', 'currentLocation'])
-            ->first();
+        // Use trait method - finds player with ship validation
+        $result = $this->findPlayerWithShipOrFail($uuid, $request, ['currentLocation']);
 
-        if (! $player) {
-            return $this->notFound('Player not found');
+        if ($result instanceof JsonResponse) {
+            return $result;
         }
 
-        if (! $player->activeShip) {
-            return $this->error('No active ship', 'NO_ACTIVE_SHIP');
-        }
+        $player = $result;
 
         $gate = WarpGate::where('uuid', $validated['gate_uuid'])
             ->where('source_poi_id', $player->current_poi_id)
@@ -92,22 +91,22 @@ class TravelController extends BaseApiController
             return $this->error('Warp gate not found at current location', 'GATE_NOT_FOUND');
         }
 
-        $result = $this->travelService->executeTravel($player, $gate);
+        $travelResult = $this->travelService->executeTravel($player, $gate);
 
-        if (! $result['success']) {
-            return $this->error($result['message'], $result['code'] ?? 'TRAVEL_FAILED');
+        if (! $travelResult['success']) {
+            return $this->error($travelResult['message'], $travelResult['code'] ?? 'TRAVEL_FAILED');
         }
 
         // Get the destination POI
         $destination = $player->fresh()->currentLocation;
 
         return $this->success([
-            'fuel_consumed' => $result['fuel_cost'],
-            'xp_earned' => $result['xp_earned'],
+            'fuel_consumed' => $travelResult['fuel_cost'],
+            'xp_earned' => $travelResult['xp_earned'],
             'new_location' => new PointOfInterestResource($destination),
-            'level_up' => $result['leveled_up'] ?? false,
-            'new_level' => $result['new_level'],
-            'pirate_encounter' => $result['pirate_encounter'] ?? null,
+            'level_up' => $travelResult['leveled_up'] ?? false,
+            'new_level' => $travelResult['new_level'],
+            'pirate_encounter' => $travelResult['pirate_encounter'] ?? null,
         ], 'Travel successful');
     }
 
@@ -127,38 +126,34 @@ class TravelController extends BaseApiController
             return $this->validationError($e->errors());
         }
 
-        $player = Player::where('uuid', $uuid)
-            ->where('user_id', $request->user()->id)
-            ->with(['activeShip', 'currentLocation'])
-            ->first();
+        // Use trait method - finds player with ship validation
+        $result = $this->findPlayerWithShipOrFail($uuid, $request, ['currentLocation']);
 
-        if (! $player) {
-            return $this->notFound('Player not found');
+        if ($result instanceof JsonResponse) {
+            return $result;
         }
 
-        if (! $player->activeShip) {
-            return $this->error('No active ship', 'NO_ACTIVE_SHIP');
-        }
+        $player = $result;
 
-        $result = $this->travelService->executeDirectJump(
+        $travelResult = $this->travelService->executeDirectJump(
             $player,
             (int) $validated['target_x'],
             (int) $validated['target_y']
         );
 
-        if (! $result['success']) {
-            return $this->error($result['message'], $result['code'] ?? 'JUMP_FAILED');
+        if (! $travelResult['success']) {
+            return $this->error($travelResult['message'], $travelResult['code'] ?? 'JUMP_FAILED');
         }
 
         // Get the destination POI
         $destination = $player->fresh()->currentLocation;
 
         return $this->success([
-            'fuel_consumed' => $result['fuel_cost'],
-            'xp_earned' => $result['xp_earned'],
+            'fuel_consumed' => $travelResult['fuel_cost'],
+            'xp_earned' => $travelResult['xp_earned'],
             'new_location' => new PointOfInterestResource($destination),
-            'level_up' => $result['leveled_up'] ?? false,
-            'new_level' => $result['new_level'],
+            'level_up' => $travelResult['leveled_up'] ?? false,
+            'new_level' => $travelResult['new_level'],
         ], 'Jump successful');
     }
 
@@ -177,16 +172,22 @@ class TravelController extends BaseApiController
             return $this->validationError($e->errors());
         }
 
-        $targetPoi = PointOfInterest::where('uuid', $validated['target_poi_uuid'])->first();
+        // Use trait method for UUID lookup
+        $result = $this->findByUuidOrNotFound(
+            PointOfInterest::class,
+            $validated['target_poi_uuid'],
+            'Target location not found'
+        );
 
-        if (! $targetPoi) {
-            return $this->notFound('Target location not found');
+        if ($result instanceof JsonResponse) {
+            return $result;
         }
+
+        $targetPoi = $result;
 
         // Reuse coordinate jump logic with POI coordinates
         $request->merge(['target_x' => $targetPoi->x, 'target_y' => $targetPoi->y]);
 
         return $this->jumpToCoordinates($request, $uuid);
     }
-
 }
