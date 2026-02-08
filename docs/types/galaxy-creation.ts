@@ -10,7 +10,7 @@
 
 export type GalaxySizeTier = 'small' | 'medium' | 'large' | 'massive';
 
-export type GameMode = 'multiplayer' | 'single_player' | 'mixed';
+export type GameMode = 'multiplayer' | 'single_player';  // NPCs are generated in all game modes
 
 export interface CreateOptimizedGalaxyRequest {
   /** Galaxy size tier (required) */
@@ -28,8 +28,8 @@ export interface CreateOptimizedGalaxyRequest {
   /** Skip precursor content (gate + ship) */
   skip_precursors?: boolean;
 
-  // Note: NPC configuration (npc_count, npc_difficulty) is NOT accepted.
-  // NPC counts are determined automatically based on galaxy size tier:
+  // Note: NPC configuration (npc_count, npc_difficulty) is NOT accepted via API.
+  // NPCs are ALWAYS generated in all galaxies. Counts are determined automatically:
   // - small: 5 NPCs (easy)
   // - medium: 10 NPCs (medium)
   // - large: 15 NPCs (hard)

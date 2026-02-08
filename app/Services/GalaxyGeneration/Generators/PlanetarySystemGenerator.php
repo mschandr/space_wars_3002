@@ -49,75 +49,94 @@ final class PlanetarySystemGenerator implements GeneratorInterface
         $now = now()->format('Y-m-d H:i:s');
         $galaxyId = $galaxy->id;
 
-        // Get outer stars only - use toBase() for faster hydration
-        $outerStars = PointOfInterest::where('galaxy_id', $galaxyId)
-            ->where('region', RegionType::OUTER)
+        // Get stars that need planetary systems:
+        // 1. All outer region stars (frontier exploration)
+        // 2. All inhabited core stars (player spawn locations need planets)
+        // Use chunked processing to reduce memory usage
+        $starQuery = PointOfInterest::where('galaxy_id', $galaxyId)
             ->where('type', PointOfInterestType::STAR)
-            ->select(['id', 'name', 'x', 'y'])
-            ->get()
-            ->toArray();
+            ->where(function ($query) {
+                $query->where('region', RegionType::OUTER)
+                    ->orWhere(function ($q) {
+                        $q->where('region', RegionType::CORE)
+                            ->where('is_inhabited', true);
+                    });
+            })
+            ->select(['id', 'name', 'x', 'y', 'region']);
 
-        $starCount = count($outerStars);
+        $starCount = $starQuery->count();
         $metrics->setCount('stars_processed', $starCount);
 
         if ($starCount === 0) {
             return GenerationResult::success($metrics, ['planets_created' => 0, 'moons_created' => 0]);
         }
 
-        // Pre-generate random values in batches for performance
-        // Reduced planet counts for faster generation (3-7 instead of 5-12)
-        $planetCounts = [];
-        $beltFlags = [];
-        for ($i = 0; $i < $starCount; $i++) {
-            $planetCounts[$i] = 3 + ($i % 5);  // Deterministic 3-7 planets
-            $beltFlags[$i] = ($i % 10) < 5;    // 50% have belts
-        }
+        $planetsInserted = 0;
+        $totalMoonSpecs = 0;
+        $chunkSize = 100; // Process 100 stars at a time for better memory management
+        $starIndex = 0;
 
-        $planetRows = [];
-        $moonSpecs = [];
+        // Process stars in chunks to limit memory usage
+        $starQuery->orderBy('id')->chunk($chunkSize, function ($stars) use (
+            &$planetsInserted, &$totalMoonSpecs, &$starIndex,
+            $galaxyId, $now
+        ) {
+            $planetRows = [];
+            $moonSpecs = [];
 
-        // Single pass planet generation using arrays
-        foreach ($outerStars as $idx => $star) {
-            $this->generateStarSystem(
-                $star['id'],
-                $star['name'],
-                $galaxyId,
-                (int) $star['x'],
-                (int) $star['y'],
-                $planetCounts[$idx],
-                $beltFlags[$idx] && $planetCounts[$idx] >= 5,
-                $now,
-                $planetRows,
-                $moonSpecs
-            );
-        }
+            foreach ($stars as $star) {
+                $planetCount = 3 + ($starIndex % 5);  // Deterministic 3-7 planets
+                $addBelt = ($starIndex % 10) < 5 && $planetCount >= 5;
 
-        // Phase 2: Bulk insert planets (larger chunks for better throughput)
-        $planetsInserted = BulkInserter::insert('points_of_interest', $planetRows, 2000);
+                // Handle region as enum or string
+                $region = $star->region;
+                if ($region instanceof RegionType) {
+                    $region = $region->value;
+                }
+
+                $this->generateStarSystem(
+                    $star->id,
+                    $star->name,
+                    $galaxyId,
+                    (int) $star->x,
+                    (int) $star->y,
+                    $planetCount,
+                    $addBelt,
+                    $region ?? RegionType::OUTER->value,
+                    $now,
+                    $planetRows,
+                    $moonSpecs
+                );
+
+                $starIndex++;
+            }
+
+            // Insert this chunk immediately
+            if (! empty($planetRows)) {
+                $planetsInserted += BulkInserter::insert('points_of_interest', $planetRows, 500);
+            }
+
+            // Count moon specs but don't accumulate them (moons are deferred)
+            $totalMoonSpecs += count($moonSpecs);
+
+            // Free memory for this chunk
+            unset($planetRows, $moonSpecs);
+
+            // Force garbage collection after each chunk
+            if (function_exists('gc_collect_cycles')) {
+                gc_collect_cycles();
+            }
+        });
+
         $metrics->setCount('planets_inserted', $planetsInserted);
+        $metrics->setCount('moon_specs_queued', $totalMoonSpecs);
 
-        // Phase 3: Store moon specs for async generation (if enabled)
-        $generateMoonsSync = $context['generate_moons_sync'] ?? false;
-        $metrics->setCount('moon_specs_queued', count($moonSpecs));
-
-        if (! $generateMoonsSync || empty($moonSpecs)) {
-            // Store moon specs in context for later async processing
-            return GenerationResult::success($metrics, [
-                'planets_created' => $planetsInserted,
-                'moons_created' => 0,
-                'moon_specs' => $moonSpecs,  // Pass to async processor
-                'moons_deferred' => true,
-            ]);
-        }
-
-        // Sync moon generation (optional, for testing)
-        $moonsInserted = $this->generateMoonsSync($moonSpecs, $galaxyId, $now);
-        $metrics->setCount('moons_inserted', $moonsInserted);
-
+        // Moons are deferred by default to save memory
+        // They can be generated later via a separate command if needed
         return GenerationResult::success($metrics, [
             'planets_created' => $planetsInserted,
-            'moons_created' => $moonsInserted,
-            'total_bodies' => $planetsInserted + $moonsInserted,
+            'moons_created' => 0,
+            'moons_deferred' => true,
         ]);
     }
 
@@ -143,7 +162,6 @@ final class PlanetarySystemGenerator implements GeneratorInterface
 
         // Generate moon rows
         $moonRows = [];
-        $outerValue = RegionType::OUTER->value;
         $moonType = PointOfInterestType::MOON->value;
         $activeStatus = PointOfInterestStatus::ACTIVE->value;
 
@@ -152,6 +170,8 @@ final class PlanetarySystemGenerator implements GeneratorInterface
             if (! $planetId) {
                 continue;
             }
+
+            $specRegion = $spec['region'] ?? RegionType::OUTER->value;
 
             for ($i = 1; $i <= $spec['moon_count']; $i++) {
                 $moonRows[] = [
@@ -167,7 +187,7 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                     'attributes' => '{"orbital_distance":'.(($i * 2) + ($i % 3)).',"size":"'.self::MOON_SIZES[$i % 2].'"}',
                     'is_hidden' => false,
                     'is_inhabited' => false,
-                    'region' => $outerValue,
+                    'region' => $specRegion,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
@@ -188,12 +208,13 @@ final class PlanetarySystemGenerator implements GeneratorInterface
         int $y,
         int $planetCount,
         bool $addBelt,
+        string $region,
         string $now,
         array &$planetRows,
         array &$moonSpecs
     ): void {
         $activeValue = PointOfInterestStatus::ACTIVE->value;
-        $outerValue = RegionType::OUTER->value;
+        $regionValue = is_string($region) ? $region : RegionType::OUTER->value;
 
         for ($i = 1; $i <= $planetCount; $i++) {
             $type = $this->getPlanetType($i, $planetCount);
@@ -216,7 +237,7 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                 'attributes' => '{"orbital_distance":'.$orbitalDist.',"size":"'.self::PLANET_SIZES[$size].'"}',
                 'is_hidden' => false,
                 'is_inhabited' => false,
-                'region' => $outerValue,
+                'region' => $regionValue,
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
@@ -229,6 +250,7 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                     'galaxy_id' => $galaxyId,
                     'x' => $x,
                     'y' => $y,
+                    'region' => $regionValue,
                 ];
             }
         }
@@ -249,7 +271,7 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                 'attributes' => '{"orbital_distance":'.($beltIndex * 10).',"density":"'.self::BELT_DENSITIES[$beltIndex % 3].'"}',
                 'is_hidden' => false,
                 'is_inhabited' => false,
-                'region' => $outerValue,
+                'region' => $regionValue,
                 'created_at' => $now,
                 'updated_at' => $now,
             ];

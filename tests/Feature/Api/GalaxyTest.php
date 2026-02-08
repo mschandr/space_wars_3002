@@ -323,7 +323,22 @@ class GalaxyTest extends TestCase
     {
         $user = User::factory()->create();
         $galaxy = Galaxy::factory()->create();
-        $poi = PointOfInterest::factory()->create(['galaxy_id' => $galaxy->id]);
+
+        // Create a sector
+        $sector = Sector::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'name' => 'Beta-2',
+            'grid_x' => 1,
+            'grid_y' => 1,
+        ]);
+
+        // Create more sectors
+        Sector::factory()->count(3)->create(['galaxy_id' => $galaxy->id]);
+
+        $poi = PointOfInterest::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'sector_id' => $sector->id,
+        ]);
 
         $player = Player::factory()->create([
             'user_id' => $user->id,
@@ -337,8 +352,12 @@ class GalaxyTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.uuid', (string) $player->uuid)
-            ->assertJsonPath('data.call_sign', 'TestPilot');
+            ->assertJsonPath('data.player.uuid', (string) $player->uuid)
+            ->assertJsonPath('data.player.call_sign', 'TestPilot')
+            ->assertJsonPath('data.sector.name', 'Beta-2')
+            ->assertJsonPath('data.sector.grid.x', 1)
+            ->assertJsonPath('data.sector.grid.y', 1)
+            ->assertJsonPath('data.total_sectors', 4);
     }
 
     public function test_my_player_returns_404_when_no_player(): void
@@ -433,6 +452,54 @@ class GalaxyTest extends TestCase
             'galaxy_id' => $galaxy->id,
             'call_sign' => 'NewPilot',
         ]);
+    }
+
+    public function test_join_response_includes_sector_info(): void
+    {
+        $user = User::factory()->create();
+        $galaxy = Galaxy::factory()->create([
+            'status' => GalaxyStatus::ACTIVE,
+            'game_mode' => 'multiplayer',
+        ]);
+
+        // Create a sector
+        $sector = Sector::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'name' => 'Alpha-1',
+            'grid_x' => 0,
+            'grid_y' => 0,
+            'x_min' => 0,
+            'x_max' => 100,
+            'y_min' => 0,
+            'y_max' => 100,
+        ]);
+
+        // Create more sectors for total count
+        Sector::factory()->count(4)->create([
+            'galaxy_id' => $galaxy->id,
+        ]);
+
+        // Create an inhabited starting location in the sector
+        PointOfInterest::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'sector_id' => $sector->id,
+            'is_inhabited' => true,
+            'x' => 50,
+            'y' => 50,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->postJson("/api/galaxies/{$galaxy->uuid}/join", [
+                'call_sign' => 'SectorPilot',
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.created', true)
+            ->assertJsonPath('data.sector.name', 'Alpha-1')
+            ->assertJsonPath('data.sector.grid.x', 0)
+            ->assertJsonPath('data.sector.grid.y', 0)
+            ->assertJsonPath('data.total_sectors', 5);
     }
 
     public function test_join_requires_call_sign_when_creating(): void
@@ -614,5 +681,87 @@ class GalaxyTest extends TestCase
         $this->assertEquals(1, Player::where('user_id', $user->id)
             ->where('galaxy_id', $galaxy->id)
             ->count());
+    }
+
+    public function test_galaxy_list_excludes_mirror_universes(): void
+    {
+        $user = User::factory()->create();
+
+        // Create a normal galaxy
+        $normalGalaxy = Galaxy::factory()->create([
+            'name' => 'Normal Galaxy',
+            'status' => GalaxyStatus::ACTIVE,
+            'game_mode' => 'multiplayer',
+        ]);
+
+        // Create a mirror universe galaxy
+        $mirrorGalaxy = Galaxy::factory()->create([
+            'name' => 'Normal Galaxy (Mirror)',
+            'status' => GalaxyStatus::ACTIVE,
+            'game_mode' => 'multiplayer',
+            'config' => [
+                'is_mirror' => true,
+                'prime_galaxy_id' => $normalGalaxy->id,
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/galaxies');
+
+        $response->assertStatus(200);
+
+        // Check that normal galaxy appears in open_games
+        $openGames = collect($response->json('data.open_games'));
+        $this->assertTrue(
+            $openGames->contains('uuid', $normalGalaxy->uuid),
+            'Normal galaxy should be in open_games'
+        );
+
+        // Check that mirror universe is NOT in open_games
+        $this->assertFalse(
+            $openGames->contains('uuid', $mirrorGalaxy->uuid),
+            'Mirror universe should NOT be in open_games'
+        );
+    }
+
+    public function test_my_games_excludes_mirror_universes(): void
+    {
+        $user = User::factory()->create();
+
+        // Create a normal galaxy the user owns
+        $normalGalaxy = Galaxy::factory()->create([
+            'name' => 'My Galaxy',
+            'status' => GalaxyStatus::ACTIVE,
+            'owner_user_id' => $user->id,
+            'game_mode' => 'single_player',
+        ]);
+
+        // Create a mirror universe the user "owns"
+        $mirrorGalaxy = Galaxy::factory()->create([
+            'name' => 'My Galaxy (Mirror)',
+            'status' => GalaxyStatus::ACTIVE,
+            'owner_user_id' => $user->id,
+            'game_mode' => 'single_player',
+            'config' => [
+                'is_mirror' => true,
+                'prime_galaxy_id' => $normalGalaxy->id,
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/galaxies');
+
+        $response->assertStatus(200);
+
+        // Check that normal galaxy appears in my_games
+        $myGames = collect($response->json('data.my_games'));
+        $this->assertTrue(
+            $myGames->contains('uuid', $normalGalaxy->uuid),
+            'Normal galaxy should be in my_games'
+        );
+
+        // Check that mirror universe is NOT in my_games
+        $this->assertFalse(
+            $myGames->contains('uuid', $mirrorGalaxy->uuid),
+            'Mirror universe should NOT be in my_games'
+        );
     }
 }

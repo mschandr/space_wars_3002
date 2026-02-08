@@ -26,6 +26,10 @@ enum PointOfInterestType: int
     case TERRESTRIAL = 20;
     case EMPTY_SPACE = 21;
     case DERELICT = 22;
+    case TRADING_STATION = 23;
+    case SHIPYARD = 24;
+    case SALVAGE_YARD = 25;
+    case DEFENSE_PLATFORM = 26;
 
     /** Labels for display */
     public function label(): string
@@ -53,6 +57,10 @@ enum PointOfInterestType: int
             self::TERRESTRIAL => 'Terrestrial',
             self::EMPTY_SPACE => 'Empty Space',
             self::DERELICT => 'Derelict Vessel',
+            self::TRADING_STATION => 'Trading Station',
+            self::SHIPYARD => 'Shipyard',
+            self::SALVAGE_YARD => 'Salvage Yard',
+            self::DEFENSE_PLATFORM => 'Defense Platform',
         };
     }
 
@@ -79,7 +87,12 @@ enum PointOfInterestType: int
             self::OCEAN,
             self::PLANET,
             self::SUPER_EARTH,
-            self::TERRESTRIAL => 'System',
+            self::TERRESTRIAL,
+            self::DERELICT,
+            self::TRADING_STATION,
+            self::SHIPYARD,
+            self::SALVAGE_YARD,
+            self::DEFENSE_PLATFORM => 'System',
 
             default => 'Unknown',
         };
@@ -107,6 +120,28 @@ enum PointOfInterestType: int
             self::SUPER_EARTH,
             self::TERRESTRIAL,
             self::PLANET => true,
+            default => false,
+        };
+    }
+
+    public function isStation(): bool
+    {
+        return match ($this) {
+            self::TRADING_STATION,
+            self::SHIPYARD,
+            self::SALVAGE_YARD,
+            self::DEFENSE_PLATFORM,
+            self::DERELICT => true,
+            default => false,
+        };
+    }
+
+    public function isDockable(): bool
+    {
+        return match ($this) {
+            self::TRADING_STATION,
+            self::SHIPYARD,
+            self::SALVAGE_YARD => true,
             default => false,
         };
     }

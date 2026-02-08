@@ -35,7 +35,7 @@ final class GenerationConfig
             ownerUserId: $options['owner_user_id'] ?? null,
             includeMirror: ! ($options['skip_mirror'] ?? false) && config('game_config.mirror_universe.enabled', true),
             includePrecursor: ! ($options['skip_precursors'] ?? false),
-            npcCount: $options['npc_count'] ?? ($gameMode === 'single_player' ? 5 : 0),
+            npcCount: $options['npc_count'] ?? 5,  // NPCs are always generated
             npcDifficulty: $options['npc_difficulty'] ?? 'medium',
         );
     }
@@ -81,10 +81,11 @@ final class GenerationConfig
 
     /**
      * Should generate NPCs?
+     * NPCs are generated in all game modes when npcCount > 0.
      */
     public function shouldGenerateNpcs(): bool
     {
-        return $this->npcCount > 0 && in_array($this->gameMode, ['single_player', 'mixed']);
+        return $this->npcCount > 0;
     }
 
     /**

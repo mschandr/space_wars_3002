@@ -16,6 +16,23 @@ use Illuminate\Support\Collection;
 class LaneKnowledgeService
 {
     /**
+     * Request-scoped cache for known gate IDs per player.
+     * Key format: player_id => [gate_id => true, ...]
+     *
+     * @var array<int, array<int, bool>>
+     */
+    private static array $knownLanesCache = [];
+
+    /**
+     * Clear the request-scoped cache.
+     * Useful for testing or long-running processes.
+     */
+    public static function clearCache(): void
+    {
+        self::$knownLanesCache = [];
+    }
+
+    /**
      * Discover a warp lane for a player.
      *
      * @param  Player  $player  The player discovering the lane
@@ -30,16 +47,28 @@ class LaneKnowledgeService
             ->first();
 
         if ($existing) {
+            // Update cache
+            if (isset(self::$knownLanesCache[$player->id])) {
+                self::$knownLanesCache[$player->id][$gate->id] = true;
+            }
+
             return $existing;
         }
 
-        return PilotLaneKnowledge::create([
+        $knowledge = PilotLaneKnowledge::create([
             'player_id' => $player->id,
             'warp_gate_id' => $gate->id,
             'discovered_at' => now(),
             'discovery_method' => $method,
             'pirate_risk_known' => false,
         ]);
+
+        // Update cache
+        if (isset(self::$knownLanesCache[$player->id])) {
+            self::$knownLanesCache[$player->id][$gate->id] = true;
+        }
+
+        return $knowledge;
     }
 
     /**
@@ -123,15 +152,43 @@ class LaneKnowledgeService
     /**
      * Check if player knows about a specific warp gate.
      *
+     * Uses request-scoped caching to avoid N+1 queries when checking
+     * multiple gates for the same player.
+     *
      * @param  Player  $player  The player
      * @param  WarpGate  $gate  The warp gate
      * @return bool True if the player knows about this gate
      */
     public function knowsLane(Player $player, WarpGate $gate): bool
     {
-        return PilotLaneKnowledge::where('player_id', $player->id)
-            ->where('warp_gate_id', $gate->id)
-            ->exists();
+        // Check cache first
+        if (isset(self::$knownLanesCache[$player->id][$gate->id])) {
+            return self::$knownLanesCache[$player->id][$gate->id];
+        }
+
+        // Warm the cache with ALL known gates for this player
+        $this->warmCache($player);
+
+        return self::$knownLanesCache[$player->id][$gate->id] ?? false;
+    }
+
+    /**
+     * Warm the request-scoped cache for a player.
+     */
+    private function warmCache(Player $player): void
+    {
+        if (isset(self::$knownLanesCache[$player->id])) {
+            return; // Already warmed
+        }
+
+        $knownIds = PilotLaneKnowledge::where('player_id', $player->id)
+            ->pluck('warp_gate_id')
+            ->toArray();
+
+        self::$knownLanesCache[$player->id] = [];
+        foreach ($knownIds as $gateId) {
+            self::$knownLanesCache[$player->id][$gateId] = true;
+        }
     }
 
     /**
@@ -202,20 +259,20 @@ class LaneKnowledgeService
     /**
      * Bulk check which gates a player knows.
      *
+     * Uses request-scoped caching for efficiency.
+     *
      * @param  Player  $player  The player
      * @param  array  $gateIds  Array of gate IDs to check
      * @return array<int, bool> Array of gate_id => known status
      */
     public function bulkKnowsLane(Player $player, array $gateIds): array
     {
-        $knownIds = PilotLaneKnowledge::where('player_id', $player->id)
-            ->whereIn('warp_gate_id', $gateIds)
-            ->pluck('warp_gate_id')
-            ->toArray();
+        // Warm the cache if not already done
+        $this->warmCache($player);
 
         $result = [];
         foreach ($gateIds as $gateId) {
-            $result[$gateId] = in_array($gateId, $knownIds);
+            $result[$gateId] = self::$knownLanesCache[$player->id][$gateId] ?? false;
         }
 
         return $result;

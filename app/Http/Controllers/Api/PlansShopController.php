@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Resources\PlanResource;
 use App\Models\Plan;
 use App\Models\Player;
-use App\Models\TradingHub;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,9 +17,13 @@ class PlansShopController extends BaseApiController
      */
     public function getPlansShop(Request $request, string $uuid): JsonResponse
     {
-        $tradingHub = TradingHub::where('uuid', $uuid)
-            ->with('plans')
-            ->firstOrFail();
+        $tradingHub = $this->findTradingHub($uuid);
+
+        if (! $tradingHub) {
+            return $this->notFound('Trading hub not found');
+        }
+
+        $tradingHub->load('plans');
 
         $sellsPlans = $tradingHub->has_plans;
         $plans = $tradingHub->plans;
@@ -104,11 +107,15 @@ class PlansShopController extends BaseApiController
 
         $validated = $request->validate([
             'plan_id' => 'required|exists:plans,id',
-            'trading_hub_uuid' => 'required|exists:trading_hubs,uuid',
+            'trading_hub_uuid' => 'required|string',
         ]);
 
         $plan = Plan::findOrFail($validated['plan_id']);
-        $tradingHub = TradingHub::where('uuid', $validated['trading_hub_uuid'])->firstOrFail();
+        $tradingHub = $this->findTradingHub($validated['trading_hub_uuid']);
+
+        if (! $tradingHub) {
+            return $this->error('Trading hub not found', 'NOT_FOUND', null, 404);
+        }
 
         // Check if hub sells plans
         if (! $tradingHub->has_plans) {

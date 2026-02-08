@@ -403,6 +403,10 @@ class TravelService
     private function autoScanDestination(Player $player, PointOfInterest $destination): ?array
     {
         try {
+            // Populate system details on first access (lazy generation)
+            $populationService = app(SystemPopulationService::class);
+            $populationService->ensurePopulated($destination);
+
             $scanService = app(SystemScanService::class);
             $result = $scanService->scanSystem($player, $destination);
 

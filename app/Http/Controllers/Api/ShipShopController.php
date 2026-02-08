@@ -6,7 +6,6 @@ use App\Http\Resources\ShipResource;
 use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\Ship;
-use App\Models\TradingHub;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -20,7 +19,11 @@ class ShipShopController extends BaseApiController
      */
     public function getShipyard(string $uuid): JsonResponse
     {
-        $tradingHub = TradingHub::where('uuid', $uuid)->firstOrFail();
+        $tradingHub = $this->findTradingHub($uuid);
+
+        if (! $tradingHub) {
+            return $this->notFound('Trading hub not found');
+        }
 
         $hasShipyard = $tradingHub->hasShipyard();
 
@@ -97,12 +100,16 @@ class ShipShopController extends BaseApiController
 
         $validated = $request->validate([
             'ship_id' => 'required|exists:ships,id',
-            'trading_hub_uuid' => 'required|exists:trading_hubs,uuid',
+            'trading_hub_uuid' => 'required|string',
             'trade_in_current_ship' => 'sometimes|boolean',
         ]);
 
         $ship = Ship::findOrFail($validated['ship_id']);
-        $tradingHub = TradingHub::where('uuid', $validated['trading_hub_uuid'])->firstOrFail();
+        $tradingHub = $this->findTradingHub($validated['trading_hub_uuid']);
+
+        if (! $tradingHub) {
+            return $this->error('Trading hub not found', 'NOT_FOUND', null, 404);
+        }
 
         // Check if hub has shipyard
         if (! $tradingHub->hasShipyard()) {

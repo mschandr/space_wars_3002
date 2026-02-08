@@ -25,6 +25,12 @@ class TradingHub extends Model
         'services',
         'attributes',
         'is_active',
+        'precursor_rumor_x',
+        'precursor_rumor_y',
+        'precursor_rumor_confidence',
+        'precursor_bribe_cost',
+        'shipyard_owner_name',
+        'precursor_rumor_flavor',
     ];
 
     protected $casts = [
@@ -35,6 +41,10 @@ class TradingHub extends Model
         'services' => 'array',
         'attributes' => 'array',
         'is_active' => 'boolean',
+        'precursor_rumor_x' => 'integer',
+        'precursor_rumor_y' => 'integer',
+        'precursor_rumor_confidence' => 'float',
+        'precursor_bribe_cost' => 'integer',
     ];
 
     protected static function boot()
@@ -129,5 +139,31 @@ class TradingHub extends Model
             'major' => '●',
             'standard' => '○',
         };
+    }
+
+    /**
+     * Check if this hub has a rumor about the Precursor ship
+     */
+    public function hasPrecursorRumor(): bool
+    {
+        return $this->precursor_rumor_x !== null && $this->precursor_rumor_y !== null;
+    }
+
+    /**
+     * Check if a player has already obtained this hub's rumor
+     */
+    public function playerHasRumor(Player $player): bool
+    {
+        return PlayerPrecursorRumor::where('player_id', $player->id)
+            ->where('trading_hub_id', $this->id)
+            ->exists();
+    }
+
+    /**
+     * Get all precursor rumors obtained from this hub
+     */
+    public function precursorRumors(): HasMany
+    {
+        return $this->hasMany(PlayerPrecursorRumor::class);
     }
 }

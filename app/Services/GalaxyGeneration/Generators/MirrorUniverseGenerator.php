@@ -13,7 +13,9 @@ use App\Services\GalaxyGeneration\Data\GenerationMetrics;
 use App\Services\GalaxyGeneration\Data\GenerationResult;
 use App\Services\MirrorUniverseService;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Generates a mirror universe paired with the prime galaxy.
@@ -102,12 +104,13 @@ final class MirrorUniverseGenerator implements GeneratorInterface
                 '--stars' => $starCount,
             ]);
             $metrics->setCount('mirror_stars', $starCount);
+            $this->freeMemory();
 
-            // Step 3: Generate sectors
-            Log::info('Generating sectors in mirror galaxy');
-            Artisan::call('galaxy:generate-sectors', [
-                'galaxy' => $mirrorGalaxy->id,
-            ]);
+            // Step 3: Generate sectors directly (avoid Artisan command to ensure correct galaxy_id)
+            Log::info('Generating sectors in mirror galaxy', ['mirror_galaxy_id' => $mirrorGalaxy->id]);
+            $sectorResult = $this->generateSectorsForMirror($mirrorGalaxy, $config);
+            $metrics->setCount('mirror_sectors', $sectorResult['sectors_created']);
+            $this->freeMemory();
 
             // Step 4: Designate inhabited systems
             $inhabitedPercentage = config('game_config.galaxy.inhabited_percentage', 0.40);
@@ -115,6 +118,7 @@ final class MirrorUniverseGenerator implements GeneratorInterface
                 'galaxy' => $mirrorGalaxy->id,
                 '--percentage' => $inhabitedPercentage,
             ]);
+            $this->freeMemory();
 
             // Step 5: Generate warp gates (denser network in mirror)
             Log::info('Generating warp gates in mirror galaxy');
@@ -127,26 +131,40 @@ final class MirrorUniverseGenerator implements GeneratorInterface
                 '--regenerate' => true,
                 '--incremental' => true,
             ]);
+            $this->freeMemory();
 
             // Step 6: Generate trading hubs
             Log::info('Generating trading hubs in mirror galaxy');
             Artisan::call('trading:generate-hubs', [
                 'galaxy' => $mirrorGalaxy->id,
             ]);
+            Log::info('Trading hubs generation complete', ['memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 1)]);
+            $this->freeMemory();
 
             // Step 7: Distribute pirates with boosted difficulty
-            Log::info('Distributing pirates in mirror galaxy');
-            Artisan::call('galaxy:distribute-pirates', [
-                'galaxy' => $mirrorGalaxy->id,
-            ]);
+            Log::info('Distributing pirates in mirror galaxy', ['memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 1)]);
+            try {
+                Artisan::call('galaxy:distribute-pirates', [
+                    'galaxy' => $mirrorGalaxy->id,
+                ]);
+                Log::info('Pirates distribution complete', ['memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 1)]);
+            } catch (\Throwable $e) {
+                Log::error('Pirates distribution failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+                throw $e;
+            }
+            $this->freeMemory();
 
             // Step 8: Link the precursor gate to mirror
+            Log::info('Linking precursor gate to mirror', ['memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 1)]);
             $this->linkPrecursorGate($galaxy, $mirrorGalaxy, $metrics);
+            Log::info('Precursor gate linked', ['memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 1)]);
 
             // Mark mirror galaxy as active
+            Log::info('Marking mirror galaxy as active', ['memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 1)]);
             $mirrorGalaxy->status = GalaxyStatus::ACTIVE;
             $mirrorGalaxy->generation_completed_at = now();
             $mirrorGalaxy->save();
+            Log::info('Mirror universe generation complete', ['mirror_galaxy_id' => $mirrorGalaxy->id]);
 
             return GenerationResult::success($metrics, [
                 'mirror_galaxy_id' => $mirrorGalaxy->id,
@@ -230,5 +248,107 @@ final class MirrorUniverseGenerator implements GeneratorInterface
             'entry_gate_id' => $precursorGate->id,
             'mirror_poi_id' => $mirrorPoi->id,
         ]);
+    }
+
+    /**
+     * Attempt to free memory by triggering garbage collection.
+     */
+    private function freeMemory(): void
+    {
+        if (function_exists('gc_collect_cycles')) {
+            gc_collect_cycles();
+        }
+    }
+
+    /**
+     * Generate sectors directly for the mirror galaxy.
+     *
+     * Uses direct DB insert to ensure correct galaxy_id is used,
+     * avoiding potential issues with Artisan command argument resolution.
+     *
+     * @return array{sectors_created: int, pois_assigned: int}
+     */
+    private function generateSectorsForMirror(Galaxy $mirrorGalaxy, ?GenerationConfig $config): array
+    {
+        // Clean up any orphaned sectors from previous failed transactions
+        // This handles the edge case where a previous attempt failed after inserting sectors
+        // but before the transaction committed (auto-increment IDs may have advanced)
+        $existingSectors = DB::table('sectors')
+            ->where('galaxy_id', $mirrorGalaxy->id)
+            ->count();
+
+        if ($existingSectors > 0) {
+            Log::warning('Found orphaned sectors for mirror galaxy, cleaning up', [
+                'mirror_galaxy_id' => $mirrorGalaxy->id,
+                'orphaned_count' => $existingSectors,
+            ]);
+            DB::table('sectors')->where('galaxy_id', $mirrorGalaxy->id)->delete();
+        }
+
+        $gridSize = $config?->getGridSize() ?? 5;
+        $sectorWidth = $mirrorGalaxy->width / $gridSize;
+        $sectorHeight = $mirrorGalaxy->height / $gridSize;
+
+        $greekLetters = [
+            'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta',
+            'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu', 'Xi', 'Omicron', 'Pi',
+            'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega',
+        ];
+
+        $now = now()->format('Y-m-d H:i:s');
+        $rows = [];
+
+        for ($y = 0; $y < $gridSize; $y++) {
+            $rowName = $greekLetters[$y % count($greekLetters)];
+            if ($y >= count($greekLetters)) {
+                $rowName .= '-'.(int) floor($y / count($greekLetters));
+            }
+
+            for ($x = 0; $x < $gridSize; $x++) {
+                $rows[] = [
+                    'uuid' => (string) Str::uuid(),
+                    'galaxy_id' => $mirrorGalaxy->id, // Explicitly use mirror galaxy ID
+                    'name' => "{$rowName}-".($x + 1),
+                    'grid_x' => $x,
+                    'grid_y' => $y,
+                    'x_min' => $x * $sectorWidth,
+                    'x_max' => ($x + 1) * $sectorWidth,
+                    'y_min' => $y * $sectorHeight,
+                    'y_max' => ($y + 1) * $sectorHeight,
+                    'danger_level' => 0,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+        }
+
+        // Single batch insert for sectors
+        DB::table('sectors')->insert($rows);
+        $sectorsCreated = count($rows);
+
+        // Assign POIs to sectors using SQL JOIN
+        $maxGridIndex = $gridSize - 1;
+        $poisAssigned = DB::update('
+            UPDATE points_of_interest poi
+            SET sector_id = (
+                SELECT s.id FROM sectors s
+                WHERE s.galaxy_id = poi.galaxy_id
+                AND s.grid_x = LEAST(FLOOR(poi.x / ?), ?)
+                AND s.grid_y = LEAST(FLOOR(poi.y / ?), ?)
+                LIMIT 1
+            )
+            WHERE poi.galaxy_id = ?
+        ', [$sectorWidth, $maxGridIndex, $sectorHeight, $maxGridIndex, $mirrorGalaxy->id]);
+
+        Log::info('Mirror galaxy sectors created', [
+            'mirror_galaxy_id' => $mirrorGalaxy->id,
+            'sectors_created' => $sectorsCreated,
+            'pois_assigned' => $poisAssigned,
+        ]);
+
+        return [
+            'sectors_created' => $sectorsCreated,
+            'pois_assigned' => $poisAssigned,
+        ];
     }
 }

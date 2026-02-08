@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\Galaxy\GalaxyStatus;
 use App\Enums\PointsOfInterest\PointOfInterestType;
+use App\Http\Controllers\Api\Builders\SystemNameGenerator;
 use App\Http\Resources\GalaxyDehydratedResource;
 use App\Http\Resources\GalaxyResource;
 use App\Http\Resources\PlayerResource;
@@ -60,7 +61,9 @@ class GalaxyController extends BaseApiController
         $myGalaxyIds = collect(array_unique(array_merge($playerGalaxyIds, $ownedGalaxyIds)));
 
         // Get user's galaxies with player's last_accessed_at for ordering
+        // Exclude mirror universes - they are accessed via gates, not direct selection
         $myGames = Galaxy::query()
+            ->excludeMirrors()
             ->select(['galaxies.id', 'galaxies.uuid', 'galaxies.name', 'galaxies.width', 'galaxies.height', 'galaxies.status', 'galaxies.game_mode', 'galaxies.size_tier', 'galaxies.max_players'])
             ->whereIn('galaxies.id', $myGalaxyIds)
             ->leftJoin('players', function ($join) use ($user) {
@@ -74,7 +77,9 @@ class GalaxyController extends BaseApiController
         // Get open galaxies: active, under player cap, not already joined, and either:
         // - owner_user_id IS NULL (public game), or
         // - game_mode is multiplayer/mixed
+        // Exclude mirror universes - they are accessed via gates, not direct selection
         $openGames = Galaxy::query()
+            ->excludeMirrors()
             ->select(['id', 'uuid', 'name', 'width', 'height', 'status', 'game_mode', 'size_tier', 'max_players'])
             ->where('status', GalaxyStatus::ACTIVE)
             ->whereNotIn('id', $myGalaxyIds)
@@ -128,7 +133,9 @@ class GalaxyController extends BaseApiController
         $myGalaxyIds = collect(array_unique(array_merge($playerGalaxyIds, $ownedGalaxyIds)));
 
         // Get user's galaxies with player's last_accessed_at for ordering
+        // Exclude mirror universes - they are accessed via gates, not direct selection
         $myGames = Galaxy::query()
+            ->excludeMirrors()
             ->select(['galaxies.id', 'galaxies.uuid', 'galaxies.name', 'galaxies.width', 'galaxies.height', 'galaxies.status', 'galaxies.game_mode', 'galaxies.size_tier', 'galaxies.max_players'])
             ->whereIn('galaxies.id', $myGalaxyIds)
             ->leftJoin('players', function ($join) use ($user) {
@@ -140,8 +147,10 @@ class GalaxyController extends BaseApiController
             ->get();
 
         // Open games are cached (5 minutes) - includes games with no owner or multiplayer/mixed mode
+        // Exclude mirror universes - they are accessed via gates, not direct selection
         $openGames = cache()->remember('galaxies:open_games', 300, function () {
             return Galaxy::query()
+                ->excludeMirrors()
                 ->select(['id', 'uuid', 'name', 'width', 'height', 'status', 'game_mode', 'size_tier', 'max_players', 'owner_user_id'])
                 ->where('status', GalaxyStatus::ACTIVE)
                 ->where(function ($query) {
@@ -424,7 +433,7 @@ class GalaxyController extends BaseApiController
 
         $player = Player::where('user_id', $user->id)
             ->where('galaxy_id', $galaxy->id)
-            ->with(['galaxy', 'currentLocation', 'activeShip.ship'])
+            ->with(['galaxy', 'currentLocation.sector', 'activeShip.ship'])
             ->first();
 
         if (! $player) {
@@ -436,10 +445,18 @@ class GalaxyController extends BaseApiController
             );
         }
 
-        return $this->success(
-            new PlayerResource($player),
-            'Player found'
-        );
+        $currentSector = $player->currentLocation?->sector;
+        $totalSectors = $galaxy->sectors()->count();
+
+        return $this->success([
+            'player' => new PlayerResource($player),
+            'sector' => $currentSector ? [
+                'uuid' => $currentSector->uuid,
+                'name' => $currentSector->name,
+                'grid' => ['x' => $currentSector->grid_x, 'y' => $currentSector->grid_y],
+            ] : null,
+            'total_sectors' => $totalSectors,
+        ], 'Player found');
     }
 
     /**
@@ -469,13 +486,22 @@ class GalaxyController extends BaseApiController
         // Check if user already has a player in this galaxy
         $existingPlayer = Player::where('user_id', $user->id)
             ->where('galaxy_id', $galaxy->id)
-            ->with(['galaxy', 'currentLocation', 'activeShip.ship'])
+            ->with(['galaxy', 'currentLocation.sector', 'activeShip.ship'])
             ->first();
 
         if ($existingPlayer) {
+            $currentSector = $existingPlayer->currentLocation?->sector;
+            $totalSectors = $galaxy->sectors()->count();
+
             return $this->success([
                 'player' => new PlayerResource($existingPlayer),
                 'created' => false,
+                'sector' => $currentSector ? [
+                    'uuid' => $currentSector->uuid,
+                    'name' => $currentSector->name,
+                    'grid' => ['x' => $currentSector->grid_x, 'y' => $currentSector->grid_y],
+                ] : null,
+                'total_sectors' => $totalSectors,
             ], 'Player already exists in this galaxy');
         }
 
@@ -567,21 +593,32 @@ class GalaxyController extends BaseApiController
                 'status' => 'active',
             ]);
 
-            // Give player a starting ship (Scout class)
-            $scoutShip = Ship::where('class', 'scout')->first();
-            if ($scoutShip) {
+            // Give player a starting ship (Starter class - Sparrow Light Freighter)
+            $starterShip = Ship::where('class', 'starter')->first();
+            if (! $starterShip) {
+                // Fallback: seed ships if not present
+                (new \Database\Seeders\ShipTypesSeeder)->run();
+                $starterShip = Ship::where('class', 'starter')->first();
+            }
+
+            if ($starterShip) {
+                // Get ship attributes for starting stats
+                $attrs = $starterShip->attributes ?? [];
+
                 PlayerShip::create([
                     'player_id' => $player->id,
-                    'ship_id' => $scoutShip->id,
-                    'name' => "{$player->call_sign}'s Scout",
-                    'current_fuel' => $scoutShip->base_max_fuel ?? 100,
-                    'max_fuel' => $scoutShip->base_max_fuel ?? 100,
-                    'hull' => $scoutShip->base_hull ?? 100,
-                    'max_hull' => $scoutShip->base_hull ?? 100,
-                    'weapons' => $scoutShip->base_weapons ?? 10,
-                    'cargo_hold' => $scoutShip->base_cargo ?? 100,
-                    'sensors' => $scoutShip->base_sensors ?? 1,
-                    'warp_drive' => $scoutShip->base_warp_drive ?? 1,
+                    'ship_id' => $starterShip->id,
+                    'name' => "{$player->call_sign}'s Sparrow",
+                    'current_fuel' => $attrs['max_fuel'] ?? 100,
+                    'max_fuel' => $attrs['max_fuel'] ?? 100,
+                    'hull' => $starterShip->hull_strength ?? 80,
+                    'max_hull' => $starterShip->hull_strength ?? 80,
+                    'weapons' => $attrs['starting_weapons'] ?? 15,
+                    'cargo_hold' => $starterShip->cargo_capacity ?? 50,
+                    'sensors' => $attrs['starting_sensors'] ?? 1,
+                    'warp_drive' => $attrs['starting_warp_drive'] ?? 1,
+                    'shields' => $starterShip->shield_strength ?? 40,
+                    'max_shields' => $starterShip->shield_strength ?? 40,
                     'is_active' => true,
                     'status' => 'operational',
                 ]);
@@ -590,10 +627,7 @@ class GalaxyController extends BaseApiController
             // === SPAWN DISCOVERY ===
 
             // Ensure spawn system has a name
-            if (empty($startingLocation->name)) {
-                $startingLocation->name = $this->generateSystemName($startingLocation);
-                $startingLocation->save();
-            }
+            SystemNameGenerator::ensureName($startingLocation);
 
             // Create minimum scan for spawn location (level 1)
             $scanService = app(SystemScanService::class);
@@ -620,11 +654,20 @@ class GalaxyController extends BaseApiController
 
             DB::commit();
 
-            $player->load(['galaxy', 'currentLocation', 'activeShip.ship']);
+            $player->load(['galaxy', 'currentLocation.sector', 'activeShip.ship']);
+
+            $currentSector = $player->currentLocation?->sector;
+            $totalSectors = $galaxy->sectors()->count();
 
             return $this->success([
                 'player' => new PlayerResource($player),
                 'created' => true,
+                'sector' => $currentSector ? [
+                    'uuid' => $currentSector->uuid,
+                    'name' => $currentSector->name,
+                    'grid' => ['x' => $currentSector->grid_x, 'y' => $currentSector->grid_y],
+                ] : null,
+                'total_sectors' => $totalSectors,
             ], 'Successfully joined galaxy', 201);
 
         } catch (\Exception $e) {
@@ -635,29 +678,5 @@ class GalaxyController extends BaseApiController
                 'JOIN_FAILED'
             );
         }
-    }
-
-    /**
-     * Generate a name for a system that doesn't have one.
-     *
-     * @param  \App\Models\PointOfInterest  $poi  The POI to name
-     * @return string Generated name
-     */
-    private function generateSystemName(\App\Models\PointOfInterest $poi): string
-    {
-        // Use coordinates as a fallback
-        $x = (int) $poi->x;
-        $y = (int) $poi->y;
-
-        // Generate a phonetic name based on coordinates
-        $prefixes = ['Al', 'Be', 'Ca', 'De', 'El', 'Fa', 'Ga', 'Ha', 'In', 'Jo', 'Ka', 'La', 'Ma', 'Na', 'Ol', 'Pa', 'Qu', 'Ra', 'Sa', 'Ta'];
-        $middles = ['ra', 'ri', 'ro', 'ta', 'ti', 'na', 'ni', 'sa', 'si', 'ma'];
-        $suffixes = ['nis', 'ria', 'tis', 'ron', 'lan', 'dar', 'nis', 'per', 'tar', 'ion'];
-
-        $prefixIndex = ($x + $y) % count($prefixes);
-        $middleIndex = abs($x - $y) % count($middles);
-        $suffixIndex = ($x * $y) % count($suffixes);
-
-        return $prefixes[$prefixIndex].$middles[$middleIndex].$suffixes[$suffixIndex];
     }
 }

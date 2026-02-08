@@ -55,6 +55,8 @@ class ShipResource extends JsonResource
             ),
             'hull' => $this->hull,
             'max_hull' => $this->max_hull,
+            'shields' => $this->shields ?? 0,
+            'max_shields' => $this->max_shields ?? 0,
             'weapons' => $this->weapons,
             'cargo_hold' => $this->cargo_hold,
             'sensors' => $this->sensors,

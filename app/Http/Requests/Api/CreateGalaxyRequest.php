@@ -30,7 +30,7 @@ class CreateGalaxyRequest extends FormRequest
             'height' => ['required_without:size_tier', 'integer', 'min:100', 'max:3000'],
             'stars' => ['required_without:size_tier', 'integer', 'min:50', 'max:10000'],
             'grid_size' => ['nullable', 'integer', 'min:5', 'max:50'],
-            'game_mode' => ['required', Rule::in(['multiplayer', 'single_player', 'mixed'])],
+            'game_mode' => ['required', Rule::in(['multiplayer', 'single_player'])],
             // NPC parameters removed - sensible defaults are applied based on size_tier
             'skip_mirror' => ['nullable', 'boolean'],
             'skip_pirates' => ['nullable', 'boolean'],
@@ -55,7 +55,7 @@ class CreateGalaxyRequest extends FormRequest
             'stars.min' => 'Galaxy must have at least 50 stars.',
             'stars.max' => 'Galaxy cannot have more than 10000 stars.',
             'stars.required_without' => 'Star count is required when not using a size tier.',
-            'game_mode.in' => 'Game mode must be one of: multiplayer, single_player, mixed.',
+            'game_mode.in' => 'Game mode must be one of: multiplayer, single_player.',
             'size_tier.in' => 'Size tier must be one of: small, medium, large.',
         ];
     }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\PointsOfInterest\PointOfInterestType;
+use App\Http\Controllers\Api\Builders\PoiCategorizer;
 use App\Models\Player;
 use App\Models\PointOfInterest;
 use App\Models\Sector;
@@ -144,11 +145,23 @@ class LocationController extends BaseApiController
 
     /**
      * Build detailed response for a known system.
+     *
+     * Optimized to load all related data once and pass through to helpers.
      */
     private function buildKnownSystemResponse(Player $player, PointOfInterest $poi, int $scanLevel): array
     {
         // Get sector info
         $sector = $poi->sector ?? $this->findSectorByCoordinates($poi->galaxy_id, $poi->x, $poi->y);
+
+        // Load children ONCE for reuse across multiple methods
+        $children = $poi->children()->get();
+
+        // Load gates ONCE with all needed relationships for reuse
+        $gates = $poi->outgoingGates()
+            ->where('is_hidden', false)
+            ->where('status', 'active')
+            ->with(['destinationPoi', 'warpLanePirate'])
+            ->get();
 
         $response = [
             'location' => 'star_system',
@@ -161,15 +174,15 @@ class LocationController extends BaseApiController
             'is_current_location' => $player->current_poi_id === $poi->id,
         ];
 
-        // Inhabited info
-        $response['inhabited'] = $this->getInhabitedInfo($poi, $scanLevel);
+        // Inhabited info - pass pre-loaded children
+        $response['inhabited'] = $this->getInhabitedInfo($poi, $scanLevel, $children);
 
-        // Facilities and services
-        $response['has'] = $this->getFacilitiesInfo($player, $poi, $scanLevel);
+        // Facilities and services - pass pre-loaded children and gates
+        $response['has'] = $this->getFacilitiesInfo($player, $poi, $scanLevel, $children, $gates);
 
-        // Danger info (if high enough scan level)
+        // Danger info (if high enough scan level) - pass pre-loaded data
         if ($scanLevel >= 3) {
-            $response['danger'] = $this->getDangerInfo($poi, $scanLevel);
+            $response['danger'] = $this->getDangerInfo($poi, $scanLevel, $gates, $children);
         }
 
         return $response;
@@ -177,8 +190,10 @@ class LocationController extends BaseApiController
 
     /**
      * Get inhabited info for a system.
+     *
+     * @param  \Illuminate\Support\Collection|null  $children  Pre-loaded children collection
      */
-    private function getInhabitedInfo(PointOfInterest $poi, int $scanLevel): array
+    private function getInhabitedInfo(PointOfInterest $poi, int $scanLevel, ?\Illuminate\Support\Collection $children = null): array
     {
         $info = [
             'is_inhabited' => $poi->is_inhabited,
@@ -188,12 +203,12 @@ class LocationController extends BaseApiController
             return $info;
         }
 
-        // Load children (planets, moons, stations)
-        $children = $poi->children()->get();
+        // Use pre-loaded children or load once
+        $children = $children ?? $poi->children()->get();
 
         $bodies = [];
         foreach ($children as $child) {
-            $bodyType = $this->getBodyType($child->type);
+            $bodyType = PoiCategorizer::getBodyTypeLabel($child->type);
             if ($bodyType) {
                 $bodies[] = [
                     'type' => $bodyType,
@@ -217,21 +232,28 @@ class LocationController extends BaseApiController
 
     /**
      * Get facilities and services info for a system.
+     *
+     * @param  \Illuminate\Support\Collection|null  $children  Pre-loaded children collection
+     * @param  \Illuminate\Support\Collection|null  $gates  Pre-loaded gates collection
      */
-    private function getFacilitiesInfo(Player $player, PointOfInterest $poi, int $scanLevel): array
+    private function getFacilitiesInfo(Player $player, PointOfInterest $poi, int $scanLevel, ?\Illuminate\Support\Collection $children = null, ?\Illuminate\Support\Collection $gates = null): array
     {
         $facilities = [];
 
-        // Gates (check player's lane knowledge)
-        $gates = $poi->outgoingGates()
+        // Use pre-loaded gates or load once with all relationships
+        $gates = $gates ?? $poi->outgoingGates()
             ->where('is_hidden', false)
             ->where('status', 'active')
             ->with('destinationPoi')
             ->get();
 
+        // Use bulk check instead of N individual queries
+        $gateIds = $gates->pluck('id')->toArray();
+        $knownLanes = $this->laneKnowledgeService->bulkKnowsLane($player, $gateIds);
+
         $knownGates = [];
         foreach ($gates as $gate) {
-            $knowsLane = $this->laneKnowledgeService->knowsLane($player, $gate);
+            $knowsLane = $knownLanes[$gate->id] ?? false;
             $destination = $gate->destinationPoi;
 
             if ($knowsLane || $poi->is_inhabited) {
@@ -283,10 +305,9 @@ class LocationController extends BaseApiController
             $services[] = 'plans_shop';
         }
 
-        // Salvage yard (check children for derelicts)
-        $hasDerelicts = $poi->children()
-            ->where('type', PointOfInterestType::DERELICT)
-            ->exists();
+        // Salvage yard (check children for derelicts - use pre-loaded collection)
+        $children = $children ?? $poi->children()->get();
+        $hasDerelicts = $children->contains(fn ($c) => $c->type === PointOfInterestType::DERELICT);
         if ($hasDerelicts) {
             $services[] = 'salvage_yard';
         }
@@ -297,7 +318,7 @@ class LocationController extends BaseApiController
 
         // Orbital defenses (if scan level high enough)
         if ($scanLevel >= 4 && $poi->is_fortified) {
-            $facilities['orbital_defenses'] = $this->getOrbitalDefenses($poi);
+            $facilities['orbital_defenses'] = $this->getOrbitalDefenses($poi, $children);
         }
 
         return $facilities;
@@ -305,13 +326,15 @@ class LocationController extends BaseApiController
 
     /**
      * Get orbital defense info.
+     *
+     * @param  \Illuminate\Support\Collection|null  $children  Pre-loaded children collection
      */
-    private function getOrbitalDefenses(PointOfInterest $poi): array
+    private function getOrbitalDefenses(PointOfInterest $poi, ?\Illuminate\Support\Collection $children = null): array
     {
         $defenses = [];
 
-        // Check for defense installations in children
-        $children = $poi->children()->get();
+        // Use pre-loaded children or load once
+        $children = $children ?? $poi->children()->get();
 
         foreach ($children as $child) {
             $attrs = $child->attributes ?? [];
@@ -347,17 +370,23 @@ class LocationController extends BaseApiController
 
     /**
      * Get danger info for a system.
+     *
+     * @param  \Illuminate\Support\Collection|null  $gates  Pre-loaded gates with warpLanePirate relationship
+     * @param  \Illuminate\Support\Collection|null  $children  Pre-loaded children collection
      */
-    private function getDangerInfo(PointOfInterest $poi, int $scanLevel): array
+    private function getDangerInfo(PointOfInterest $poi, int $scanLevel, ?\Illuminate\Support\Collection $gates = null, ?\Illuminate\Support\Collection $children = null): array
     {
         $danger = [
             'threat_level' => 'low',
         ];
 
-        // Check for pirates on warp lanes
-        $pirateGates = $poi->outgoingGates()
-            ->whereHas('warpLanePirate')
-            ->count();
+        // Use pre-loaded gates or load with pirate relationship
+        if ($gates === null) {
+            $gates = $poi->outgoingGates()->with('warpLanePirate')->get();
+        }
+
+        // Count pirate-infested gates from pre-loaded collection
+        $pirateGates = $gates->filter(fn ($g) => $g->warpLanePirate !== null)->count();
 
         if ($pirateGates > 0 && $scanLevel >= 5) {
             $danger['pirate_presence'] = true;
@@ -371,11 +400,10 @@ class LocationController extends BaseApiController
             $danger['threat_level'] = 'medium';
         }
 
-        // Check for anomalies (scan level 6+)
+        // Check for anomalies (scan level 6+) - use pre-loaded children
         if ($scanLevel >= 6) {
-            $anomalies = $poi->children()
-                ->where('type', PointOfInterestType::ANOMALY)
-                ->count();
+            $children = $children ?? $poi->children()->get();
+            $anomalies = $children->filter(fn ($c) => $c->type === PointOfInterestType::ANOMALY)->count();
 
             if ($anomalies > 0) {
                 $danger['anomalies'] = $anomalies;
@@ -383,35 +411,6 @@ class LocationController extends BaseApiController
         }
 
         return $danger;
-    }
-
-    /**
-     * Get body type label.
-     */
-    private function getBodyType(?PointOfInterestType $type): ?string
-    {
-        if (! $type) {
-            return null;
-        }
-
-        return match ($type) {
-            PointOfInterestType::TERRESTRIAL,
-            PointOfInterestType::SUPER_EARTH,
-            PointOfInterestType::GAS_GIANT,
-            PointOfInterestType::ICE_GIANT,
-            PointOfInterestType::HOT_JUPITER,
-            PointOfInterestType::OCEAN,
-            PointOfInterestType::LAVA,
-            PointOfInterestType::CHTHONIC,
-            PointOfInterestType::PLANET,
-            PointOfInterestType::DWARF_PLANET => 'planet',
-            PointOfInterestType::MOON => 'moon',
-            PointOfInterestType::ASTEROID_BELT => 'asteroid_belt',
-            PointOfInterestType::ASTEROID => 'asteroid',
-            PointOfInterestType::DERELICT => 'derelict',
-            PointOfInterestType::STAR => 'star',
-            default => null,
-        };
     }
 
     /**

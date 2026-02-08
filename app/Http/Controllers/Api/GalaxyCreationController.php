@@ -72,15 +72,13 @@ class GalaxyCreationController extends BaseApiController
 
             $options = $request->validatedWithDefaults();
 
-            // Set sensible NPC defaults based on size_tier
+            // Set sensible NPC defaults based on size_tier - NPCs are always generated
             $npcDefaults = $this->getNpcDefaultsForTier($sizeTier);
             $options['npc_count'] = $npcDefaults['count'];
             $options['npc_difficulty'] = $npcDefaults['difficulty'];
 
-            // Add owner user ID for single player galaxies
-            if (in_array($options['game_mode'], ['single_player', 'mixed'])) {
-                $options['owner_user_id'] = $request->user()->id;
-            }
+            // Set owner for tracking purposes
+            $options['owner_user_id'] = $request->user()->id;
 
             $result = $this->orchestrator->generate($sizeTier, $options);
 
@@ -185,20 +183,7 @@ class GalaxyCreationController extends BaseApiController
             return $this->notFound('Galaxy not found');
         }
 
-        // Check if galaxy allows NPCs
-        if (! $galaxy->allowsNpcs()) {
-            return $this->error(
-                'This galaxy does not allow NPCs. Game mode must be single_player or mixed.',
-                'NPC_NOT_ALLOWED',
-                ['game_mode' => $galaxy->game_mode],
-                422
-            );
-        }
-
-        // Check ownership for single_player galaxies
-        if ($galaxy->isSinglePlayer() && $galaxy->owner_user_id !== $request->user()->id) {
-            return $this->forbidden('You do not own this galaxy');
-        }
+        // All galaxies now support NPCs - no game mode check needed
 
         try {
             $result = $this->galaxyCreationService->addNpcsToGalaxy(
@@ -375,8 +360,8 @@ class GalaxyCreationController extends BaseApiController
             return $this->notFound('NPC not found');
         }
 
-        // Check ownership for single_player galaxies
-        if ($npc->galaxy->isSinglePlayer() && $npc->galaxy->owner_user_id !== $request->user()->id) {
+        // Check ownership - only the galaxy owner can delete NPCs
+        if ($npc->galaxy->owner_user_id && $npc->galaxy->owner_user_id !== $request->user()->id) {
             return $this->forbidden('You do not own this galaxy');
         }
 

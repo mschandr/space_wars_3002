@@ -127,34 +127,37 @@ class TradingHubGenerateCommand extends Command
         ];
 
         if ($mineralCount > 0) {
-            $totalInventoryItems = 0;
-            foreach ($hubs as $hub) {
-                $totalInventoryItems += $hub->inventories()->count();
-            }
+            // Use single query to count all inventory items
+            $hubIds = $hubs->pluck('id');
+            $totalInventoryItems = \App\Models\TradingHubInventory::whereIn('trading_hub_id', $hubIds)->count();
             $tableData[] = ['Total Inventory Items', $totalInventoryItems];
             $tableData[] = ['Avg Items per Hub', round($totalInventoryItems / $totalHubs, 1)];
         }
 
         $this->table(['Metric', 'Value'], $tableData);
 
-        // Show individual hubs
-        $this->newLine();
-        $this->info('Trading Hubs Created:');
-        $hubTable = [];
-        foreach ($hubs as $hub) {
-            $poi = $hub->pointOfInterest;
-            $hubTable[] = [
-                $hub->name,
-                $hub->type,
-                $hub->gate_count,
-                $hub->has_salvage_yard ? 'Yes' : 'No',
-                $hub->inventories()->count(),
-            ];
+        // Only show individual hubs if there are fewer than 50 (for large galaxies, skip the detail table)
+        if ($totalHubs <= 50) {
+            $this->newLine();
+            $this->info('Trading Hubs Created:');
+            $hubTable = [];
+            foreach ($hubs as $hub) {
+                $hubTable[] = [
+                    $hub->name,
+                    $hub->type,
+                    $hub->gate_count,
+                    $hub->has_salvage_yard ? 'Yes' : 'No',
+                    $hub->inventories()->count(),
+                ];
+            }
+            $this->table(
+                ['Name', 'Type', 'Gates', 'Salvage', 'Minerals'],
+                $hubTable
+            );
+        } else {
+            $this->newLine();
+            $this->info("(Skipping individual hub listing for {$totalHubs} hubs - too many to display)");
         }
-        $this->table(
-            ['Name', 'Type', 'Gates', 'Salvage', 'Minerals'],
-            $hubTable
-        );
 
         return Command::SUCCESS;
     }

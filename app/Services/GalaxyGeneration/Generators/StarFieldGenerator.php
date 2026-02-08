@@ -50,28 +50,37 @@ final class StarFieldGenerator implements GeneratorInterface
         $now = now();
         $version = $this->getVersion();
 
-        // Generate core stars
+        // Generate and insert core stars (free memory before outer)
         $corePoints = $this->generateCorePoints($starCounts['core'], $coreBounds);
         $coreRows = $this->buildStarRows($galaxy->id, $corePoints, RegionType::CORE, true, $now, $version);
+        $coreCount = count($coreRows);
         $metrics->setCount('core_points_generated', count($corePoints));
+        unset($corePoints); // Free memory
 
-        // Generate outer stars
+        $coreInserted = BulkInserter::insert('points_of_interest', $coreRows, 500);
+        unset($coreRows); // Free memory
+        gc_collect_cycles();
+
+        // Generate and insert outer stars
         $outerPoints = $this->generateOuterPoints($galaxy, $starCounts['outer'], $coreBounds);
         $outerRows = $this->buildStarRows($galaxy->id, $outerPoints, RegionType::OUTER, false, $now, $version);
+        $outerCount = count($outerRows);
         $metrics->setCount('outer_points_generated', count($outerPoints));
+        unset($outerPoints); // Free memory
 
-        // Bulk insert all stars
-        $allRows = array_merge($coreRows, $outerRows);
-        $inserted = BulkInserter::insert('points_of_interest', $allRows);
+        $outerInserted = BulkInserter::insert('points_of_interest', $outerRows, 500);
+        unset($outerRows); // Free memory
+        gc_collect_cycles();
 
-        $metrics->setCount('stars_inserted', $inserted);
-        $metrics->setCount('core_stars', count($coreRows));
-        $metrics->setCount('outer_stars', count($outerRows));
+        $totalInserted = $coreInserted + $outerInserted;
+        $metrics->setCount('stars_inserted', $totalInserted);
+        $metrics->setCount('core_stars', $coreCount);
+        $metrics->setCount('outer_stars', $outerCount);
 
         return GenerationResult::success($metrics, [
-            'star_count' => $inserted,
-            'core_star_count' => count($coreRows),
-            'outer_star_count' => count($outerRows),
+            'star_count' => $totalInserted,
+            'core_star_count' => $coreCount,
+            'outer_star_count' => $outerCount,
         ]);
     }
 

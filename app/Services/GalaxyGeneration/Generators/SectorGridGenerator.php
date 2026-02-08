@@ -8,6 +8,7 @@ use App\Services\GalaxyGeneration\Data\GenerationConfig;
 use App\Services\GalaxyGeneration\Data\GenerationMetrics;
 use App\Services\GalaxyGeneration\Data\GenerationResult;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -71,6 +72,21 @@ final class SectorGridGenerator implements GeneratorInterface
      */
     private function createSectorGrid(Galaxy $galaxy, int $gridSize, float $sectorWidth, float $sectorHeight): array
     {
+        // Clean up any orphaned sectors from previous failed transactions
+        // This handles the edge case where a previous attempt failed after inserting sectors
+        // but before the transaction committed (auto-increment IDs may have advanced)
+        $existingSectors = DB::table('sectors')
+            ->where('galaxy_id', $galaxy->id)
+            ->count();
+
+        if ($existingSectors > 0) {
+            Log::warning('Found orphaned sectors for galaxy, cleaning up', [
+                'galaxy_id' => $galaxy->id,
+                'orphaned_count' => $existingSectors,
+            ]);
+            DB::table('sectors')->where('galaxy_id', $galaxy->id)->delete();
+        }
+
         $now = now()->format('Y-m-d H:i:s');
 
         $rows = [];

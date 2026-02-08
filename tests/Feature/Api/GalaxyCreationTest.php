@@ -79,14 +79,14 @@ class GalaxyCreationTest extends TestCase
         $response = $this->actingAs($this->user)
             ->postJson('/api/galaxies/create', [
                 'size_tier' => 'medium',
-                'game_mode' => 'single_player',
+                'game_mode' => 'multiplayer',
                 'skip_mirror' => true,
                 'skip_precursors' => true,
             ]);
 
         $response->assertStatus(201)
             ->assertJsonPath('data.config.tier', 'medium')
-            ->assertJsonPath('data.config.game_mode', 'single_player')
+            ->assertJsonPath('data.config.game_mode', 'multiplayer')
             ->assertJsonPath('data.config.dimensions.width', 1500)
             ->assertJsonPath('data.config.dimensions.height', 1500);
     }
@@ -106,9 +106,26 @@ class GalaxyCreationTest extends TestCase
         $response = $this->actingAs($this->user)
             ->postJson('/api/galaxies/create', [
                 'size_tier' => 'small',
+                'skip_mirror' => true,
+                'skip_precursors' => true,
             ]);
 
+        // game_mode is required
         $response->assertStatus(422);
+    }
+
+    public function test_can_create_single_player_galaxy(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/galaxies/create', [
+                'size_tier' => 'small',
+                'game_mode' => 'single_player',
+                'skip_mirror' => true,
+                'skip_precursors' => true,
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.config.game_mode', 'single_player');
     }
 
     public function test_validation_rejects_invalid_size_tier(): void

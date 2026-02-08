@@ -68,23 +68,30 @@ final class GalaxyGenerationOrchestrator
      */
     public function generate(GalaxySizeTier $tier, array $options = []): array
     {
+        // Increase memory limit for large galaxies
+        $this->setMemoryLimitForTier($tier);
+
         $this->totalMetrics = new GenerationMetrics;
         $this->results = [];
 
         $config = GenerationConfig::fromTier($tier, $options);
 
-        try {
-            DB::beginTransaction();
+        $galaxy = null;
 
-            // Step 1: Seed prerequisites (global, idempotent)
+        try {
+            // Step 1: Seed prerequisites (global, idempotent) - no transaction needed
             $this->seedPrerequisites();
 
-            // Step 2: Create galaxy record
+            // Step 2: Create galaxy record in its own transaction
+            DB::beginTransaction();
             $galaxy = $this->createGalaxyRecord($config);
+            DB::commit();
+
             $this->totalMetrics->setCustom('galaxy_id', $galaxy->id);
             $this->totalMetrics->setCustom('galaxy_uuid', $galaxy->uuid);
 
-            // Step 3: Run generator pipeline
+            // Step 3: Run generator pipeline - each generator commits its own work
+            // This prevents lock wait timeouts on large galaxies
             $context = ['config' => $config];
 
             foreach (self::GENERATOR_PIPELINE as $generatorClass) {
@@ -97,7 +104,14 @@ final class GalaxyGenerationOrchestrator
                 }
 
                 // Merge result data into context for next generator
-                $context = array_merge($context, $result->data);
+                // but exclude large arrays that aren't needed downstream
+                $resultData = $result->data;
+                unset($resultData['moon_specs']); // Large array, not needed downstream
+                $context = array_merge($context, $resultData);
+
+                // Free memory after each generator
+                unset($result, $resultData);
+                $this->freeMemory();
             }
 
             // Step 4: Finalize galaxy
@@ -105,14 +119,16 @@ final class GalaxyGenerationOrchestrator
             $galaxy->generation_completed_at = now();
             $galaxy->save();
 
-            DB::commit();
-
             $this->totalMetrics->complete();
 
             return $this->buildFinalResult($galaxy, $config, true);
 
         } catch (\Throwable $e) {
-            DB::rollBack();
+            // Clean up partial galaxy if creation failed
+            if ($galaxy && $galaxy->exists) {
+                Log::warning('Cleaning up failed galaxy generation', ['galaxy_id' => $galaxy->id]);
+                $this->cleanupFailedGalaxy($galaxy);
+            }
 
             Log::error('Galaxy generation failed', [
                 'tier' => $tier->value,
@@ -276,5 +292,99 @@ final class GalaxyGenerationOrchestrator
         }
 
         return $stats;
+    }
+
+    /**
+     * Set memory limit based on galaxy tier.
+     *
+     * Large and massive galaxies require more memory for:
+     * - Building thousands of star/planet rows
+     * - Spatial index structures for warp gates (holds all stars)
+     * - Context accumulation between generators
+     * - UUID generation overhead
+     */
+    private function setMemoryLimitForTier(GalaxySizeTier $tier): void
+    {
+        // Memory limits account for mirror universe generation which doubles the workload
+        $memoryLimit = match ($tier) {
+            GalaxySizeTier::SMALL => '512M',
+            GalaxySizeTier::MEDIUM => '1024M',
+            GalaxySizeTier::LARGE => '1536M',
+            GalaxySizeTier::MASSIVE => '2048M',
+        };
+
+        ini_set('memory_limit', $memoryLimit);
+
+        Log::info("Set memory limit for {$tier->value} galaxy", ['limit' => $memoryLimit]);
+    }
+
+    /**
+     * Attempt to free memory by triggering garbage collection.
+     */
+    private function freeMemory(): void
+    {
+        if (function_exists('gc_collect_cycles')) {
+            gc_collect_cycles();
+        }
+    }
+
+    /**
+     * Clean up a failed galaxy generation by removing all related data.
+     *
+     * Since generators commit their own work, we need to delete any
+     * partial data that was inserted before the failure.
+     */
+    private function cleanupFailedGalaxy(Galaxy $galaxy): void
+    {
+        try {
+            // Delete in order of dependencies (children before parents)
+            // Use raw queries for performance on large datasets
+
+            $galaxyId = $galaxy->id;
+
+            // Delete warp gates
+            DB::table('warp_gates')->where('galaxy_id', $galaxyId)->delete();
+
+            // Delete trading hub inventories (via trading hubs)
+            $hubIds = DB::table('trading_hubs')
+                ->join('points_of_interest', 'trading_hubs.poi_id', '=', 'points_of_interest.id')
+                ->where('points_of_interest.galaxy_id', $galaxyId)
+                ->pluck('trading_hubs.id');
+
+            if ($hubIds->isNotEmpty()) {
+                DB::table('trading_hub_inventories')->whereIn('trading_hub_id', $hubIds)->delete();
+                DB::table('salvage_yard_inventories')->whereIn('trading_hub_id', $hubIds)->delete();
+                DB::table('trading_hubs')->whereIn('id', $hubIds)->delete();
+            }
+
+            // Delete stellar cartographers
+            DB::table('stellar_cartographers')
+                ->join('points_of_interest', 'stellar_cartographers.poi_id', '=', 'points_of_interest.id')
+                ->where('points_of_interest.galaxy_id', $galaxyId)
+                ->delete();
+
+            // Delete sectors
+            DB::table('sectors')->where('galaxy_id', $galaxyId)->delete();
+
+            // Delete points of interest (will cascade to children via parent_poi_id)
+            DB::table('points_of_interest')->where('galaxy_id', $galaxyId)->delete();
+
+            // Delete the mirror galaxy if it exists
+            $mirrorGalaxy = $galaxy->getPairedGalaxy();
+            if ($mirrorGalaxy) {
+                $this->cleanupFailedGalaxy($mirrorGalaxy);
+            }
+
+            // Finally delete the galaxy itself
+            $galaxy->delete();
+
+            Log::info('Cleaned up failed galaxy', ['galaxy_id' => $galaxyId]);
+
+        } catch (\Throwable $e) {
+            Log::error('Failed to clean up galaxy', [
+                'galaxy_id' => $galaxy->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

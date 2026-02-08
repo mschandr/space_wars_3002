@@ -325,4 +325,124 @@ class NavigationTest extends TestCase
 
         $response->assertStatus(404);
     }
+
+    /**
+     * Test user can get local bodies (planets, moons, etc.) at current location
+     */
+    public function test_user_can_get_local_bodies(): void
+    {
+        // Create planetary bodies orbiting the current star
+        $planet1 = PointOfInterest::factory()->create([
+            'galaxy_id' => $this->galaxy->id,
+            'type' => PointOfInterestType::TERRESTRIAL,
+            'parent_poi_id' => $this->currentLocation->id,
+            'name' => 'Planet Alpha',
+            'orbital_index' => 1,
+            'is_inhabited' => true,
+        ]);
+
+        $planet2 = PointOfInterest::factory()->create([
+            'galaxy_id' => $this->galaxy->id,
+            'type' => PointOfInterestType::GAS_GIANT,
+            'parent_poi_id' => $this->currentLocation->id,
+            'name' => 'Planet Beta',
+            'orbital_index' => 3,
+            'is_inhabited' => false,
+        ]);
+
+        // Create a moon orbiting the gas giant
+        PointOfInterest::factory()->create([
+            'galaxy_id' => $this->galaxy->id,
+            'type' => PointOfInterestType::MOON,
+            'parent_poi_id' => $planet2->id,
+            'name' => 'Moon Beta-1',
+            'orbital_index' => 1,
+        ]);
+
+        // Create an asteroid belt
+        PointOfInterest::factory()->create([
+            'galaxy_id' => $this->galaxy->id,
+            'type' => PointOfInterestType::ASTEROID_BELT,
+            'parent_poi_id' => $this->currentLocation->id,
+            'name' => 'Inner Asteroid Belt',
+            'orbital_index' => 2,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->getJson("/api/players/{$this->player->uuid}/local-bodies");
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'system' => ['uuid', 'name', 'type', 'coordinates', 'is_inhabited'],
+                    'sector',
+                    'bodies' => [
+                        'planets',
+                        'moons',
+                        'asteroid_belts',
+                        'stations',
+                        'other',
+                    ],
+                    'summary' => [
+                        'total_bodies',
+                        'planets',
+                        'moons',
+                        'asteroid_belts',
+                        'stations',
+                    ],
+                ],
+            ])
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'system' => [
+                        'uuid' => $this->currentLocation->uuid,
+                    ],
+                    'summary' => [
+                        'total_bodies' => 3, // 2 planets + 1 asteroid belt (moon is child of planet)
+                        'planets' => 2,
+                        'moons' => 0, // Direct children only, moon is child of planet
+                        'asteroid_belts' => 1,
+                    ],
+                ],
+            ]);
+
+        // Verify planet data structure
+        $planets = $response->json('data.bodies.planets');
+        $this->assertCount(2, $planets);
+        $this->assertEquals('Planet Alpha', $planets[0]['name']); // Ordered by orbital_distance
+        $this->assertEquals('Planet Beta', $planets[1]['name']);
+        $this->assertTrue($planets[0]['is_inhabited']);
+        $this->assertFalse($planets[1]['is_inhabited']);
+
+        // Verify gas giant has moons listed
+        $this->assertArrayHasKey('moons', $planets[1]);
+        $this->assertCount(1, $planets[1]['moons']);
+        $this->assertEquals('Moon Beta-1', $planets[1]['moons'][0]['name']);
+    }
+
+    /**
+     * Test local bodies returns empty when at uninhabited star with no planets
+     */
+    public function test_local_bodies_returns_empty_for_star_without_planets(): void
+    {
+        // Current location already has no children by default
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->getJson("/api/players/{$this->player->uuid}/local-bodies");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'summary' => [
+                        'total_bodies' => 0,
+                        'planets' => 0,
+                        'moons' => 0,
+                        'asteroid_belts' => 0,
+                        'stations' => 0,
+                    ],
+                ],
+            ]);
+    }
 }

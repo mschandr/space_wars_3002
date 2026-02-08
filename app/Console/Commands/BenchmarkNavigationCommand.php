@@ -78,20 +78,24 @@ class BenchmarkNavigationCommand extends Command
         }
 
         // Create warp gates between systems for BFS testing
-        $this->info("Creating warp gate network...");
+        $this->info('Creating warp gate network...');
         $allSystems = $nearbySystems->prepend($currentLocation);
         foreach ($allSystems->take(30) as $index => $source) {
             // Connect to 2-4 random destinations
             $destinations = $allSystems->except($index)->random(min(3, $allSystems->count() - 1));
             foreach ($destinations as $dest) {
-                if (!WarpGate::where('source_poi_id', $source->id)->where('destination_poi_id', $dest->id)->exists()) {
+                if (! WarpGate::where('source_poi_id', $source->id)->where('destination_poi_id', $dest->id)->exists()) {
+                    $distance = sqrt(pow($source->x - $dest->x, 2) + pow($source->y - $dest->y, 2));
                     WarpGate::create([
                         'uuid' => Str::uuid(),
                         'galaxy_id' => $galaxy->id,
                         'source_poi_id' => $source->id,
                         'destination_poi_id' => $dest->id,
-                        'fuel_cost' => 10,
-                        'distance' => sqrt(pow($source->x - $dest->x, 2) + pow($source->y - $dest->y, 2)),
+                        'source_x' => $source->x,
+                        'source_y' => $source->y,
+                        'dest_x' => $dest->x,
+                        'dest_y' => $dest->y,
+                        'distance' => $distance,
                         'is_hidden' => false,
                         'status' => 'active',
                     ]);
@@ -193,6 +197,7 @@ class BenchmarkNavigationCommand extends Command
 
         $systems = $nearbySystems->map(function ($system) use ($player) {
             $hasChart = $player->hasChartFor($system);
+
             return [
                 'uuid' => $system->uuid,
                 'name' => $hasChart ? $system->name : 'Unknown System',
@@ -204,7 +209,7 @@ class BenchmarkNavigationCommand extends Command
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        $this->displayResults($endTime - $startTime, count($queries), $systems->count() . ' systems processed');
+        $this->displayResults($endTime - $startTime, count($queries), $systems->count().' systems processed');
     }
 
     private function benchmarkScanLocal(Player $player, PointOfInterest $location): void
@@ -228,6 +233,7 @@ class BenchmarkNavigationCommand extends Command
         $groupedByType = $nearbyPOIs->groupBy('type')->map(function ($group) use ($player) {
             return $group->map(function ($poi) use ($player) {
                 $hasChart = $player->hasChartFor($poi);
+
                 return [
                     'uuid' => $poi->uuid,
                     'has_chart' => $hasChart,
@@ -239,7 +245,7 @@ class BenchmarkNavigationCommand extends Command
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        $this->displayResults($endTime - $startTime, count($queries), $nearbyPOIs->count() . ' POIs processed');
+        $this->displayResults($endTime - $startTime, count($queries), $nearbyPOIs->count().' POIs processed');
     }
 
     private function benchmarkChartPrice(Player $player, PointOfInterest $location, StellarCartographer $cartographer): void
@@ -247,7 +253,7 @@ class BenchmarkNavigationCommand extends Command
         DB::enableQueryLog();
         $startTime = microtime(true);
 
-        $service = new StarChartService();
+        $service = new StarChartService;
         $price = $service->calculateChartPrice($location, $player, $cartographer);
 
         $endTime = microtime(true);
@@ -262,14 +268,14 @@ class BenchmarkNavigationCommand extends Command
         DB::enableQueryLog();
         $startTime = microtime(true);
 
-        $service = new StarChartService();
+        $service = new StarChartService;
         $coverage = $service->getChartCoverage($location, 2);
 
         $endTime = microtime(true);
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        $this->displayResults($endTime - $startTime, count($queries), $coverage->count() . ' systems in coverage');
+        $this->displayResults($endTime - $startTime, count($queries), $coverage->count().' systems in coverage');
     }
 
     private function benchmarkAvailableCharts(Player $player, StellarCartographer $cartographer): void
@@ -277,7 +283,7 @@ class BenchmarkNavigationCommand extends Command
         DB::enableQueryLog();
         $startTime = microtime(true);
 
-        $service = new StarChartService();
+        $service = new StarChartService;
         $charts = $service->getAvailableCharts($cartographer, $player);
 
         $endTime = microtime(true);

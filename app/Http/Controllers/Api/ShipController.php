@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\ShipResource;
+use App\Models\Galaxy;
 use App\Models\PlayerShip;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,37 @@ use Illuminate\Validation\ValidationException;
  */
 class ShipController extends BaseApiController
 {
+    /**
+     * Get my ship in a specific galaxy (uses authenticated user context)
+     *
+     * GET /api/galaxies/{galaxyUuid}/my-ship
+     */
+    public function getMyShip(Request $request, string $galaxyUuid): JsonResponse
+    {
+        $galaxy = Galaxy::where('uuid', $galaxyUuid)->first();
+
+        if (! $galaxy) {
+            return $this->notFound('Galaxy not found');
+        }
+
+        $player = $request->user()
+            ->players()
+            ->where('galaxy_id', $galaxy->id)
+            ->first();
+
+        if (! $player) {
+            return $this->error('You are not in this galaxy', 'NOT_IN_GALAXY', null, 404);
+        }
+
+        $ship = $player->activeShip()->with('ship')->first();
+
+        if (! $ship) {
+            return $this->error('No active ship found', 'NO_SHIP', null, 404);
+        }
+
+        return $this->success(new ShipResource($ship));
+    }
+
     /**
      * Get active ship details for a player
      *

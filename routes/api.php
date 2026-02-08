@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ColonyBuildingController;
 use App\Http\Controllers\Api\ColonyCombatController;
 use App\Http\Controllers\Api\ColonyController;
 use App\Http\Controllers\Api\CombatController;
+use App\Http\Controllers\Api\FacilitiesController;
 use App\Http\Controllers\Api\GalaxyController;
 use App\Http\Controllers\Api\GalaxyCreationController;
 use App\Http\Controllers\Api\GalaxySettingsController;
@@ -22,12 +23,16 @@ use App\Http\Controllers\Api\PlansShopController;
 use App\Http\Controllers\Api\PlayerController;
 use App\Http\Controllers\Api\PlayerSettingsController;
 use App\Http\Controllers\Api\PlayerStatusController;
+use App\Http\Controllers\Api\PoiTypeController;
+use App\Http\Controllers\Api\PrecursorRumorController;
 use App\Http\Controllers\Api\PvPCombatController;
+use App\Http\Controllers\Api\SalvageYardController;
 use App\Http\Controllers\Api\ScanController;
 use App\Http\Controllers\Api\ShipController;
 use App\Http\Controllers\Api\ShipServiceController;
 use App\Http\Controllers\Api\ShipShopController;
 use App\Http\Controllers\Api\ShipStatusController;
+use App\Http\Controllers\Api\StarSystemController;
 use App\Http\Controllers\Api\TeamCombatController;
 use App\Http\Controllers\Api\TradingController;
 use App\Http\Controllers\Api\TradingTransactionController;
@@ -101,6 +106,15 @@ Route::prefix('galaxies/{galaxyUuid}/pirate-factions')->group(function () {
 Route::get('pirate-factions/{factionUuid}', [PirateFactionController::class, 'show']);
 Route::get('pirate-factions/{factionUuid}/captains', [PirateFactionController::class, 'factionCaptains']);
 
+// POI types reference routes (public)
+Route::prefix('poi-types')->group(function () {
+    Route::get('/', [PoiTypeController::class, 'index']);
+    Route::get('by-category', [PoiTypeController::class, 'byCategory']);
+    Route::get('habitable', [PoiTypeController::class, 'habitable']);
+    Route::get('mineable', [PoiTypeController::class, 'mineable']);
+    Route::get('{idOrCode}', [PoiTypeController::class, 'show']);
+});
+
 // Protected routes requiring authentication
 Route::middleware('auth:sanctum')->group(function () {
     // Galaxy list routes (authenticated - returns user's games + open games)
@@ -124,6 +138,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Player membership routes
         Route::get('my-player', [GalaxyController::class, 'getMyPlayer']);
+        Route::get('my-ship', [ShipController::class, 'getMyShip']);
         Route::post('join', [GalaxyController::class, 'join']);
 
         // Map summaries (lightweight data for rendering)
@@ -183,6 +198,23 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('{uuid}/location', [NavigationController::class, 'getLocation']);
         Route::get('{uuid}/nearby-systems', [NavigationController::class, 'getNearbySystems']);
         Route::get('{uuid}/scan-local', [NavigationController::class, 'scanLocal']);
+        Route::get('{uuid}/local-bodies', [NavigationController::class, 'getLocalBodies']);
+    });
+
+    // Star System routes
+    // Comprehensive star system data with visibility based on inhabited status + scan level
+    Route::prefix('players/{playerUuid}')->group(function () {
+        Route::get('star-systems', [StarSystemController::class, 'index']);
+        Route::get('star-systems/{systemUuid}', [StarSystemController::class, 'show']);
+        Route::get('star-systems/{systemUuid}/status', [StarSystemController::class, 'status']);
+        Route::get('current-system', [StarSystemController::class, 'current']);
+    });
+
+    // Facilities routes
+    // Unified view of all facilities in the current star system
+    Route::prefix('players/{playerUuid}')->group(function () {
+        Route::get('facilities', [FacilitiesController::class, 'index']);
+        Route::get('facilities/bar', [FacilitiesController::class, 'bar']);
     });
 
     // Travel routes
@@ -331,5 +363,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('exploration-log', [ScanController::class, 'explorationLog']);
         Route::post('bulk-scan-levels', [ScanController::class, 'bulkScanLevels']);
         Route::get('system-data/{poiUuid}', [ScanController::class, 'getSystemData']);
+    });
+
+    // Precursor Ship Rumor routes
+    // The legendary Precursor ship is hidden somewhere in each galaxy.
+    // Ship yard owners think they know where it is. They're all wrong.
+    // But their rumors might help narrow down the real location...
+    Route::prefix('players/{uuid}/precursor')->group(function () {
+        Route::get('check', [PrecursorRumorController::class, 'checkForRumor']);
+        Route::get('gossip', [PrecursorRumorController::class, 'getGossip']);
+        Route::post('bribe', [PrecursorRumorController::class, 'bribeForRumor']);
+        Route::get('rumors', [PrecursorRumorController::class, 'getCollectedRumors']);
+    });
+
+    // Salvage Yard routes
+    // Salvage yards sell ship components: weapons, shield regenerators, hull patches
+    Route::prefix('players/{uuid}')->group(function () {
+        Route::get('salvage-yard', [SalvageYardController::class, 'index']);
+        Route::get('ship-components', [SalvageYardController::class, 'shipComponents']);
+        Route::post('salvage-yard/purchase', [SalvageYardController::class, 'purchase']);
+        Route::post('ship-components/{componentId}/uninstall', [SalvageYardController::class, 'uninstall']);
     });
 });

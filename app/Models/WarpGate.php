@@ -169,6 +169,22 @@ class WarpGate extends Model
         return sqrt($dx * $dx + $dy * $dy);
     }
 
+    /**
+     * Get the fuel cost for traveling through this gate.
+     * Computed dynamically from distance.
+     */
+    public function getFuelCostAttribute(): int
+    {
+        if ($this->distance !== null && $this->distance > 0) {
+            return max(1, (int) ceil($this->distance / 2));
+        }
+
+        // Fallback to calculating from POIs if distance not stored
+        $calculatedDistance = $this->calculateDistance();
+
+        return max(1, (int) ceil($calculatedDistance / 2));
+    }
+
     public function isAccessible(): bool
     {
         return ! $this->is_hidden && $this->status === 'active';

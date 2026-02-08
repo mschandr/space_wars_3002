@@ -27,6 +27,11 @@ enum ScanLevel: int
     public const PRECURSOR_LEVEL = 100;
 
     /**
+     * Full visibility level for inhabited systems (common knowledge).
+     */
+    public const FULL_VISIBILITY = 10;
+
+    /**
      * Get the human-readable label for this scan level.
      */
     public function label(): string
