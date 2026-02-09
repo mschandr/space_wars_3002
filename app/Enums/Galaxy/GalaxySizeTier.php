@@ -2,9 +2,6 @@
 
 namespace App\Enums\Galaxy;
 
-use App\Models\Galaxy;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-
 /**
  * Galaxy size tiers define the overall dimensions and star counts.
  *
@@ -44,11 +41,6 @@ enum GalaxySizeTier: string
         ];
 
         return $options;
-    }
-
-    public function Galaxies(): HasMany
-    {
-        return $this->HasMany(Galaxy::class);
     }
 
     /**

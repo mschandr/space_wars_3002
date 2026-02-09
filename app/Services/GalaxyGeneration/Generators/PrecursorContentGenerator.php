@@ -123,7 +123,8 @@ final class PrecursorContentGenerator implements GeneratorInterface
             'is_hidden' => true,
             'is_inhabited' => false,
             'region' => RegionType::OUTER,
-            'attributes' => json_encode([
+            // Note: No json_encode - the 'array' cast on PointOfInterest handles serialization
+            'attributes' => [
                 'precursor' => true,
                 'discovery_sensor_level' => 4,
                 'rewards' => [
@@ -132,7 +133,7 @@ final class PrecursorContentGenerator implements GeneratorInterface
                     'plans' => ['precursor_shield', 'precursor_weapon'],
                 ],
                 'lore' => 'A vessel from an ancient civilization that once ruled this galaxy.',
-            ]),
+            ],
         ]);
 
         return $shipPoi->id;

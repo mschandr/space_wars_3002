@@ -157,6 +157,13 @@ class SalvageYardService
             ];
         }
 
+        // TODO: TECH DEBT - Wrap in DB::transaction()
+        //       Issue: Credit deduction, inventory decrement, and component install are not atomic
+        //       Risk: If any step fails after credits deducted, player loses credits without
+        //             receiving component (or inventory decremented without installation)
+        //       Fix: Use DB::transaction(function() { ... }) around all three operations
+        //       Priority: Low (pre-release)
+
         // Process purchase
         $player->credits -= $item->current_price;
         $player->save();
@@ -207,6 +214,13 @@ class SalvageYardService
 
         $componentName = $component->component->name;
         $sellValue = 0;
+
+        // TODO: TECH DEBT - Wrap in DB::transaction()
+        //       Issue: Credit addition, inventory update, and component deletion are not atomic
+        //       Risk: Failure mid-way could credit player without removing component,
+        //             or delete component without crediting
+        //       Fix: Use DB::transaction(function() { ... }) around all operations
+        //       Priority: Low (pre-release)
 
         if ($sellToYard) {
             // Get current location trading hub

@@ -27,8 +27,6 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
 {
     private const HIDDEN_GATE_PERCENTAGE = 0.02;
 
-    private const MAX_GATES_PER_SYSTEM = 6;
-
     public function getName(): string
     {
         return 'warp_gate_network';
@@ -86,7 +84,7 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
 
         // For small datasets, use simple O(n²) approach to avoid spatial index overhead
         if ($starCount <= 100) {
-            return $this->generateGatesSimple($galaxy->id, $stars, $adjacencyThreshold, 'active', false, self::MAX_GATES_PER_SYSTEM, $metrics);
+            return $this->generateGatesSimple($galaxy->id, $stars, $adjacencyThreshold, 'active', false, $metrics);
         }
 
         // Build spatial index for larger datasets
@@ -102,7 +100,6 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
             $stars,
             $spatialIndex,
             $adjacencyThreshold,
-            self::MAX_GATES_PER_SYSTEM,
             'active',
             false,
             $globalSeen
@@ -152,7 +149,7 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
 
         // For small datasets, use simple approach
         if ($starCount <= 150) {
-            return $this->generateGatesSimple($galaxy->id, $stars, $maxDistance, 'dormant', true, 2, $metrics);
+            return $this->generateGatesSimple($galaxy->id, $stars, $maxDistance, 'dormant', true, $metrics);
         }
 
         // Build spatial index for larger datasets
@@ -167,7 +164,6 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
             $stars,
             $spatialIndex,
             $maxDistance,
-            2,
             'dormant',
             true,
             $globalSeen
@@ -202,29 +198,17 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
         float $maxDistance,
         string $status,
         bool $hidden,
-        int $maxPerStar,
         GenerationMetrics $metrics
     ): int {
         $pairs = [];
         $seen = [];
-        $starGateCounts = [];
 
         $starCount = count($stars);
         for ($i = 0; $i < $starCount; $i++) {
             $s1 = $stars[$i];
-            $s1Gates = $starGateCounts[$s1['id']] ?? 0;
-
-            if ($s1Gates >= $maxPerStar) {
-                continue;
-            }
 
             for ($j = $i + 1; $j < $starCount; $j++) {
                 $s2 = $stars[$j];
-                $s2Gates = $starGateCounts[$s2['id']] ?? 0;
-
-                if ($s2Gates >= $maxPerStar) {
-                    continue;
-                }
 
                 $dx = $s2['x'] - $s1['x'];
                 $dy = $s2['y'] - $s1['y'];
@@ -245,8 +229,6 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
                             'status' => $status,
                             'is_hidden' => $hidden,
                         ];
-                        $starGateCounts[$s1['id']] = $s1Gates + 1;
-                        $starGateCounts[$s2['id']] = $s2Gates + 1;
                     }
                 }
             }
@@ -269,14 +251,13 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
 
     /**
      * Collect gate pairs using spatial index and canonical coordinates.
-     * Optimized: limit neighbors upfront, use string keys for reliability.
+     * Uses string keys for reliable deduplication.
      * Works with both array and object star data.
      */
     private function collectGatePairs(
         array $stars,
         SpatialIndex $spatialIndex,
         float $maxDistance,
-        int $maxPerStar,
         string $status,
         bool $hidden
     ): array {
@@ -286,7 +267,6 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
             $stars,
             $spatialIndex,
             $maxDistance,
-            $maxPerStar,
             $status,
             $hidden,
             $seen
@@ -301,7 +281,6 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
         array $stars,
         SpatialIndex $spatialIndex,
         float $maxDistance,
-        int $maxPerStar,
         string $status,
         bool $hidden,
         array &$globalSeen
@@ -314,12 +293,10 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
             $sy = is_array($star) ? $star['y'] : (int) $star->y;
             $starId = is_array($star) ? $star['id'] : $star->id;
 
-            // Limit neighbors upfront for performance
             $neighbors = $spatialIndex->findNeighbors($sx, $sy, $maxDistance, $star);
-            $neighborCount = min(count($neighbors), $maxPerStar);
 
-            for ($i = 0; $i < $neighborCount; $i++) {
-                $neighbor = $neighbors[$i]['item'];
+            foreach ($neighbors as $neighborData) {
+                $neighbor = $neighborData['item'];
                 $nx = is_array($neighbor) ? $neighbor['x'] : (int) $neighbor->x;
                 $ny = is_array($neighbor) ? $neighbor['y'] : (int) $neighbor->y;
                 $neighborId = is_array($neighbor) ? $neighbor['id'] : $neighbor->id;
@@ -340,7 +317,7 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
                         'source_y' => $sy,
                         'dest_x' => $nx,
                         'dest_y' => $ny,
-                        'distance' => $neighbors[$i]['distance'],
+                        'distance' => $neighborData['distance'],
                         'status' => $status,
                         'is_hidden' => $hidden,
                     ];

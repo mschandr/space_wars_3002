@@ -213,6 +213,13 @@ class PrecursorRumorService
             ];
         }
 
+        // TODO: TECH DEBT - Wrap in DB::transaction()
+        //       Issue: Credit deduction and rumor creation are not atomic
+        //       Risk: If PlayerPrecursorRumor::create() fails, credits are already
+        //             deducted with no rollback
+        //       Fix: Use DB::transaction(function() { ... }) around both operations
+        //       Priority: Low (pre-release)
+
         // Process the bribe
         $player->credits -= $hub->precursor_bribe_cost;
         $player->save();

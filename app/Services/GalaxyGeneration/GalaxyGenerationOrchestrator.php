@@ -333,8 +333,12 @@ final class GalaxyGenerationOrchestrator
      *
      * Since generators commit their own work, we need to delete any
      * partial data that was inserted before the failure.
+     *
+     * @param  Galaxy  $galaxy  The galaxy to clean up
+     * @param  bool  $cleanupPairedGalaxy  Whether to also clean up the paired (mirror) galaxy.
+     *                                      Set to false when called recursively to prevent infinite loop.
      */
-    private function cleanupFailedGalaxy(Galaxy $galaxy): void
+    private function cleanupFailedGalaxy(Galaxy $galaxy, bool $cleanupPairedGalaxy = true): void
     {
         try {
             // Delete in order of dependencies (children before parents)
@@ -369,10 +373,12 @@ final class GalaxyGenerationOrchestrator
             // Delete points of interest (will cascade to children via parent_poi_id)
             DB::table('points_of_interest')->where('galaxy_id', $galaxyId)->delete();
 
-            // Delete the mirror galaxy if it exists
-            $mirrorGalaxy = $galaxy->getPairedGalaxy();
-            if ($mirrorGalaxy) {
-                $this->cleanupFailedGalaxy($mirrorGalaxy);
+            // Delete the mirror galaxy if it exists (only on first call to prevent infinite recursion)
+            if ($cleanupPairedGalaxy) {
+                $mirrorGalaxy = $galaxy->getPairedGalaxy();
+                if ($mirrorGalaxy) {
+                    $this->cleanupFailedGalaxy($mirrorGalaxy, false);
+                }
             }
 
             // Finally delete the galaxy itself

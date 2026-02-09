@@ -113,17 +113,21 @@ class PlayerShip extends Model
     }
 
     /**
-     * Get installed weapons
+     * Get installed weapon components.
+     *
+     * Note: Named weaponComponents() to avoid shadowing the 'weapons' integer attribute.
      */
-    public function weapons(): HasMany
+    public function weaponComponents(): HasMany
     {
         return $this->hasMany(PlayerShipComponent::class)->where('slot_type', 'weapon_slot');
     }
 
     /**
-     * Get installed utilities
+     * Get installed utility components.
+     *
+     * Note: Named utilityComponents() for consistency with weaponComponents().
      */
-    public function utilities(): HasMany
+    public function utilityComponents(): HasMany
     {
         return $this->hasMany(PlayerShipComponent::class)->where('slot_type', 'utility_slot');
     }
