@@ -99,7 +99,7 @@ class MapSummaryController extends BaseApiController
                     'is_inhabited' => (bool) $system->is_inhabited,
                     'has_trading' => (bool) $system->has_trading,
                     'gate_count' => (int) $system->gate_count,
-                    'is_current_location' => $system->id === $currentPoiId,
+                    'is_current_location' => (int) $system->id === (int) $currentPoiId,
                 ];
             });
 
