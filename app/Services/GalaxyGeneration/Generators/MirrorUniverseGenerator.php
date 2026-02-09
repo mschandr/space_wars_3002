@@ -327,18 +327,37 @@ final class MirrorUniverseGenerator implements GeneratorInterface
         $sectorsCreated = count($rows);
 
         // Assign POIs to sectors using SQL JOIN
+        // Use driver-specific SQL for cross-database compatibility
         $maxGridIndex = $gridSize - 1;
-        $poisAssigned = DB::update('
-            UPDATE points_of_interest poi
-            SET sector_id = (
-                SELECT s.id FROM sectors s
-                WHERE s.galaxy_id = poi.galaxy_id
-                AND s.grid_x = LEAST(FLOOR(poi.x / ?), ?)
-                AND s.grid_y = LEAST(FLOOR(poi.y / ?), ?)
-                LIMIT 1
-            )
-            WHERE poi.galaxy_id = ?
-        ', [$sectorWidth, $maxGridIndex, $sectorHeight, $maxGridIndex, $mirrorGalaxy->id]);
+
+        if (DB::getDriverName() === 'sqlite') {
+            // SQLite: Use MIN (scalar) and CAST instead of LEAST/FLOOR
+            // Also no table aliases in UPDATE statements
+            $poisAssigned = DB::update('
+                UPDATE points_of_interest
+                SET sector_id = (
+                    SELECT s.id FROM sectors s
+                    WHERE s.galaxy_id = points_of_interest.galaxy_id
+                    AND s.grid_x = MIN(CAST(points_of_interest.x / ? AS INTEGER), ?)
+                    AND s.grid_y = MIN(CAST(points_of_interest.y / ? AS INTEGER), ?)
+                    LIMIT 1
+                )
+                WHERE galaxy_id = ?
+            ', [$sectorWidth, $maxGridIndex, $sectorHeight, $maxGridIndex, $mirrorGalaxy->id]);
+        } else {
+            // MySQL/MariaDB: Use LEAST and FLOOR
+            $poisAssigned = DB::update('
+                UPDATE points_of_interest poi
+                SET sector_id = (
+                    SELECT s.id FROM sectors s
+                    WHERE s.galaxy_id = poi.galaxy_id
+                    AND s.grid_x = LEAST(FLOOR(poi.x / ?), ?)
+                    AND s.grid_y = LEAST(FLOOR(poi.y / ?), ?)
+                    LIMIT 1
+                )
+                WHERE poi.galaxy_id = ?
+            ', [$sectorWidth, $maxGridIndex, $sectorHeight, $maxGridIndex, $mirrorGalaxy->id]);
+        }
 
         Log::info('Mirror galaxy sectors created', [
             'mirror_galaxy_id' => $mirrorGalaxy->id,

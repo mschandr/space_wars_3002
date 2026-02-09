@@ -76,6 +76,7 @@ class MapSummaryController extends BaseApiController
         // Get lightweight system data with gate counts
         $systems = DB::table('points_of_interest as poi')
             ->select([
+                'poi.id',
                 'poi.uuid',
                 'poi.name',
                 'poi.x',
@@ -98,7 +99,7 @@ class MapSummaryController extends BaseApiController
                     'is_inhabited' => (bool) $system->is_inhabited,
                     'has_trading' => (bool) $system->has_trading,
                     'gate_count' => (int) $system->gate_count,
-                    'is_current_location' => $system->uuid === $currentPoiId,
+                    'is_current_location' => $system->id === $currentPoiId,
                 ];
             });
 

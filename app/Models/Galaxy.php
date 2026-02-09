@@ -33,7 +33,6 @@ class Galaxy extends Model
         'distribution_method' => GalaxyDistributionMethod::class,
         'engine' => GalaxyRandomEngine::class,
         'size_tier' => GalaxySizeTier::class,
-        'sector' => Sector::class,
         'config' => 'array',
         'core_bounds' => 'array',
         'progress_status' => 'array',
@@ -109,11 +108,6 @@ class Galaxy extends Model
     public function warpGates(): HasMany
     {
         return $this->hasMany(WarpGate::class);
-    }
-
-    public function sizeTier(): HasOne
-    {
-        return $this->HasOne(GalaxySizeTier::class)->label('size_tier');
     }
 
     public function sectors(): HasMany

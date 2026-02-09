@@ -596,7 +596,12 @@ class GalaxyController extends BaseApiController
             // Give player a starting ship (Starter class - Sparrow Light Freighter)
             $starterShip = Ship::where('class', 'starter')->first();
             if (! $starterShip) {
-                // Fallback: seed ships if not present
+                // TODO: TECH DEBT - Remove runtime seeder fallback
+                //       Issue: Running seeders in request handlers is an anti-pattern
+                //       Current behavior: Seeds ships if missing (unsafe for production)
+                //       Desired fix: Return 500 error if starter ship missing,
+                //                    enforce seeding during deployment
+                //       Priority: Medium (works but risky)
                 (new \Database\Seeders\ShipTypesSeeder)->run();
                 $starterShip = Ship::where('class', 'starter')->first();
             }
