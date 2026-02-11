@@ -24,6 +24,10 @@ return new class extends Migration
 
             $table->index(['galaxy_id', 'source_poi_id']);
             $table->index(['galaxy_id', 'destination_poi_id']);
+            // TODO: (Design Clarification) This unique constraint allows both A->B and B->A as separate
+            // records. If warp gates are bidirectional, this permits duplicate logical connections.
+            // Clarify: Are gates one-way (current design is correct) or two-way (need LEAST/GREATEST
+            // constraint or application-level enforcement to prevent duplicates)?
             $table->unique(['source_poi_id', 'destination_poi_id']);
         });
     }

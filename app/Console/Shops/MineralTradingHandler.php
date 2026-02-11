@@ -270,7 +270,10 @@ class MineralTradingHandler
             return;
         }
 
-        // Execute transaction
+        // TODO: (Race Condition) This buy transaction is NOT wrapped in a DB::transaction().
+        // Between checking stock and deducting, another process could purchase the same items.
+        // Stock could go negative. Wrap all operations (deductCredits, removeStock, cargo update)
+        // in DB::transaction() and re-check stock within the transaction.
         $player->deductCredits($totalCost);
         $inventory->removeStock($quantity);
 

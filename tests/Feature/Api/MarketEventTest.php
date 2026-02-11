@@ -16,7 +16,9 @@ class MarketEventTest extends TestCase
     use RefreshDatabase;
 
     private Galaxy $galaxy;
+
     private TradingHub $tradingHub;
+
     private Mineral $mineral;
 
     protected function setUp(): void
@@ -61,7 +63,7 @@ class MarketEventTest extends TestCase
                         'uuid',
                         'event_type',
                         'mineral' => ['name', 'symbol'],
-                        'price_modifier',
+                        'price_multiplier',
                         'trading_hub',
                         'description',
                         'created_at',
@@ -77,12 +79,14 @@ class MarketEventTest extends TestCase
     {
         MarketEvent::factory()->create([
             'mineral_id' => $this->mineral->id,
+            'trading_hub_id' => $this->tradingHub->id,
             'event_type' => 'supply_shortage',
             'is_active' => true,
         ]);
 
         MarketEvent::factory()->create([
             'mineral_id' => $this->mineral->id,
+            'trading_hub_id' => $this->tradingHub->id,
             'event_type' => 'market_flooding',
             'is_active' => true,
         ]);
@@ -101,11 +105,13 @@ class MarketEventTest extends TestCase
 
         MarketEvent::factory()->create([
             'mineral_id' => $goldMineral->id,
+            'trading_hub_id' => $this->tradingHub->id,
             'is_active' => true,
         ]);
 
         MarketEvent::factory()->create([
             'mineral_id' => $silverMineral->id,
+            'trading_hub_id' => $this->tradingHub->id,
             'is_active' => true,
         ]);
 
@@ -130,9 +136,9 @@ class MarketEventTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonPath('success', true);
-        $response->assertJsonPath('data.uuid', $event->uuid);
+        $response->assertJsonPath('data.uuid', (string) $event->uuid);
         $response->assertJsonPath('data.event_type', 'supply_shortage');
-        $response->assertJsonPath('data.price_modifier', 1.5);
+        $response->assertJsonPath('data.price_multiplier', 1.5);
         $response->assertJsonStructure([
             'success',
             'data' => [
@@ -140,7 +146,7 @@ class MarketEventTest extends TestCase
                 'event_type',
                 'galaxy' => ['uuid', 'name'],
                 'mineral' => ['uuid', 'name', 'symbol', 'base_price'],
-                'price_modifier',
+                'price_multiplier',
                 'modified_price',
                 'trading_hub',
                 'description',
@@ -154,7 +160,7 @@ class MarketEventTest extends TestCase
 
     public function test_it_calculates_modified_price_correctly()
     {
-        $this->mineral->update(['base_price' => 100]);
+        $this->mineral->update(['base_value' => 100]);
 
         $event = MarketEvent::factory()->create([
             'mineral_id' => $this->mineral->id,
@@ -206,7 +212,7 @@ class MarketEventTest extends TestCase
                         'uuid',
                         'event_type',
                         'mineral',
-                        'price_modifier',
+                        'price_multiplier',
                         'modified_price',
                         'price_change_percent',
                         'description',

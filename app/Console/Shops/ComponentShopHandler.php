@@ -103,7 +103,9 @@ class ComponentShopHandler
             $this->newLine();
             $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
 
-            // Wait for input
+            // TODO: (Input Handling) fgetc(STDIN) reads one byte. If user types "12", the "2" stays
+            // in the input buffer and gets processed as the next input. Consider flushing the input
+            // buffer after reading, or switching to fgets() with validation.
             system('stty -icanon -echo');
             $char = fgetc(STDIN);
 

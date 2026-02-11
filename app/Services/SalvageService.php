@@ -78,7 +78,10 @@ class SalvageService
         $cargoSpaceUsed = 0;
         $availableSpace = $playerShip->cargo_hold - $playerShip->current_cargo;
 
-        // Transfer minerals (require cargo space)
+        // TODO: (Missing Validation) Validate $selectedMinerals entries before use.
+        // Each entry should have 'mineral_id' (positive int) and 'quantity' (positive int).
+        // Missing keys will cause undefined index errors; negative quantities could corrupt cargo data.
+        // Also wrap the entire transfer in a DB::transaction() to prevent partial transfers on failure.
         foreach ($selectedMinerals as $mineral) {
             $mineralId = $mineral['mineral_id'];
             $quantity = $mineral['quantity'];

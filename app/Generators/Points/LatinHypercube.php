@@ -100,6 +100,8 @@ final class LatinHypercube extends AbstractPointGenerator implements PointGenera
                 $maxY = $minY;
             }
 
+            // TODO: (Debug Leftover) Remove this file_put_contents debug logging before production.
+            // Writing to /tmp on every point generation is a performance drag and a debug artifact.
             file_put_contents('/tmp/permlo.mark', __METHOD__.'::'.__LINE__."\tmin x = ".$minX."\tmax x = ".$maxX, FILE_APPEND);
 
             $x = $this->randomizer->getInt($minX, $maxX);

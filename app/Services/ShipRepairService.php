@@ -118,7 +118,9 @@ class ShipRepairService
             ];
         }
 
-        // Deduct credits
+        // TODO: (Inconsistent Pattern) Use $player->deductCredits($cost) instead of direct manipulation.
+        // Other services (e.g., TradingService) use deductCredits() which may contain business logic
+        // that is being bypassed here. Also wrap hull repair + credit deduction in a DB transaction.
         $player->credits -= $cost;
         $player->save();
 
@@ -159,7 +161,8 @@ class ShipRepairService
             ];
         }
 
-        // Deduct credits
+        // TODO: (Inconsistent Pattern) Use $player->deductCredits($totalCost) instead of direct manipulation.
+        // Same issue as repairHull() - bypasses any business logic in deductCredits(). Also wrap in DB transaction.
         $player->credits -= $totalCost;
         $player->save();
 

@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+// TODO: (Missing UUID Generation) No boot() method to auto-generate UUIDs like other models.
+// Add: protected static function boot() { parent::boot(); static::creating(fn($m) => $m->uuid = $m->uuid ?: Str::uuid()); }
 class WarpLanePirate extends Model
 {
     protected $fillable = [

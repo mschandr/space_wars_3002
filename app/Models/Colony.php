@@ -159,6 +159,10 @@ class Colony extends Model
     /**
      * Check if colony can support a new building
      */
+    // TODO: (Logic Error) $existingCount is calculated but NEVER USED - only total building count
+    // is checked. This means there's no per-type building limit enforcement. A player could build
+    // 10 hydroponics bays with zero defense buildings, breaking game balance.
+    // Fix: Add per-type limits and check $existingCount against them before returning.
     public function canBuildBuilding(string $buildingType): bool
     {
         $existingCount = $this->buildings()->where('building_type', $buildingType)->count();
@@ -206,7 +210,8 @@ class Colony extends Model
             return false;
         }
 
-        // Deduct costs
+        // TODO: (Inconsistent Pattern) Use $player->deductCredits($creditCost) instead of direct
+        // credit manipulation. Also wrap in DB::transaction() with the development upgrade.
         $player->credits -= $creditCost;
         $player->save();
 

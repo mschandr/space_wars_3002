@@ -195,6 +195,11 @@ class PlayerShip extends Model
     /**
      * Calculate and update fuel based on time elapsed.
      * Applies fuel_regen_modifier for ship variations (e.g., 1.2 = 20% faster, 0.8 = 20% slower)
+     *
+     * TODO: (Critical - Fuel Regen Not Auto-Triggered) This method is only called via getCurrentFuel().
+     * Direct access to $ship->current_fuel bypasses regeneration entirely (e.g., in TravelService).
+     * Consider: (a) Using an Eloquent 'retrieved' event to auto-trigger, (b) Creating an accessor
+     * via Attribute::make(), or (c) Ensuring all callers use getCurrentFuel() instead of direct access.
      */
     public function regenerateFuel(): void
     {

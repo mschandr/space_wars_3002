@@ -92,7 +92,8 @@ class CombatResolutionService
 
             $round++;
 
-            // Safety limit to prevent infinite loops
+            // TODO: (Code Quality) Extract magic number 100 to a class constant, e.g.,
+            // private const MAX_COMBAT_ROUNDS = 100;
             if ($round > 100) {
                 $combatLog[] = [
                     'type' => 'error',
@@ -234,6 +235,9 @@ class CombatResolutionService
 
         // Difficulty bonus based on average weapons power per pirate
         $avgWeapons = $totalWeapons / max(1, $pirateCount);
+        // TODO: (Precision) Use explicit floor() for clarity: (int) floor($avgWeapons / 2)
+        // Implicit (int) cast truncates towards zero which matches floor() for positive values
+        // but could differ for negative values in edge cases.
         $difficultyBonus = (int) ($avgWeapons / 2); // 1 XP per 2 weapons points
 
         // Fleet size bonus (more dangerous to fight multiple ships)

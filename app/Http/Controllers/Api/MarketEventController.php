@@ -46,7 +46,7 @@ class MarketEventController extends BaseApiController
                     'name' => $event->mineral->name,
                     'symbol' => $event->mineral->symbol,
                 ],
-                'price_multiplier' => $event->price_multiplier,
+                'price_multiplier' => (float) $event->price_multiplier,
                 'trading_hub' => $event->tradingHub ? [
                     'uuid' => $event->tradingHub->uuid,
                     'name' => $event->tradingHub->pointOfInterest->name ?? 'Unknown',
@@ -85,17 +85,17 @@ class MarketEventController extends BaseApiController
             'uuid' => $event->uuid,
             'event_type' => $event->event_type,
             'galaxy' => [
-                'uuid' => $event->tradingHub?->poi?->galaxy?->uuid,
-                'name' => $event->tradingHub?->poi?->galaxy?->name,
+                'uuid' => $event->tradingHub?->pointOfInterest?->galaxy?->uuid,
+                'name' => $event->tradingHub?->pointOfInterest?->galaxy?->name,
             ],
             'mineral' => [
                 'uuid' => $event->mineral->uuid,
                 'name' => $event->mineral->name,
                 'symbol' => $event->mineral->symbol,
-                'base_price' => $event->mineral->base_price,
+                'base_price' => $event->mineral->base_value,
             ],
-            'price_multiplier' => $event->price_multiplier,
-            'modified_price' => round($event->mineral->base_price * $event->price_multiplier, 2),
+            'price_multiplier' => (float) $event->price_multiplier,
+            'modified_price' => round($event->mineral->base_value * $event->price_multiplier, 2),
             'trading_hub' => $event->tradingHub ? [
                 'uuid' => $event->tradingHub->uuid,
                 'name' => $event->tradingHub->pointOfInterest->name ?? 'Unknown',
@@ -122,7 +122,7 @@ class MarketEventController extends BaseApiController
     public function hubEvents(string $hubUuid): JsonResponse
     {
         $hub = TradingHub::where('uuid', $hubUuid)
-            ->with('poi')
+            ->with('pointOfInterest')
             ->firstOrFail();
 
         $events = MarketEvent::where('trading_hub_id', $hub->id)
@@ -138,10 +138,10 @@ class MarketEventController extends BaseApiController
                 'mineral' => [
                     'name' => $event->mineral->name,
                     'symbol' => $event->mineral->symbol,
-                    'base_price' => $event->mineral->base_price,
+                    'base_price' => $event->mineral->base_value,
                 ],
-                'price_multiplier' => $event->price_multiplier,
-                'modified_price' => round($event->mineral->base_price * $event->price_multiplier, 2),
+                'price_multiplier' => (float) $event->price_multiplier,
+                'modified_price' => round($event->mineral->base_value * $event->price_multiplier, 2),
                 'price_change_percent' => round(($event->price_multiplier - 1) * 100, 1),
                 'description' => $event->description,
                 'expires_at' => $event->expires_at?->toIso8601String(),
@@ -152,10 +152,10 @@ class MarketEventController extends BaseApiController
         return $this->success([
             'trading_hub' => [
                 'uuid' => $hub->uuid,
-                'name' => $hub->poi->name ?? 'Unknown',
+                'name' => $hub->pointOfInterest->name ?? 'Unknown',
                 'location' => [
-                    'x' => $hub->poi->x ?? null,
-                    'y' => $hub->poi->y ?? null,
+                    'x' => $hub->pointOfInterest->x ?? null,
+                    'y' => $hub->pointOfInterest->y ?? null,
                 ],
             ],
             'active_events_count' => $events->count(),

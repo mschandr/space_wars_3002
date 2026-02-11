@@ -319,7 +319,8 @@ class ShipShopHandler
                 'status' => 'operational',
             ]);
 
-            // Deduct credits
+            // TODO: (Inconsistent Pattern) Use $player->deductCredits($netCost) instead of direct
+            // credit manipulation. This bypasses any business logic in the deductCredits() method.
             $player->credits -= $netCost;
             $player->save();
 

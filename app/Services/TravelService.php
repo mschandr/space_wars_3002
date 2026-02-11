@@ -97,7 +97,9 @@ class TravelService
         $distance = $gate->distance ?? $gate->calculateDistance();
         $fuelCost = $this->calculateFuelCost($distance, $ship);
 
-        // Check if ship has enough fuel
+        // TODO: (Logical Error) Call $ship->regenerateFuel() before checking fuel to ensure
+        // passive fuel regeneration is applied. Direct property access bypasses the regeneration
+        // logic in PlayerShip::getCurrentFuel().
         if ($ship->current_fuel < $fuelCost) {
             return [
                 'success' => false,
@@ -369,7 +371,9 @@ class TravelService
      */
     private function findOrCreateEmptySpace(int $galaxyId, int $x, int $y): PointOfInterest
     {
-        // Check if POI exists at these coordinates
+        // TODO: (Race Condition) Use firstOrCreate() inside a DB::transaction() to prevent duplicate
+        // POIs when two players jump to the same empty coordinates simultaneously. The current
+        // find-then-create pattern has a TOCTOU (time-of-check-time-of-use) vulnerability.
         $existing = PointOfInterest::where('galaxy_id', $galaxyId)
             ->where('x', $x)
             ->where('y', $y)

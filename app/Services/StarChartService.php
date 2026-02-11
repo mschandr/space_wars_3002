@@ -98,7 +98,8 @@ class StarChartService
         // Get charted POI IDs once (cached, prevents N+1 queries)
         $chartedPoiIds = $player->getChartedPoiIds();
 
-        // Count unknown systems using in-memory lookup
+        // TODO: (Optimization) in_array() is O(n) per lookup. Use array_flip($chartedPoiIds) for
+        // O(1) lookups with isset(), especially important as chart collections grow large.
         $unknownCount = 0;
         foreach ($coverage as $poi) {
             if (! in_array($poi->id, $chartedPoiIds, true)) {

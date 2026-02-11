@@ -83,7 +83,8 @@ class ColonyCycleService
                 $buildingLog = $building->processCycle($colony);
                 $log = array_merge($log, $buildingLog);
 
-                // Track resources consumed
+                // TODO: (Null Safety) Use null coalescing operator for building properties that may not exist:
+                // e.g., ($building->quantium_per_cycle ?? 0) to avoid potential null addition errors
                 $resourcesConsumed['quantium'] += $building->quantium_per_cycle;
                 $resourcesConsumed['food'] += $building->food_per_cycle;
                 $resourcesConsumed['minerals'] += $building->minerals_per_cycle;
@@ -101,6 +102,8 @@ class ColonyCycleService
             }
 
             // 3. Apply credits generated to player
+            // TODO: (Inconsistent Pattern) Use a consistent method for adding credits (e.g., $player->addCredits())
+            // instead of direct manipulation. This bypasses any credit-related business logic.
             if ($creditsGenerated > 0) {
                 $colony->player->credits += $creditsGenerated;
                 $colony->player->save();

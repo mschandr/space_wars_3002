@@ -60,7 +60,9 @@ final class R2Sequence extends AbstractPointGenerator implements PointGeneratorI
                     $pts[] = [$x, $y];
                 }
             } else {
-                // No spacing constraint - just ensure uniqueness
+                // TODO: (Performance) O(n) linear search for uniqueness. The $key variable is computed
+                // but never used. Use a hash set ($seen[$key] = true / isset($seen[$key])) for O(1) lookups
+                // instead of iterating the full $pts array. With 3000+ points this becomes O(n²).
                 $key = $x.':'.$y;
                 $found = false;
                 foreach ($pts as [$px, $py]) {
@@ -76,7 +78,9 @@ final class R2Sequence extends AbstractPointGenerator implements PointGeneratorI
 
             $i++;
 
-            // Safety check to prevent infinite loops
+            // TODO: (Robustness) Safety limit of count * 1000 is extremely high (3,000,000 for 3000 points).
+            // If the loop breaks early, fewer points are silently returned without logging.
+            // Consider a lower limit (count * 100) and log a warning when the limit is reached.
             if ($i > $this->count * 1000) {
                 break;
             }

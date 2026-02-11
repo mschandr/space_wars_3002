@@ -49,7 +49,8 @@ class GalaxyDistributePirates extends Command
             return Command::FAILURE;
         }
 
-        // Get captains
+        // TODO: (Missing Validation) Filter by is_active to avoid assigning inactive/deleted captains.
+        // Use PirateCaptain::where('is_active', true)->get() instead of ::all().
         $captains = PirateCaptain::all();
         if ($captains->isEmpty()) {
             $this->error('No pirate captains found. Run PirateCaptainSeeder first.');

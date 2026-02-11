@@ -78,6 +78,8 @@ final class StratifiedGrid extends AbstractPointGenerator implements PointGenera
             $x = $this->randomizer->getInt($minX, $maxX);
             $y = $this->randomizer->getInt($minY, $maxY);
 
+            // TODO: (Performance) in_array() is O(n) per check. In the collision recovery loop this
+            // results in O(n²) behavior. Use a hash set ($seen["$x:$y"]) for O(1) lookups.
             if (! in_array([$x, $y], $pts, true)) {
                 $pts[] = [$x, $y];
             }

@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\PrecursorRumorController;
 use App\Http\Controllers\Api\PvPCombatController;
 use App\Http\Controllers\Api\SalvageYardController;
 use App\Http\Controllers\Api\ScanController;
+use App\Http\Controllers\Api\SectorMapController;
 use App\Http\Controllers\Api\ShipController;
 use App\Http\Controllers\Api\ShipServiceController;
 use App\Http\Controllers\Api\ShipShopController;
@@ -143,6 +144,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Map summaries (lightweight data for rendering)
         Route::get('map-summaries', [MapSummaryController::class, 'index']);
+
+        // Sector map (aggregate stats per sector, no individual stars)
+        Route::get('sector-map', [SectorMapController::class, 'index']);
 
         // Galaxy settings (owner only)
         Route::patch('settings', [GalaxySettingsController::class, 'update']);

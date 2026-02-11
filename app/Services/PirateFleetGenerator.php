@@ -104,7 +104,10 @@ class PirateFleetGenerator
     {
         $preferences = self::TIER_SHIP_PREFERENCES[$tier] ?? self::TIER_SHIP_PREFERENCES[1];
 
-        // Build weighted array
+        // TODO: (Optimization) This creates a massive array by repeating items by weight (e.g., 40 copies of a Ship).
+        // Use the mschandr/weighted-random package already in this project for memory-efficient weighted selection.
+        // Also, Ship::where('name', ...) inside a loop causes N+1 queries - preload all ships with a single
+        // whereIn query: Ship::whereIn('name', array_keys($preferences))->get()->keyBy('name')
         $weightedShips = [];
         foreach ($preferences as $shipName => $weight) {
             $ship = Ship::where('name', $shipName)->first();

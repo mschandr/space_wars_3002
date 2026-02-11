@@ -67,6 +67,8 @@ class TravelController extends BaseApiController
     public function travelViaWarpGate(Request $request, string $uuid): JsonResponse
     {
         try {
+            // TODO: (Weak Validation) gate_uuid should validate UUID format ('uuid' rule) rather
+            // than just 'string'. Same applies to target_poi_uuid in directJumpToHub().
             $validated = $request->validate([
                 'gate_uuid' => ['required', 'string'],
             ]);

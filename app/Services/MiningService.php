@@ -139,6 +139,8 @@ class MiningService
         $deposits = $poi->mineral_deposits ?? [];
         $available = [];
 
+        // TODO: (Optimization) Mineral::where() inside a loop causes N+1 queries. Preload all
+        // minerals with a single query: Mineral::whereIn('name', array_keys($deposits))->get()->keyBy('name')
         foreach ($deposits as $mineralName => $depositInfo) {
             $mineral = Mineral::where('name', $mineralName)->first();
             if ($mineral) {

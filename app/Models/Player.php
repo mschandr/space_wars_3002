@@ -15,6 +15,10 @@ class Player extends Model
 {
     use HasFactory;
 
+    // TODO: (Missing Fillable) Add 'mirror_universe_entry_time' to $fillable.
+    // The enterMirrorUniverse() and canReturnFromMirror() methods use this attribute
+    // but it's not in $fillable, which will cause mass-assignment to silently ignore it.
+    // Also add it to $casts as 'datetime'.
     protected $fillable = [
         'uuid',
         'user_id',

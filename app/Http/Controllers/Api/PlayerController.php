@@ -6,9 +6,9 @@ use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Http\Resources\PlayerResource;
 use App\Models\Galaxy;
 use App\Models\Player;
+use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
 use App\Models\Ship;
-use App\Models\PlayerShip;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +39,9 @@ class PlayerController extends BaseApiController
     public function store(Request $request): JsonResponse
     {
         try {
+            // TODO: (Missing Validation) call_sign lacks min length, character set regex (e.g. alphanumeric
+            // + underscore), and uniqueness-within-galaxy rule. galaxy_id accepts raw integer IDs instead
+            // of UUIDs, inconsistent with the rest of the API which uses UUID lookups.
             $validated = $request->validate([
                 'galaxy_id' => ['required', 'exists:galaxies,id'],
                 'call_sign' => ['required', 'string', 'max:50'],
