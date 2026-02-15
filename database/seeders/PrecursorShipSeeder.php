@@ -32,8 +32,9 @@ class PrecursorShipSeeder extends Seeder
 
     public function seedPrecursorShip(Galaxy $galaxy): void
     {
-        // Get all POIs in this galaxy
-        $pois = PointOfInterest::where('galaxy_id', $galaxy->id)
+        // Get all star systems in this galaxy (inhabitance is a system-level property)
+        $starSystems = PointOfInterest::where('galaxy_id', $galaxy->id)
+            ->where('type', \App\Enums\PointsOfInterest\PointOfInterestType::STAR)
             ->select('x', 'y')
             ->get();
 
@@ -52,11 +53,11 @@ class PrecursorShipSeeder extends Seeder
             $x = rand($minX, $maxX);
             $y = rand($minY, $maxY);
 
-            // Check distance from all POIs
+            // Check distance from all star systems
             $tooClose = false;
-            foreach ($pois as $poi) {
+            foreach ($starSystems as $system) {
                 $distance = sqrt(
-                    pow($x - $poi->x, 2) + pow($y - $poi->y, 2)
+                    pow($x - $system->x, 2) + pow($y - $system->y, 2)
                 );
 
                 if ($distance < $minDistanceFromAnyPOI) {

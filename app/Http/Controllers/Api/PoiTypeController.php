@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\PoiType;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class PoiTypeController extends BaseApiController
 {

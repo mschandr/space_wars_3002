@@ -41,7 +41,7 @@ class PvPCombatController extends BaseApiController
             $validated['max_team_size'] ?? 1
         );
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'CHALLENGE_FAILED', null, 400);
         }
 
@@ -73,7 +73,7 @@ class PvPCombatController extends BaseApiController
             ->where('status', 'pending')
             ->with(['challenger'])
             ->get()
-            ->filter(fn ($c) => !$c->isExpired())
+            ->filter(fn ($c) => ! $c->isExpired())
             ->map(fn ($c) => [
                 'uuid' => $c->uuid,
                 'type' => 'incoming',
@@ -91,7 +91,7 @@ class PvPCombatController extends BaseApiController
             ->where('status', 'pending')
             ->with(['target'])
             ->get()
-            ->filter(fn ($c) => !$c->isExpired())
+            ->filter(fn ($c) => ! $c->isExpired())
             ->map(fn ($c) => [
                 'uuid' => $c->uuid,
                 'type' => 'outgoing',
@@ -126,7 +126,7 @@ class PvPCombatController extends BaseApiController
 
         $result = $this->pvpService->acceptChallenge($challenge, $player);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'ACCEPT_FAILED', null, 400);
         }
 
@@ -167,7 +167,7 @@ class PvPCombatController extends BaseApiController
 
         $result = $this->pvpService->declineChallenge($challenge, $player);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'DECLINE_FAILED', null, 400);
         }
 

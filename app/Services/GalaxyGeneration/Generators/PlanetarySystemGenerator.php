@@ -16,7 +16,8 @@ use Illuminate\Support\Str;
 /**
  * Generates planetary systems (planets, moons, asteroid belts) for stars.
  *
- * Outer stars: 5-12 planets (larger, resource-rich systems)
+ * Planet counts and types are driven by stellar classification and size.
+ * Moons are generated synchronously per chunk.
  *
  * Optimized with:
  * - Pre-generated random pools to reduce random_int overhead
@@ -25,13 +26,53 @@ use Illuminate\Support\Str;
  */
 final class PlanetarySystemGenerator implements GeneratorInterface
 {
-    private const ROMAN_NUMERALS = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+    private const ROMAN_NUMERALS = [
+        '', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+        'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX',
+    ];
 
     private const PLANET_SIZES = ['small', 'medium', 'large', 'massive'];
 
     private const MOON_SIZES = ['tiny', 'small'];
 
     private const BELT_DENSITIES = ['sparse', 'moderate', 'dense'];
+
+    /**
+     * Base planet count ranges per stellar class [min, max].
+     */
+    private const PLANET_COUNT_RANGES = [
+        'O' => [0, 2],
+        'B' => [0, 3],
+        'A' => [1, 5],
+        'F' => [2, 8],
+        'G' => [3, 10],
+        'K' => [2, 7],
+        'M' => [1, 6],
+    ];
+
+    /**
+     * Max planet count modifier per stellar size.
+     */
+    private const SIZE_MODIFIERS = [
+        'dwarf' => -2,
+        'main_sequence' => 0,
+        'subgiant' => 1,
+        'giant' => 2,
+        'supergiant' => 3,
+    ];
+
+    /**
+     * Asteroid belt chance per stellar class.
+     */
+    private const ASTEROID_BELT_CHANCES = [
+        'O' => 0.10,
+        'B' => 0.15,
+        'A' => 0.25,
+        'F' => 0.35,
+        'G' => 0.40,
+        'K' => 0.30,
+        'M' => 0.20,
+    ];
 
     public function getName(): string
     {
@@ -51,18 +92,17 @@ final class PlanetarySystemGenerator implements GeneratorInterface
 
         // Get stars that need planetary systems:
         // 1. All outer region stars (frontier exploration)
-        // 2. All inhabited core stars (player spawn locations need planets)
+        // 2. All inhabited stars (player spawn locations need planets)
+        // 3. All charted core stars (discoverable systems need content)
         // Use chunked processing to reduce memory usage
         $starQuery = PointOfInterest::where('galaxy_id', $galaxyId)
             ->where('type', PointOfInterestType::STAR)
             ->where(function ($query) {
                 $query->where('region', RegionType::OUTER)
-                    ->orWhere(function ($q) {
-                        $q->where('region', RegionType::CORE)
-                            ->where('is_inhabited', true);
-                    });
+                    ->orWhere('is_inhabited', true)
+                    ->orWhere('is_charted', true);
             })
-            ->select(['id', 'name', 'x', 'y', 'region']);
+            ->select(['id', 'name', 'x', 'y', 'region', 'attributes']);
 
         $starCount = $starQuery->count();
         $metrics->setCount('stars_processed', $starCount);
@@ -72,21 +112,26 @@ final class PlanetarySystemGenerator implements GeneratorInterface
         }
 
         $planetsInserted = 0;
+        $moonsInserted = 0;
         $totalMoonSpecs = 0;
         $chunkSize = 100; // Process 100 stars at a time for better memory management
-        $starIndex = 0;
 
         // Process stars in chunks to limit memory usage
         $starQuery->orderBy('id')->chunk($chunkSize, function ($stars) use (
-            &$planetsInserted, &$totalMoonSpecs, &$starIndex,
+            &$planetsInserted, &$moonsInserted, &$totalMoonSpecs,
             $galaxyId, $now
         ) {
             $planetRows = [];
             $moonSpecs = [];
 
             foreach ($stars as $star) {
-                $planetCount = 3 + ($starIndex % 5);  // Deterministic 3-7 planets
-                $addBelt = ($starIndex % 10) < 5 && $planetCount >= 5;
+                $attrs = $star->attributes ?? [];
+                $stellarClass = $attrs['stellar_class'] ?? 'G';
+                $stellarSize = $attrs['stellar_size'] ?? 'main_sequence';
+
+                $planetCount = $this->getPlanetCountForStar($stellarClass, $stellarSize);
+                $addBelt = $planetCount >= 4
+                    && (random_int(1, 100) / 100) <= $this->getAsteroidBeltChance($stellarClass);
 
                 // Handle region as enum or string
                 $region = $star->region;
@@ -102,13 +147,12 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                     (int) $star->y,
                     $planetCount,
                     $addBelt,
+                    $stellarClass,
                     $region ?? RegionType::OUTER->value,
                     $now,
                     $planetRows,
                     $moonSpecs
                 );
-
-                $starIndex++;
             }
 
             // Insert this chunk immediately
@@ -116,7 +160,10 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                 $planetsInserted += BulkInserter::insert('points_of_interest', $planetRows, 500);
             }
 
-            // Count moon specs but don't accumulate them (moons are deferred)
+            // Generate moons for this chunk's planets
+            if (! empty($moonSpecs)) {
+                $moonsInserted += $this->generateMoonsSync($moonSpecs, $galaxyId, $now);
+            }
             $totalMoonSpecs += count($moonSpecs);
 
             // Free memory for this chunk
@@ -129,14 +176,13 @@ final class PlanetarySystemGenerator implements GeneratorInterface
         });
 
         $metrics->setCount('planets_inserted', $planetsInserted);
+        $metrics->setCount('moons_inserted', $moonsInserted);
         $metrics->setCount('moon_specs_queued', $totalMoonSpecs);
 
-        // Moons are deferred by default to save memory
-        // They can be generated later via a separate command if needed
         return GenerationResult::success($metrics, [
             'planets_created' => $planetsInserted,
-            'moons_created' => 0,
-            'moons_deferred' => true,
+            'moons_created' => $moonsInserted,
+            'moons_deferred' => false,
         ]);
     }
 
@@ -187,6 +233,7 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                     'attributes' => '{"orbital_distance":'.(($i * 2) + ($i % 3)).',"size":"'.self::MOON_SIZES[$i % 2].'"}',
                     'is_hidden' => false,
                     'is_inhabited' => false,
+                    'is_charted' => false,
                     'region' => $specRegion,
                     'created_at' => $now,
                     'updated_at' => $now,
@@ -208,6 +255,7 @@ final class PlanetarySystemGenerator implements GeneratorInterface
         int $y,
         int $planetCount,
         bool $addBelt,
+        string $stellarClass,
         string $region,
         string $now,
         array &$planetRows,
@@ -217,11 +265,11 @@ final class PlanetarySystemGenerator implements GeneratorInterface
         $regionValue = is_string($region) ? $region : RegionType::OUTER->value;
 
         for ($i = 1; $i <= $planetCount; $i++) {
-            $type = $this->getPlanetType($i, $planetCount);
+            $type = $this->getPlanetTypeForStar($i, $planetCount, $stellarClass);
             $moonCount = $this->getMoonCount($type);
             $size = $this->getPlanetSizeIndex($type);
             $orbitalDist = $i * 10 + ($i % 6);
-            $planetName = $starName.' '.self::ROMAN_NUMERALS[$i];
+            $planetName = $starName.' '.(self::ROMAN_NUMERALS[$i] ?? (string) $i);
             $planetUuid = (string) Str::uuid();
 
             $planetRows[] = [
@@ -237,6 +285,7 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                 'attributes' => '{"orbital_distance":'.$orbitalDist.',"size":"'.self::PLANET_SIZES[$size].'"}',
                 'is_hidden' => false,
                 'is_inhabited' => false,
+                'is_charted' => false,
                 'region' => $regionValue,
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -271,6 +320,7 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                 'attributes' => '{"orbital_distance":'.($beltIndex * 10).',"density":"'.self::BELT_DENSITIES[$beltIndex % 3].'"}',
                 'is_hidden' => false,
                 'is_inhabited' => false,
+                'is_charted' => false,
                 'region' => $regionValue,
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -279,45 +329,146 @@ final class PlanetarySystemGenerator implements GeneratorInterface
     }
 
     /**
-     * Get planet type based on orbital position (optimized - no random calls).
+     * Get planet count based on stellar class and size.
      */
-    private function getPlanetType(int $orbitalIndex, int $totalPlanets): int
+    private function getPlanetCountForStar(string $stellarClass, string $stellarSize): int
     {
-        // Inner planets (1-2): Rocky
-        if ($orbitalIndex <= 2) {
-            return $orbitalIndex % 2 === 0
-                ? PointOfInterestType::TERRESTRIAL->value
-                : PointOfInterestType::LAVA->value;
-        }
+        [$min, $max] = self::PLANET_COUNT_RANGES[$stellarClass] ?? self::PLANET_COUNT_RANGES['G'];
+        $modifier = self::SIZE_MODIFIERS[$stellarSize] ?? 0;
 
-        // Outer planets (last 2): Gas/Ice giants
-        if ($orbitalIndex >= $totalPlanets - 1) {
-            return $orbitalIndex % 2 === 0
-                ? PointOfInterestType::ICE_GIANT->value
-                : PointOfInterestType::GAS_GIANT->value;
-        }
+        $adjustedMax = max($min, $max + $modifier);
 
-        // Middle planets: Cycle through types deterministically
-        $types = [
-            PointOfInterestType::TERRESTRIAL->value,
-            PointOfInterestType::GAS_GIANT->value,
-            PointOfInterestType::ICE_GIANT->value,
-            PointOfInterestType::SUPER_EARTH->value,
-            PointOfInterestType::OCEAN->value,
-        ];
-
-        return $types[$orbitalIndex % 5];
+        return random_int($min, $adjustedMax);
     }
 
     /**
-     * Get moon count based on planet type (deterministic).
+     * Get asteroid belt chance for a stellar class.
+     */
+    private function getAsteroidBeltChance(string $stellarClass): float
+    {
+        return self::ASTEROID_BELT_CHANCES[$stellarClass] ?? 0.30;
+    }
+
+    /**
+     * Get planet type based on stellar class and orbital position.
+     *
+     * Uses cumulative weight arrays with random_int() for bulk performance
+     * instead of WeightedRandomGenerator.
+     */
+    private function getPlanetTypeForStar(int $orbitalIndex, int $totalPlanets, string $stellarClass): int
+    {
+        // Calculate normalized orbital distance (0 = inner, 1 = outer)
+        $normalizedDistance = ($totalPlanets > 1)
+            ? ($orbitalIndex - 1) / ($totalPlanets - 1)
+            : 0.5;
+
+        if ($normalizedDistance < 0.4) {
+            return $this->selectInnerPlanetType($stellarClass);
+        }
+
+        return $this->selectOuterPlanetType($normalizedDistance);
+    }
+
+    /**
+     * Select inner planet type based on stellar class using weighted random.
+     */
+    private function selectInnerPlanetType(string $stellarClass): int
+    {
+        $weights = match ($stellarClass) {
+            'O', 'B' => [
+                PointOfInterestType::LAVA->value => 60,
+                PointOfInterestType::CHTHONIC->value => 30,
+                PointOfInterestType::TERRESTRIAL->value => 10,
+            ],
+            'A', 'F' => [
+                PointOfInterestType::TERRESTRIAL->value => 40,
+                PointOfInterestType::LAVA->value => 30,
+                PointOfInterestType::SUPER_EARTH->value => 20,
+                PointOfInterestType::OCEAN->value => 10,
+            ],
+            'G' => [
+                PointOfInterestType::TERRESTRIAL->value => 45,
+                PointOfInterestType::SUPER_EARTH->value => 25,
+                PointOfInterestType::OCEAN->value => 15,
+                PointOfInterestType::LAVA->value => 15,
+            ],
+            'K' => [
+                PointOfInterestType::TERRESTRIAL->value => 50,
+                PointOfInterestType::SUPER_EARTH->value => 30,
+                PointOfInterestType::OCEAN->value => 20,
+            ],
+            'M' => [
+                PointOfInterestType::TERRESTRIAL->value => 60,
+                PointOfInterestType::SUPER_EARTH->value => 25,
+                PointOfInterestType::LAVA->value => 15,
+            ],
+            default => [
+                PointOfInterestType::TERRESTRIAL->value => 45,
+                PointOfInterestType::SUPER_EARTH->value => 25,
+                PointOfInterestType::OCEAN->value => 15,
+                PointOfInterestType::LAVA->value => 15,
+            ],
+        };
+
+        return $this->weightedPick($weights);
+    }
+
+    /**
+     * Select outer planet type based on normalized orbital distance.
+     */
+    private function selectOuterPlanetType(float $normalizedDistance): int
+    {
+        if ($normalizedDistance > 0.7) {
+            // Very outer: favors ice giants
+            $weights = [
+                PointOfInterestType::ICE_GIANT->value => 60,
+                PointOfInterestType::GAS_GIANT->value => 30,
+                PointOfInterestType::DWARF_PLANET->value => 10,
+            ];
+        } else {
+            // Mid-outer: favors gas giants
+            $weights = [
+                PointOfInterestType::GAS_GIANT->value => 70,
+                PointOfInterestType::ICE_GIANT->value => 25,
+                PointOfInterestType::SUPER_EARTH->value => 5,
+            ];
+        }
+
+        return $this->weightedPick($weights);
+    }
+
+    /**
+     * Pick a value from a weighted array using cumulative weights.
+     *
+     * @param  array<int, int>  $weights  Map of value => weight
+     */
+    private function weightedPick(array $weights): int
+    {
+        $total = array_sum($weights);
+        $roll = random_int(1, $total);
+        $cumulative = 0;
+
+        foreach ($weights as $value => $weight) {
+            $cumulative += $weight;
+            if ($roll <= $cumulative) {
+                return $value;
+            }
+        }
+
+        // Fallback (should not reach)
+        return array_key_first($weights);
+    }
+
+    /**
+     * Get moon count based on planet type with randomized ranges.
      */
     private function getMoonCount(int $typeValue): int
     {
         return match ($typeValue) {
-            PointOfInterestType::GAS_GIANT->value => 4,
-            PointOfInterestType::ICE_GIANT->value => 3,
-            PointOfInterestType::SUPER_EARTH->value => 1,
+            PointOfInterestType::GAS_GIANT->value => random_int(2, 6),
+            PointOfInterestType::ICE_GIANT->value => random_int(1, 4),
+            PointOfInterestType::SUPER_EARTH->value => random_int(0, 2),
+            PointOfInterestType::TERRESTRIAL->value => random_int(0, 1),
             default => 0,
         };
     }

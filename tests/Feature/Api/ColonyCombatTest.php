@@ -17,11 +17,22 @@ class ColonyCombatTest extends TestCase
 {
     use RefreshDatabase;
 
-    private User $attacker1User, $defender1User;
-    private Player $attacker1, $defender1;
-    private PlayerShip $attackerShip, $defenderShip;
+    private User $attacker1User;
+
+    private User $defender1User;
+
+    private Player $attacker1;
+
+    private Player $defender1;
+
+    private PlayerShip $attackerShip;
+
+    private PlayerShip $defenderShip;
+
     private PointOfInterest $planet;
+
     private Galaxy $galaxy;
+
     private Colony $colony;
 
     protected function setUp(): void

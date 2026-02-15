@@ -20,9 +20,13 @@ class MiningTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Player $player;
+
     private PointOfInterest $asteroid;
+
     private Mineral $mineral;
+
     private PlayerShip $playerShip;
 
     protected function setUp(): void

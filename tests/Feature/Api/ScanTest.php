@@ -114,7 +114,7 @@ class ScanTest extends TestCase
     {
         $remotePoi = PointOfInterest::factory()->create([
             'galaxy_id' => $this->galaxy->id,
-            'x' => $this->currentPoi->x + 50, // Within range (sensor 3 * 100 = 300 units)
+            'x' => $this->currentPoi->x + 2, // Within range (sensor 3 = 4 LY range)
             'y' => $this->currentPoi->y,
         ]);
 
@@ -132,7 +132,7 @@ class ScanTest extends TestCase
     {
         $remotePoi = PointOfInterest::factory()->create([
             'galaxy_id' => $this->galaxy->id,
-            'x' => $this->currentPoi->x + 500, // Out of range (sensor 3 * 100 = 300 units)
+            'x' => $this->currentPoi->x + 500, // Out of range (sensor 3 = 4 LY range)
             'y' => $this->currentPoi->y,
         ]);
 
@@ -322,28 +322,26 @@ class ScanTest extends TestCase
         $response->assertStatus(403);
     }
 
-    public function test_returns_baseline_for_unscanned_core_systems(): void
+    public function test_returns_baseline_for_unscanned_charted_systems(): void
     {
-        $corePoi = PointOfInterest::factory()->create([
+        $chartedPoi = PointOfInterest::factory()->charted()->create([
             'galaxy_id' => $this->galaxy->id,
             'region' => RegionType::CORE,
-            'is_inhabited' => false,
         ]);
 
         $response = $this->actingAs($this->user)
-            ->getJson("/api/players/{$this->player->uuid}/scan-results/{$corePoi->uuid}");
+            ->getJson("/api/players/{$this->player->uuid}/scan-results/{$chartedPoi->uuid}");
 
         $response->assertStatus(200)
             ->assertJsonPath('data.scan.baseline', true)
-            ->assertJsonPath('data.scan.scan_level', 3); // Core baseline
+            ->assertJsonPath('data.scan.scan_level', 2); // Charted baseline
     }
 
     public function test_returns_baseline_for_unscanned_inhabited_systems(): void
     {
-        $inhabitedPoi = PointOfInterest::factory()->create([
+        $inhabitedPoi = PointOfInterest::factory()->inhabited()->create([
             'galaxy_id' => $this->galaxy->id,
             'region' => RegionType::OUTER,
-            'is_inhabited' => true,
         ]);
 
         $response = $this->actingAs($this->user)
@@ -351,7 +349,7 @@ class ScanTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('data.scan.baseline', true)
-            ->assertJsonPath('data.scan.scan_level', 2); // Inhabited baseline
+            ->assertJsonPath('data.scan.scan_level', 3); // Inhabited baseline
     }
 
     public function test_returns_zero_for_unscanned_outer_uninhabited_systems(): void

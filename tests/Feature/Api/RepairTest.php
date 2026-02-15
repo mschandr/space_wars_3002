@@ -65,7 +65,6 @@ class RepairTest extends TestCase
         ]);
     }
 
-
     public function test_it_gets_repair_estimate()
     {
         $response = $this->actingAs($this->user, 'sanctum')
@@ -91,7 +90,6 @@ class RepairTest extends TestCase
         $this->assertTrue($response->json('data.needs_hull_repair'));
         $this->assertEquals(60.0, $response->json('data.hull_percentage'));
     }
-
 
     public function test_it_repairs_hull()
     {
@@ -124,7 +122,6 @@ class RepairTest extends TestCase
         $this->assertEquals($oldCredits - 400, $this->player->credits);
     }
 
-
     public function test_it_fails_hull_repair_with_insufficient_credits()
     {
         // Set credits too low
@@ -145,7 +142,6 @@ class RepairTest extends TestCase
         $this->playerShip->refresh();
         $this->assertEquals(60, $this->playerShip->hull);
     }
-
 
     public function test_it_repairs_downgraded_components()
     {
@@ -170,7 +166,6 @@ class RepairTest extends TestCase
         $this->assertEquals($baseWeapons, $this->playerShip->weapons);
     }
 
-
     public function test_it_returns_error_when_no_components_need_repair()
     {
         // Components are at base values, no downgrade
@@ -185,7 +180,6 @@ class RepairTest extends TestCase
                 ],
             ]);
     }
-
 
     public function test_it_repairs_everything_at_once()
     {
@@ -221,7 +215,6 @@ class RepairTest extends TestCase
         $this->assertLessThan($oldCredits, $this->player->credits);
     }
 
-
     public function test_it_returns_error_when_ship_is_perfect()
     {
         // Repair ship fully first
@@ -238,7 +231,6 @@ class RepairTest extends TestCase
                 ],
             ]);
     }
-
 
     public function test_it_gets_maintenance_status()
     {
@@ -265,7 +257,6 @@ class RepairTest extends TestCase
         $this->assertTrue($response->json('data.needs_repair'));
     }
 
-
     public function test_it_shows_excellent_status_for_healthy_ship()
     {
         $this->playerShip->update(['hull' => 100]);
@@ -283,7 +274,6 @@ class RepairTest extends TestCase
             ]);
     }
 
-
     public function test_it_shows_critical_status_for_damaged_ship()
     {
         $this->playerShip->update(['hull' => 20]); // 20%
@@ -300,14 +290,12 @@ class RepairTest extends TestCase
             ]);
     }
 
-
     public function test_it_requires_authentication()
     {
         $response = $this->getJson("/api/ships/{$this->playerShip->uuid}/repair-estimate");
 
         $response->assertUnauthorized();
     }
-
 
     public function test_it_authorizes_ship_owner()
     {
@@ -319,7 +307,6 @@ class RepairTest extends TestCase
 
         $response->assertStatus(403);
     }
-
 
     public function test_it_calculates_repair_cost_correctly()
     {
@@ -338,7 +325,6 @@ class RepairTest extends TestCase
                 ],
             ]);
     }
-
 
     public function test_it_returns_404_for_nonexistent_ship()
     {

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Builders\PoiCategorizer;
 use App\Http\Resources\PointOfInterestResource;
 use App\Models\Player;
 use App\Models\PointOfInterest;
+use App\Support\SensorRangeCalculator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -92,7 +93,7 @@ class NavigationController extends BaseApiController
 
         $currentLocation = $player->currentLocation;
         $sensorLevel = $player->activeShip->sensors;
-        $sensorRange = $sensorLevel * 100; // 100 units per sensor level
+        $sensorRange = SensorRangeCalculator::getRangeLY($sensorLevel);
 
         // Find all POIs within sensor range
         // Use bounding box pre-filter to reduce spatial calculations
@@ -107,9 +108,9 @@ class NavigationController extends BaseApiController
             ->where('x', '<=', $x + $sensorRange)
             ->where('y', '>=', $y - $sensorRange)
             ->where('y', '<=', $y + $sensorRange)
-            ->selectRaw('*, SQRT(POW(x - ?, 2) + POW(y - ?, 2)) as distance', [$x, $y])
+            ->selectRaw('*, SQRT(POW(CAST(x AS SIGNED) - ?, 2) + POW(CAST(y AS SIGNED) - ?, 2)) as distance', [$x, $y])
             // Precise circular distance (on remaining candidates)
-            ->whereRaw('SQRT(POW(x - ?, 2) + POW(y - ?, 2)) <= ?', [$x, $y, $sensorRange])
+            ->whereRaw('SQRT(POW(CAST(x AS SIGNED) - ?, 2) + POW(CAST(y AS SIGNED) - ?, 2)) <= ?', [$x, $y, $sensorRange])
             ->orderBy('distance')
             ->limit(50)
             ->get();
@@ -177,7 +178,7 @@ class NavigationController extends BaseApiController
 
         $currentLocation = $player->currentLocation;
         $sensorLevel = $player->activeShip->sensors;
-        $sensorRange = $sensorLevel * 100;
+        $sensorRange = SensorRangeCalculator::getRangeLY($sensorLevel);
 
         // Find all POIs within sensor range (including planets, asteroids, nebulae, etc.)
         // Use bounding box pre-filter to reduce spatial calculations

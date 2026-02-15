@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 class Plan extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'uuid',
         'name',

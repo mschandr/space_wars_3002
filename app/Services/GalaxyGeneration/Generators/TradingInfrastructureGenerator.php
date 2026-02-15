@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 /**
  * Generates trading infrastructure (hubs, shops) for inhabited systems.
  *
- * Core systems: 100% have premium trading hubs with all services
+ * All inhabited systems get premium trading hubs with all services.
  * Uses bulk insert for performance.
  */
 final class TradingInfrastructureGenerator implements GeneratorInterface
@@ -38,14 +38,13 @@ final class TradingInfrastructureGenerator implements GeneratorInterface
     {
         $metrics = new GenerationMetrics;
 
-        // Get core (inhabited) stars
+        // Get all inhabited stars (any region)
         $coreStars = PointOfInterest::where('galaxy_id', $galaxy->id)
-            ->where('region', RegionType::CORE)
             ->where('type', PointOfInterestType::STAR)
             ->where('is_inhabited', true)
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'region']);
 
-        $metrics->setCount('core_stars', $coreStars->count());
+        $metrics->setCount('inhabited_stars', $coreStars->count());
 
         if ($coreStars->isEmpty()) {
             return GenerationResult::success($metrics, ['hubs_created' => 0]);
@@ -56,6 +55,8 @@ final class TradingInfrastructureGenerator implements GeneratorInterface
         $hubRows = [];
 
         foreach ($coreStars as $star) {
+            $regionValue = $star->region instanceof RegionType ? $star->region->value : ($star->region ?? 'core');
+
             $hubRows[] = [
                 'uuid' => (string) Str::uuid(),
                 'poi_id' => $star->id,
@@ -65,10 +66,10 @@ final class TradingInfrastructureGenerator implements GeneratorInterface
                 'has_salvage_yard' => true,
                 'has_plans' => true,
                 'gate_count' => 0,
-                'tax_rate' => 0.05, // 5% tax for core systems
+                'tax_rate' => 0.05,
                 'services' => json_encode(['shipyard', 'salvage', 'upgrades', 'plans', 'cartography']),
                 'attributes' => json_encode([
-                    'region' => 'core',
+                    'region' => $regionValue,
                     'premium' => true,
                 ]),
                 'created_at' => $now,

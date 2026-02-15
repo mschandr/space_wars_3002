@@ -15,7 +15,9 @@ class VictoryTest extends TestCase
     use RefreshDatabase;
 
     private Galaxy $galaxy;
+
     private User $user;
+
     private Player $player;
 
     protected function setUp(): void

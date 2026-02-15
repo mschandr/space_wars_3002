@@ -27,13 +27,13 @@ class Sector extends Model
     ];
 
     protected $casts = [
-        'attributes'   => 'array',
-        'grid_x'       => 'integer',
-        'grid_y'       => 'integer',
-        'x_min'        => 'float',
-        'x_max'        => 'float',
-        'y_min'        => 'float',
-        'y_max'        => 'float',
+        'attributes' => 'array',
+        'grid_x' => 'integer',
+        'grid_y' => 'integer',
+        'x_min' => 'float',
+        'x_max' => 'float',
+        'y_min' => 'float',
+        'y_max' => 'float',
         'danger_level' => 'integer',
     ];
 
@@ -59,7 +59,7 @@ class Sector extends Model
      */
     public function getDangerLevel(): string
     {
-        $stats       = $this->getStats();
+        $stats = $this->getStats();
         $pirateRatio = $stats['star_count'] > 0
             ? $stats['pirate_count'] / $stats['star_count']
             : 0;
@@ -93,8 +93,8 @@ class Sector extends Model
         })->where('is_active', true)->count();
 
         return [
-            'star_count'   => $stars,
-            'poi_count'    => $totalPOIs,
+            'star_count' => $stars,
+            'poi_count' => $totalPOIs,
             'pirate_count' => $pirates,
         ];
     }

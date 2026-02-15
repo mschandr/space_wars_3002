@@ -8,7 +8,6 @@ use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
 use App\Models\Ship;
-use App\Models\ShipShop;
 use App\Models\TradingHub;
 use App\Models\User;
 use App\Services\PlayerDeathService;
@@ -20,9 +19,13 @@ class PlayerDeathTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Player $player;
+
     private Galaxy $galaxy;
+
     private PlayerShip $playerShip;
+
     private PlayerDeathService $deathService;
 
     protected function setUp(): void

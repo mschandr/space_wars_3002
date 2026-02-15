@@ -141,7 +141,7 @@ class PlayerShipComponent extends Model
     {
         $baseEffect = $this->component->getEffect($stat);
 
-        if ($baseEffect === null || !is_numeric($baseEffect)) {
+        if ($baseEffect === null || ! is_numeric($baseEffect)) {
             return $baseEffect;
         }
 

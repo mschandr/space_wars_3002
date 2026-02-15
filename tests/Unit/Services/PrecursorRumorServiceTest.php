@@ -214,7 +214,7 @@ class PrecursorRumorServiceTest extends TestCase
         $gossip = $this->service->getShipyardGossip($hub);
 
         // Should mention the Precursor ship legend
-        $this->assertStringContainsString('Void Strider', $gossip);
+        $this->assertStringContainsString('Precursor ship', $gossip);
         // Should mention the bribe cost
         $this->assertStringContainsString('credits', $gossip);
         // Should NOT contain actual coordinates

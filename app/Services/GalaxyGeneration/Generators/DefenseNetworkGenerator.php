@@ -3,7 +3,6 @@
 namespace App\Services\GalaxyGeneration\Generators;
 
 use App\Enums\Defense\SystemDefenseType;
-use App\Enums\Galaxy\RegionType;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
 use App\Models\PointOfInterest;
@@ -14,9 +13,9 @@ use App\Services\GalaxyGeneration\Support\BulkInserter;
 use Illuminate\Support\Str;
 
 /**
- * Generates defense networks for core systems.
+ * Generates defense networks for inhabited systems.
  *
- * Each core system gets a fortress defense package:
+ * Each inhabited system gets a fortress defense package:
  * - 4 Orbital Cannons
  * - 2 Space Lasers
  * - 6 Ground Missiles
@@ -53,13 +52,13 @@ final class DefenseNetworkGenerator implements GeneratorInterface
     {
         $metrics = new GenerationMetrics;
 
-        // Get core stars
+        // Get inhabited stars (any region)
         $coreStars = PointOfInterest::where('galaxy_id', $galaxy->id)
-            ->where('region', RegionType::CORE)
+            ->where('is_inhabited', true)
             ->where('type', PointOfInterestType::STAR)
             ->get(['id']);
 
-        $metrics->setCount('core_stars', $coreStars->count());
+        $metrics->setCount('inhabited_stars', $coreStars->count());
 
         if ($coreStars->isEmpty()) {
             return GenerationResult::success($metrics, ['defenses_created' => 0]);
@@ -95,9 +94,9 @@ final class DefenseNetworkGenerator implements GeneratorInterface
         $metrics->setCount('defenses_created', $inserted);
         $metrics->setCount('systems_fortified', $coreStars->count());
 
-        // Mark POIs as fortified
+        // Mark inhabited POIs as fortified
         PointOfInterest::where('galaxy_id', $galaxy->id)
-            ->where('region', RegionType::CORE)
+            ->where('is_inhabited', true)
             ->where('type', PointOfInterestType::STAR)
             ->update(['is_fortified' => true]);
 

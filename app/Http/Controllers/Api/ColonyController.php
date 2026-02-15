@@ -50,7 +50,7 @@ class ColonyController extends BaseApiController
         $poi = PointOfInterest::where('uuid', $validated['poi_uuid'])->firstOrFail();
 
         // Validate POI is suitable for colonization
-        if (!in_array($poi->type, [PointOfInterestType::PLANET, PointOfInterestType::MOON])) {
+        if (! in_array($poi->type, [PointOfInterestType::PLANET, PointOfInterestType::MOON])) {
             return $this->error('Only planets and moons can be colonized', 'INVALID_POI', null, 400);
         }
 
@@ -228,7 +228,7 @@ class ColonyController extends BaseApiController
     {
         $colony = Colony::where('uuid', $uuid)->firstOrFail();
 
-        if (!$colony->hasShipyard()) {
+        if (! $colony->hasShipyard()) {
             return $this->success([
                 'has_shipyard' => false,
                 'queue' => [],

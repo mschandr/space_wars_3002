@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PirateFactionController;
 use App\Http\Controllers\Api\PlansShopController;
 use App\Http\Controllers\Api\PlayerController;
+use App\Http\Controllers\Api\PlayerKnowledgeMapController;
 use App\Http\Controllers\Api\PlayerSettingsController;
 use App\Http\Controllers\Api\PlayerStatusController;
 use App\Http\Controllers\Api\PoiTypeController;
@@ -204,6 +205,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('{uuid}/scan-local', [NavigationController::class, 'scanLocal']);
         Route::get('{uuid}/local-bodies', [NavigationController::class, 'getLocalBodies']);
     });
+
+    // Knowledge Map (fog-of-war)
+    Route::get('players/{playerUuid}/knowledge-map', [PlayerKnowledgeMapController::class, 'index']);
 
     // Star System routes
     // Comprehensive star system data with visibility based on inhabited status + scan level

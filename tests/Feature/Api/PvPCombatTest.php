@@ -3,7 +3,6 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\PointsOfInterest\PointOfInterestType;
-use App\Models\CombatSession;
 use App\Models\Galaxy;
 use App\Models\Player;
 use App\Models\PlayerShip;
@@ -21,12 +20,19 @@ class PvPCombatTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private User $targetUser;
+
     private Player $challenger;
+
     private Player $target;
+
     private PlayerShip $challengerShip;
+
     private PlayerShip $targetShip;
+
     private PointOfInterest $location;
+
     private Galaxy $galaxy;
 
     protected function setUp(): void
@@ -613,10 +619,18 @@ class PvPCombatTest extends TestCase
         $hasVictory = false;
 
         foreach ($combatLog as $entry) {
-            if ($entry['type'] === 'header') $hasHeader = true;
-            if ($entry['type'] === 'round') $hasRound = true;
-            if ($entry['type'] === 'attack') $hasAttack = true;
-            if ($entry['type'] === 'victory') $hasVictory = true;
+            if ($entry['type'] === 'header') {
+                $hasHeader = true;
+            }
+            if ($entry['type'] === 'round') {
+                $hasRound = true;
+            }
+            if ($entry['type'] === 'attack') {
+                $hasAttack = true;
+            }
+            if ($entry['type'] === 'victory') {
+                $hasVictory = true;
+            }
         }
 
         $this->assertTrue($hasHeader);

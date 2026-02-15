@@ -5,7 +5,6 @@ namespace App\Jobs;
 use App\Models\Galaxy;
 use App\Models\Mineral;
 use App\Models\TradingHub;
-use App\Services\Trading\MineralSourceMapper;
 use App\Services\Trading\ProximityPricingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -48,8 +47,9 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
     {
         $galaxy = Galaxy::find($this->galaxyId);
 
-        if (!$galaxy) {
+        if (! $galaxy) {
             Log::warning("PopulateTradingHubInventoryJob: Galaxy {$this->galaxyId} not found");
+
             return;
         }
 
@@ -103,7 +103,7 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
         foreach ($allPois as $poi) {
             $produces = $poi->attributes['produces'] ?? [];
             foreach ($produces as $mineralSymbol) {
-                if (!isset($index[$mineralSymbol])) {
+                if (! isset($index[$mineralSymbol])) {
                     $index[$mineralSymbol] = [];
                 }
                 $index[$mineralSymbol][] = [
@@ -163,7 +163,7 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
             $nearestDistance = $proximityData['nearest_distance'];
 
             // Check if hub should stock this mineral
-            if (!ProximityPricingService::shouldStockMineral($hub, $mineral, $nearestDistance)) {
+            if (! ProximityPricingService::shouldStockMineral($hub, $mineral, $nearestDistance)) {
                 continue;
             }
 
@@ -185,11 +185,11 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
         }
 
         // Bulk insert for performance
-        if (!empty($inventoryData)) {
+        if (! empty($inventoryData)) {
             DB::table('trading_hub_inventories')->insert($inventoryData);
 
             // Update pricing for all inserted items
-            $hub->inventories()->each(fn($inv) => $inv->updatePricing());
+            $hub->inventories()->each(fn ($inv) => $inv->updatePricing());
         }
 
         return $inventoryCount;
@@ -197,11 +197,20 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
 
     private function calculateSupply(float $distance): int
     {
-        if ($distance < 1.0) return (int)(100 - ($distance * 20));
-        if ($distance < 3.0) return (int)(80 - (($distance - 1) * 10));
-        if ($distance < 6.0) return (int)(60 - (($distance - 3) * 6.67));
-        if ($distance < 10.0) return (int)(40 - (($distance - 6) * 5));
-        return max(5, (int)(20 - (($distance - 10) * 1)));
+        if ($distance < 1.0) {
+            return (int) (100 - ($distance * 20));
+        }
+        if ($distance < 3.0) {
+            return (int) (80 - (($distance - 1) * 10));
+        }
+        if ($distance < 6.0) {
+            return (int) (60 - (($distance - 3) * 6.67));
+        }
+        if ($distance < 10.0) {
+            return (int) (40 - (($distance - 6) * 5));
+        }
+
+        return max(5, (int) (20 - (($distance - 10) * 1)));
     }
 
     private function calculateDemand(Mineral $mineral, TradingHub $hub): int
@@ -233,7 +242,7 @@ class PopulateTradingHubInventoryJob implements ShouldQueue
 
         $proximityMultiplier = ProximityPricingService::calculateStockingMultiplier($nearestDistance);
 
-        return (int)($baseQuantity * $rarityMultiplier * $proximityMultiplier);
+        return (int) ($baseQuantity * $rarityMultiplier * $proximityMultiplier);
     }
 
     /**

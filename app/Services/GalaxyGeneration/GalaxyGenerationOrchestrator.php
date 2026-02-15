@@ -336,7 +336,7 @@ final class GalaxyGenerationOrchestrator
      *
      * @param  Galaxy  $galaxy  The galaxy to clean up
      * @param  bool  $cleanupPairedGalaxy  Whether to also clean up the paired (mirror) galaxy.
-     *                                      Set to false when called recursively to prevent infinite loop.
+     *                                     Set to false when called recursively to prevent infinite loop.
      */
     private function cleanupFailedGalaxy(Galaxy $galaxy, bool $cleanupPairedGalaxy = true): void
     {

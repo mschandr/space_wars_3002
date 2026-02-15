@@ -34,6 +34,7 @@ class PointOfInterestFactory extends Factory
             'name' => fake()->words(2, true).' Star',
             'attributes' => [],
             'is_hidden' => false,
+            'is_charted' => false,
             'version' => '',
         ];
     }
@@ -45,6 +46,28 @@ class PointOfInterestFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => PointOfInterestStatus::ACTIVE,
+        ]);
+    }
+
+    /**
+     * Inhabited POI (also charted)
+     */
+    public function inhabited(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_inhabited' => true,
+            'is_charted' => true,
+        ]);
+    }
+
+    /**
+     * Charted but uninhabited POI
+     */
+    public function charted(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_inhabited' => false,
+            'is_charted' => true,
         ]);
     }
 

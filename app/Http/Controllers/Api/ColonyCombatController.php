@@ -70,13 +70,13 @@ class ColonyCombatController extends BaseApiController
         ]);
 
         $allies = [];
-        if (!empty($validated['ally_uuids'])) {
+        if (! empty($validated['ally_uuids'])) {
             $allies = Player::whereIn('uuid', $validated['ally_uuids'])->get()->all();
         }
 
         $result = $this->colonyCombatService->initiateColonyAttack($colony, $player, $allies);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'ATTACK_FAILED', null, 400);
         }
 

@@ -53,13 +53,14 @@ class RegenerateFuelCommand extends Command
             ->where('is_active', true);
 
         if ($playerUuid = $this->option('player')) {
-            $query->whereHas('player', fn($q) => $q->where('uuid', $playerUuid));
+            $query->whereHas('player', fn ($q) => $q->where('uuid', $playerUuid));
         }
 
         $ships = $query->get();
 
         if ($ships->isEmpty()) {
             $this->info('No ships need fuel regeneration');
+
             return Command::SUCCESS;
         }
 

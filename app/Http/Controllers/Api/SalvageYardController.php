@@ -7,7 +7,6 @@ use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\PlayerShipComponent;
 use App\Models\SalvageYardInventory;
-use App\Models\TradingHub;
 use App\Services\SalvageYardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

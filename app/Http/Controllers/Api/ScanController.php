@@ -320,8 +320,6 @@ class ScanController extends BaseApiController
      */
     protected function getScanRange($ship): float
     {
-        $multiplier = config('game_config.scanning.scan_range_multiplier', 100);
-
-        return ($ship->sensors ?? 1) * $multiplier;
+        return \App\Support\SensorRangeCalculator::getRangeLY($ship->sensors ?? 1);
     }
 }

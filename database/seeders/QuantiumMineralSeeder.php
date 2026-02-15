@@ -17,17 +17,17 @@ class QuantiumMineralSeeder extends Seeder
                 'name' => 'Quantium',
             ],
             [
-                'symbol'        => 'Qm',
-                'description'   => 'Rare crystallized particles found in the upper atmospheres of ice giants. When excited, they create stable micro-wormholes - essential for sustaining warp gates.',
-                'rarity'        => 'legendary',
-                'base_value'    => 5000.00, // Very expensive
-                'attributes'    => [
-                    'found_in'                  => ['ice_giant'],
-                    'extraction_difficulty'     => 'extreme',
-                    'sensor_dependent'          => true,
-                    'requires_orbital_mining'   => true,
-                    'use_case'                  => 'warp_gate_fuel',
-                    'market_volatility'         => 0.4,
+                'symbol' => 'Qm',
+                'description' => 'Rare crystallized particles found in the upper atmospheres of ice giants. When excited, they create stable micro-wormholes - essential for sustaining warp gates.',
+                'rarity' => 'legendary',
+                'base_value' => 5000.00, // Very expensive
+                'attributes' => [
+                    'found_in' => ['ice_giant'],
+                    'extraction_difficulty' => 'extreme',
+                    'sensor_dependent' => true,
+                    'requires_orbital_mining' => true,
+                    'use_case' => 'warp_gate_fuel',
+                    'market_volatility' => 0.4,
                 ],
             ]
         );

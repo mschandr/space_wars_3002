@@ -31,6 +31,7 @@ class CompleteGalaxyCreationJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $timeout = 1800; // 30 minutes max
 
     public function __construct(
@@ -42,8 +43,9 @@ class CompleteGalaxyCreationJob implements ShouldQueue
     {
         $galaxy = Galaxy::find($this->galaxyId);
 
-        if (!$galaxy) {
+        if (! $galaxy) {
             Log::warning("CompleteGalaxyCreationJob: Galaxy {$this->galaxyId} not found");
+
             return;
         }
 
@@ -85,7 +87,7 @@ class CompleteGalaxyCreationJob implements ShouldQueue
             });
 
             // Step 4: Spawn precursor ship (if not skipped)
-            if (!($this->options['skip_precursors'] ?? false)) {
+            if (! ($this->options['skip_precursors'] ?? false)) {
                 $steps[] = $this->runStep('Spawn Precursor Ship', function () use ($galaxy) {
                     $seeder = app(PrecursorShipSeeder::class);
                     $seeder->seedPrecursorShip($galaxy);
@@ -93,7 +95,7 @@ class CompleteGalaxyCreationJob implements ShouldQueue
             }
 
             // Step 5: Distribute pirates (if not skipped)
-            if (!($this->options['skip_pirates'] ?? false)) {
+            if (! ($this->options['skip_pirates'] ?? false)) {
                 $steps[] = $this->runStep('Distribute Pirates', function () use ($galaxy) {
                     Artisan::call('galaxy:distribute-pirates', [
                         'galaxy' => $galaxy->id,
@@ -103,7 +105,7 @@ class CompleteGalaxyCreationJob implements ShouldQueue
 
             // Step 6: Create mirror universe (if not skipped)
             $mirrorGalaxy = null;
-            if (!($this->options['skip_mirror'] ?? false) && config('game_config.mirror_universe.enabled', true)) {
+            if (! ($this->options['skip_mirror'] ?? false) && config('game_config.mirror_universe.enabled', true)) {
                 $steps[] = $this->runStep('Create Mirror Universe', function () use ($galaxy, &$mirrorGalaxy) {
                     Artisan::call('galaxy:create-mirror', [
                         'galaxy' => $galaxy->id,
@@ -112,7 +114,7 @@ class CompleteGalaxyCreationJob implements ShouldQueue
                 });
 
                 // Spawn precursor in mirror too
-                if ($mirrorGalaxy && !($this->options['skip_precursors'] ?? false)) {
+                if ($mirrorGalaxy && ! ($this->options['skip_precursors'] ?? false)) {
                     $steps[] = $this->runStep('Spawn Mirror Precursor', function () use ($mirrorGalaxy) {
                         $seeder = app(PrecursorShipSeeder::class);
                         $seeder->seedPrecursorShip($mirrorGalaxy);
@@ -170,7 +172,7 @@ class CompleteGalaxyCreationJob implements ShouldQueue
                 'duration' => $duration,
             ];
         } catch (\Exception $e) {
-            Log::error("CompleteGalaxyCreationJob: Step '{$name}' failed: " . $e->getMessage());
+            Log::error("CompleteGalaxyCreationJob: Step '{$name}' failed: ".$e->getMessage());
             throw $e;
         }
     }

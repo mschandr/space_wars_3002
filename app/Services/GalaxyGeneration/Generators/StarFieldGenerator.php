@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
 /**
  * Generates star systems for a galaxy.
  *
- * Creates core stars (100% inhabited) and outer stars (0% inhabited).
+ * Creates core and outer stars with probabilistic charted/inhabited assignment.
  * Uses golden ratio spiral for core distribution and rejection sampling for outer.
  */
 final class StarFieldGenerator implements GeneratorInterface
@@ -52,7 +52,7 @@ final class StarFieldGenerator implements GeneratorInterface
 
         // Generate and insert core stars (free memory before outer)
         $corePoints = $this->generateCorePoints($starCounts['core'], $coreBounds);
-        $coreRows = $this->buildStarRows($galaxy->id, $corePoints, RegionType::CORE, true, $now, $version);
+        $coreRows = $this->buildStarRows($galaxy->id, $corePoints, RegionType::CORE, $now, $version);
         $coreCount = count($coreRows);
         $metrics->setCount('core_points_generated', count($corePoints));
         unset($corePoints); // Free memory
@@ -63,7 +63,7 @@ final class StarFieldGenerator implements GeneratorInterface
 
         // Generate and insert outer stars
         $outerPoints = $this->generateOuterPoints($galaxy, $starCounts['outer'], $coreBounds);
-        $outerRows = $this->buildStarRows($galaxy->id, $outerPoints, RegionType::OUTER, false, $now, $version);
+        $outerRows = $this->buildStarRows($galaxy->id, $outerPoints, RegionType::OUTER, $now, $version);
         $outerCount = count($outerRows);
         $metrics->setCount('outer_points_generated', count($outerPoints));
         unset($outerPoints); // Free memory
@@ -163,20 +163,25 @@ final class StarFieldGenerator implements GeneratorInterface
     }
 
     /**
-     * Build database rows for stars.
+     * Build database rows for stars with probabilistic charted/inhabited assignment.
      */
     private function buildStarRows(
         int $galaxyId,
         array $points,
         RegionType $region,
-        bool $inhabited,
         $now,
         ?string $version
     ): array {
         $rows = [];
         $stellarClasses = $region === RegionType::CORE ? self::STELLAR_CLASSES_CORE : self::STELLAR_CLASSES_OUTER;
+        $chartedPct = $region->getChartedPercentage();
+        $inhabitedPct = $region->getInhabitedPercentage();
 
         foreach ($points as $point) {
+            $isCharted = (random_int(1, 10000) / 10000) <= $chartedPct;
+            $isInhabited = $isCharted && $chartedPct > 0
+                && (random_int(1, 10000) / 10000) <= ($inhabitedPct / $chartedPct);
+
             $rows[] = [
                 'uuid' => (string) Str::uuid(),
                 'galaxy_id' => $galaxyId,
@@ -190,7 +195,8 @@ final class StarFieldGenerator implements GeneratorInterface
                     'stellar_size' => $this->weightedRandom(self::STELLAR_SIZES),
                 ]),
                 'is_hidden' => false,
-                'is_inhabited' => $inhabited,
+                'is_inhabited' => $isInhabited,
+                'is_charted' => $isCharted,
                 'region' => $region->value,
                 'is_fortified' => false,
                 'version' => $version,

@@ -148,6 +148,14 @@ class Player extends Model
     }
 
     /**
+     * Get all system knowledge records for this player (fog-of-war).
+     */
+    public function systemKnowledge(): HasMany
+    {
+        return $this->hasMany(PlayerSystemKnowledge::class);
+    }
+
+    /**
      * Check if player knows about a specific warp gate.
      */
     public function knowsLane(WarpGate $gate): bool

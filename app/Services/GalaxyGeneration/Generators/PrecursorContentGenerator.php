@@ -96,34 +96,68 @@ final class PrecursorContentGenerator implements GeneratorInterface
     }
 
     /**
-     * Place a derelict precursor ship somewhere in the galaxy.
+     * Place a derelict precursor ship in interstellar void, away from any stars or systems.
      */
     private function placePrecursorShip(Galaxy $galaxy): ?int
     {
-        // Select a random star (prefer outer region for exploration incentive)
-        $star = PointOfInterest::where('galaxy_id', $galaxy->id)
-            ->where('type', PointOfInterestType::STAR)
-            ->where('region', RegionType::OUTER)
-            ->inRandomOrder()
-            ->first(['id', 'x', 'y', 'name']);
+        $minDistanceFromAnyPOI = 20;
+        $maxAttempts = 100;
 
-        if (! $star) {
-            return null;
+        // Load star system coordinates for distance checks
+        // Inhabitance is a star system property, so we check against stars (not individual POIs)
+        $starSystems = PointOfInterest::where('galaxy_id', $galaxy->id)
+            ->where('type', PointOfInterestType::STAR)
+            ->select('x', 'y')
+            ->get();
+
+        // Galaxy bounds with 10% margin from edges
+        $minX = (int) ($galaxy->width * 0.1);
+        $maxX = (int) ($galaxy->width * 0.9);
+        $minY = (int) ($galaxy->height * 0.1);
+        $maxY = (int) ($galaxy->height * 0.9);
+
+        $x = null;
+        $y = null;
+
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            $candidateX = rand($minX, $maxX);
+            $candidateY = rand($minY, $maxY);
+
+            $tooClose = false;
+            foreach ($starSystems as $system) {
+                $distance = sqrt(
+                    pow($candidateX - $system->x, 2) + pow($candidateY - $system->y, 2)
+                );
+                if ($distance < $minDistanceFromAnyPOI) {
+                    $tooClose = true;
+                    break;
+                }
+            }
+
+            if (! $tooClose) {
+                $x = $candidateX;
+                $y = $candidateY;
+                break;
+            }
         }
 
-        // Create a special POI for the precursor ship
+        // Fallback: place at galaxy center if no isolated spot found
+        if ($x === null) {
+            $x = (int) ($galaxy->width / 2);
+            $y = (int) ($galaxy->height / 2);
+        }
+
+        // Create a special POI in interstellar void (no parent star)
         $shipPoi = PointOfInterest::create([
             'uuid' => Str::uuid(),
             'galaxy_id' => $galaxy->id,
-            'parent_poi_id' => $star->id,
             'type' => PointOfInterestType::DERELICT,
             'name' => 'Ancient Precursor Vessel',
-            'x' => $star->x,
-            'y' => $star->y,
+            'x' => $x,
+            'y' => $y,
             'is_hidden' => true,
             'is_inhabited' => false,
             'region' => RegionType::OUTER,
-            // Note: No json_encode - the 'array' cast on PointOfInterest handles serialization
             'attributes' => [
                 'precursor' => true,
                 'discovery_sensor_level' => 4,

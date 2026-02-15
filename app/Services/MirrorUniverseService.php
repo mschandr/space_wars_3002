@@ -51,6 +51,10 @@ class MirrorUniverseService
             'engine' => $primeGalaxy->engine,
             'turn_limit' => $primeGalaxy->turn_limit,
             'status' => GalaxyStatus::DRAFT,
+            'game_mode' => $primeGalaxy->game_mode,
+            'max_players' => $primeGalaxy->max_players,
+            'size_tier' => $primeGalaxy->size_tier,
+            'core_bounds' => $primeGalaxy->core_bounds,
             'is_public' => false, // Mirror galaxies not directly accessible
             'config' => $mirrorConfig,
         ]);

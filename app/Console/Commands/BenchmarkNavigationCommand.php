@@ -85,7 +85,7 @@ class BenchmarkNavigationCommand extends Command
             $destinations = $allSystems->except($index)->random(min(3, $allSystems->count() - 1));
             foreach ($destinations as $dest) {
                 if (! WarpGate::where('source_poi_id', $source->id)->where('destination_poi_id', $dest->id)->exists()) {
-                    $distance = sqrt(pow($source->x - $dest->x, 2) + pow($source->y - $dest->y, 2));
+                    $distance = sqrt(pow(abs($source->x - $dest->x), 2) + pow(abs($source->y - $dest->y), 2));
                     WarpGate::create([
                         'uuid' => Str::uuid(),
                         'galaxy_id' => $galaxy->id,

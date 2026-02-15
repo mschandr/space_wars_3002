@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 class PlayerNotification extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'uuid',
         'player_id',

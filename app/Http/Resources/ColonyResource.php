@@ -37,7 +37,7 @@ class ColonyResource extends JsonResource
                     'y' => $this->poi->y,
                 ],
             ],
-            'buildings_count' => $this->whenLoaded('buildings', fn() => $this->buildings->count()),
+            'buildings_count' => $this->whenLoaded('buildings', fn () => $this->buildings->count()),
             'max_buildings' => $this->development_level * 2,
             'has_shipyard' => $this->hasShipyard(),
             'established_at' => $this->established_at->toIso8601String(),

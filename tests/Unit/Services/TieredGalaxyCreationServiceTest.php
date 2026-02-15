@@ -62,8 +62,28 @@ class TieredGalaxyCreationServiceTest extends TestCase
 
     public function test_region_type_has_correct_inhabited_percentage()
     {
-        $this->assertEquals(1.0, RegionType::CORE->getInhabitedPercentage());
-        $this->assertEquals(0.0, RegionType::OUTER->getInhabitedPercentage());
+        $this->assertEquals(0.81, RegionType::CORE->getInhabitedPercentage());
+        $this->assertEquals(0.02, RegionType::OUTER->getInhabitedPercentage());
+    }
+
+    public function test_region_type_has_correct_charted_percentage()
+    {
+        $this->assertEquals(0.90, RegionType::CORE->getChartedPercentage());
+        $this->assertEquals(0.20, RegionType::OUTER->getChartedPercentage());
+    }
+
+    public function test_all_inhabited_systems_are_charted()
+    {
+        $galaxy = Galaxy::factory()->create();
+
+        // Create inhabited system — should also be charted
+        $poi = PointOfInterest::factory()->inhabited()->create([
+            'galaxy_id' => $galaxy->id,
+            'region' => RegionType::CORE,
+        ]);
+
+        $this->assertTrue($poi->is_inhabited);
+        $this->assertTrue($poi->is_charted);
     }
 
     public function test_region_type_has_correct_mineral_multiplier()

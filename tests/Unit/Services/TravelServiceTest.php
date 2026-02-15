@@ -572,4 +572,110 @@ class TravelServiceTest extends TestCase
             );
         }
     }
+
+    /** @test */
+    public function test_direct_jump_fuel_cost_uses_reduced_warp_efficiency()
+    {
+        $ship = Ship::factory()->create();
+
+        // Direct jumps use 25% warp efficiency factor + 4.0x penalty
+        // directEfficiency = 1 + ((warpLevel - 1) * 0.2 * 0.25)
+        // baseCost = ceil(ceil(distance) / directEfficiency)
+        // finalCost = ceil(baseCost * 4.0)
+        $tests = [
+            // Warp 1: eff=1.0, base=ceil(10/1.0)=10, final=ceil(10*4.0)=40
+            ['warp' => 1, 'distance' => 10.0, 'expected' => 40],
+            // Warp 6: eff=1+5*0.2*0.25=1.25, base=ceil(10/1.25)=8, final=ceil(8*4.0)=32
+            ['warp' => 6, 'distance' => 10.0, 'expected' => 32],
+            // Warp 10: eff=1+9*0.2*0.25=1.45, base=ceil(10/1.45)=ceil(6.896)=7, final=ceil(7*4.0)=28
+            ['warp' => 10, 'distance' => 10.0, 'expected' => 28],
+        ];
+
+        foreach ($tests as $test) {
+            $playerShip = PlayerShip::factory()->create([
+                'ship_id' => $ship->id,
+                'warp_drive' => $test['warp'],
+            ]);
+
+            $fuelCost = $this->travelService->calculateDirectJumpFuelCost($test['distance'], $playerShip);
+
+            $this->assertEquals(
+                $test['expected'],
+                $fuelCost,
+                "Warp drive {$test['warp']} direct jump should cost {$test['expected']} fuel for distance {$test['distance']}, got {$fuelCost}"
+            );
+        }
+    }
+
+    /** @test */
+    public function test_direct_jump_efficiency_gap_grows_with_warp_level()
+    {
+        $ship = Ship::factory()->create();
+        $distance = 10.0;
+
+        $previousRatio = 0;
+
+        foreach ([1, 3, 6, 10] as $warpLevel) {
+            $playerShip = PlayerShip::factory()->create([
+                'ship_id' => $ship->id,
+                'warp_drive' => $warpLevel,
+            ]);
+
+            $gateCost = $this->travelService->calculateFuelCost($distance, $playerShip);
+            $directCost = $this->travelService->calculateDirectJumpFuelCost($distance, $playerShip);
+
+            $ratio = $directCost / $gateCost;
+
+            if ($previousRatio > 0) {
+                $this->assertGreaterThan(
+                    $previousRatio,
+                    $ratio,
+                    "Direct/gate cost ratio should grow with warp level (warp {$warpLevel}: {$ratio} should be > {$previousRatio})"
+                );
+            }
+
+            $previousRatio = $ratio;
+        }
+    }
+
+    /** @test */
+    public function test_direct_jump_fuel_cost_is_symmetric_between_points()
+    {
+        $ship = Ship::factory()->create();
+
+        // Points: A(47, 183) and B(219, 62)
+        // Distance = sqrt((219-47)^2 + (62-183)^2) = sqrt(172^2 + 121^2) = sqrt(44225) ≈ 210.30
+        $ax = 47;
+        $ay = 183;
+        $bx = 219;
+        $by = 62;
+        $distance = sqrt(pow($bx - $ax, 2) + pow($by - $ay, 2));
+
+        foreach ([1, 3, 6] as $warpLevel) {
+            $playerShip = PlayerShip::factory()->create([
+                'ship_id' => $ship->id,
+                'warp_drive' => $warpLevel,
+            ]);
+
+            // Direct jump cost should be the same A→B and B→A (same distance)
+            $costAB = $this->travelService->calculateDirectJumpFuelCost($distance, $playerShip);
+            $costBA = $this->travelService->calculateDirectJumpFuelCost($distance, $playerShip);
+
+            $this->assertEquals(
+                $costAB,
+                $costBA,
+                "Direct jump fuel cost should be symmetric at warp {$warpLevel}"
+            );
+
+            // Gate cost should also be symmetric
+            $gateCostAB = $this->travelService->calculateFuelCost($distance, $playerShip);
+            $gateCostBA = $this->travelService->calculateFuelCost($distance, $playerShip);
+
+            $this->assertEquals(
+                $gateCostAB,
+                $gateCostBA,
+                "Gate fuel cost should be symmetric at warp {$warpLevel}"
+            );
+        }
+    }
 }

@@ -74,14 +74,14 @@ class MiningController extends BaseApiController
         $mineral = \App\Models\Mineral::findOrFail($validated['mineral_id']);
 
         // Check if colony has orbital mining
-        if (!$this->miningService->hasOrbitalMining($colony)) {
+        if (! $this->miningService->hasOrbitalMining($colony)) {
             return $this->error('Colony does not have an operational orbital mining facility', 'NO_MINING_FACILITY', null, 400);
         }
 
         // Start automated mining
         $result = $this->miningService->startAutomatedMining($colony, $poi, $mineral);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'MINING_FAILED', null, 400);
         }
 
@@ -117,7 +117,7 @@ class MiningController extends BaseApiController
         }
 
         // Check if POI has this mineral
-        if (!$this->miningService->canMineFromPOI($poi, $mineral)) {
+        if (! $this->miningService->canMineFromPOI($poi, $mineral)) {
             return $this->error("Cannot mine {$mineral->name} from this location", 'MINERAL_NOT_AVAILABLE', null, 400);
         }
 
@@ -125,7 +125,7 @@ class MiningController extends BaseApiController
         $deposits = $poi->mineral_deposits ?? [];
         $depositInfo = $deposits[$mineral->name] ?? null;
 
-        if (!$depositInfo) {
+        if (! $depositInfo) {
             return $this->error('No deposits of this mineral found', 'NO_DEPOSIT', null, 400);
         }
 

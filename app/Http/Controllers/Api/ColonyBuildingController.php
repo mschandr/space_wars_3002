@@ -47,7 +47,7 @@ class ColonyBuildingController extends BaseApiController
         ]);
 
         // Check if colony can build
-        if (!$colony->canBuildBuilding($validated['building_type'])) {
+        if (! $colony->canBuildBuilding($validated['building_type'])) {
             return $this->error('Colony cannot build more buildings at current development level', 'BUILDING_LIMIT', null, 400);
         }
 

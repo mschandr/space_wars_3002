@@ -17,9 +17,13 @@ class MirrorUniverseTest extends TestCase
     use RefreshDatabase;
 
     private Galaxy $galaxy;
+
     private User $user;
+
     private Player $player;
+
     private PlayerShip $ship;
+
     private WarpGate $mirrorGate;
 
     protected function setUp(): void

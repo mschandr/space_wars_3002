@@ -18,9 +18,9 @@ namespace App\Enums\Galaxy;
  */
 enum GalaxySizeTier: string
 {
-    case SMALL   = 'small';
-    case MEDIUM  = 'medium';
-    case LARGE   = 'large';
+    case SMALL = 'small';
+    case MEDIUM = 'medium';
+    case LARGE = 'large';
     case MASSIVE = 'massive';
 
     /**
@@ -28,16 +28,16 @@ enum GalaxySizeTier: string
      */
     public static function toFullOptionsArray(): array
     {
-        $options   = self::toOptionsArray();
+        $options = self::toOptionsArray();
         $options[] = [
-            'value'        => 'massive',
-            'label'        => 'Massive Galaxy (5000×5000)',
+            'value' => 'massive',
+            'label' => 'Massive Galaxy (5000×5000)',
             'outer_bounds' => 5000,
-            'core_bounds'  => 2500,
-            'core_stars'   => 1000,
-            'outer_stars'  => 1500,
-            'total_stars'  => 2500,
-            'secret'       => true,
+            'core_bounds' => 2500,
+            'core_stars' => 1000,
+            'outer_stars' => 1500,
+            'total_stars' => 2500,
+            'secret' => true,
         ];
 
         return $options;
@@ -52,31 +52,31 @@ enum GalaxySizeTier: string
     {
         return [
             [
-                'value'        => 'small',
-                'label'        => 'Small Galaxy (500×500)',
+                'value' => 'small',
+                'label' => 'Small Galaxy (500×500)',
                 'outer_bounds' => 500,
-                'core_bounds'  => 250,
-                'core_stars'   => 100,
-                'outer_stars'  => 150,
-                'total_stars'  => 250,
+                'core_bounds' => 250,
+                'core_stars' => 100,
+                'outer_stars' => 150,
+                'total_stars' => 250,
             ],
             [
-                'value'        => 'medium',
-                'label'        => 'Medium Galaxy (1500×1500)',
+                'value' => 'medium',
+                'label' => 'Medium Galaxy (1500×1500)',
                 'outer_bounds' => 1500,
-                'core_bounds'  => 750,
-                'core_stars'   => 300,
-                'outer_stars'  => 450,
-                'total_stars'  => 750,
+                'core_bounds' => 750,
+                'core_stars' => 300,
+                'outer_stars' => 450,
+                'total_stars' => 750,
             ],
             [
-                'value'        => 'large',
-                'label'        => 'Large Galaxy (2500×2500)',
+                'value' => 'large',
+                'label' => 'Large Galaxy (2500×2500)',
                 'outer_bounds' => 2500,
-                'core_bounds'  => 1250,
-                'core_stars'   => 500,
-                'outer_stars'  => 750,
-                'total_stars'  => 1250,
+                'core_bounds' => 1250,
+                'core_stars' => 500,
+                'outer_stars' => 750,
+                'total_stars' => 1250,
             ],
         ];
     }
@@ -95,9 +95,9 @@ enum GalaxySizeTier: string
     public function getCoreStars(): int
     {
         return match ($this) {
-            self::SMALL   => 100,
-            self::MEDIUM  => 300,
-            self::LARGE   => 500,
+            self::SMALL => 100,
+            self::MEDIUM => 300,
+            self::LARGE => 500,
             self::MASSIVE => 1000,
         };
     }
@@ -108,9 +108,9 @@ enum GalaxySizeTier: string
     public function getOuterStars(): int
     {
         return match ($this) {
-            self::SMALL   => 150,
-            self::MEDIUM  => 450,
-            self::LARGE   => 750,
+            self::SMALL => 150,
+            self::MEDIUM => 450,
+            self::LARGE => 750,
             self::MASSIVE => 1500,
         };
     }
@@ -122,14 +122,14 @@ enum GalaxySizeTier: string
     public function getCoreBoundsArray(): array
     {
         $outerSize = $this->getOuterBounds();
-        $coreSize  = $this->getCoreBounds();
-        $offset    = ($outerSize - $coreSize) / 2;
+        $coreSize = $this->getCoreBounds();
+        $offset = ($outerSize - $coreSize) / 2;
 
         return [
-            'x_min' => (int)$offset,
-            'x_max' => (int)($offset + $coreSize),
-            'y_min' => (int)$offset,
-            'y_max' => (int)($offset + $coreSize),
+            'x_min' => (int) $offset,
+            'x_max' => (int) ($offset + $coreSize),
+            'y_min' => (int) $offset,
+            'y_max' => (int) ($offset + $coreSize),
         ];
     }
 
@@ -139,9 +139,9 @@ enum GalaxySizeTier: string
     public function getOuterBounds(): int
     {
         return match ($this) {
-            self::SMALL   => 500,
-            self::MEDIUM  => 1500,
-            self::LARGE   => 2500,
+            self::SMALL => 500,
+            self::MEDIUM => 1500,
+            self::LARGE => 2500,
             self::MASSIVE => 5000,
         };
     }
@@ -152,9 +152,9 @@ enum GalaxySizeTier: string
     public function getCoreBounds(): int
     {
         return match ($this) {
-            self::SMALL   => 250,
-            self::MEDIUM  => 750,
-            self::LARGE   => 1250,
+            self::SMALL => 250,
+            self::MEDIUM => 750,
+            self::LARGE => 1250,
             self::MASSIVE => 2500,  // 2500x2500 core centered in 5000x5000 galaxy
         };
     }
@@ -165,9 +165,9 @@ enum GalaxySizeTier: string
     public function getRecommendedGridSize(): int
     {
         return match ($this) {
-            self::SMALL   => 10,
-            self::MEDIUM  => 15,
-            self::LARGE   => 20,
+            self::SMALL => 10,
+            self::MEDIUM => 15,
+            self::LARGE => 20,
             self::MASSIVE => 25,
         };
     }
@@ -178,7 +178,7 @@ enum GalaxySizeTier: string
      */
     public function getWarpGateAdjacency(): int
     {
-        return (int)($this->getOuterBounds() / 15);
+        return (int) ($this->getOuterBounds() / 15);
     }
 
     /**
@@ -187,9 +187,9 @@ enum GalaxySizeTier: string
     public function label(): string
     {
         return match ($this) {
-            self::SMALL   => 'Small Galaxy (500×500)',
-            self::MEDIUM  => 'Medium Galaxy (1500×1500)',
-            self::LARGE   => 'Large Galaxy (2500×2500)',
+            self::SMALL => 'Small Galaxy (500×500)',
+            self::MEDIUM => 'Medium Galaxy (1500×1500)',
+            self::LARGE => 'Large Galaxy (2500×2500)',
             self::MASSIVE => 'Massive Galaxy (5000×5000)',
         };
     }

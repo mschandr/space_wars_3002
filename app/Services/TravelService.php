@@ -142,6 +142,10 @@ class TravelService
         $laneKnowledgeService = app(LaneKnowledgeService::class);
         $laneKnowledgeService->discoverLaneBidirectional($player, $gate, 'travel');
 
+        // Update player knowledge (fog-of-war system)
+        $knowledgeService = app(PlayerKnowledgeService::class);
+        $knowledgeService->markVisited($player, $destination);
+
         // Award XP
         $xpEarned = $this->calculateTravelXP($distance);
         $oldLevel = $player->level;
@@ -195,8 +199,13 @@ class TravelService
      */
     public function calculateDirectJumpFuelCost(float $distance, PlayerShip $ship): int
     {
-        $baseCost = $this->calculateFuelCost($distance, $ship);
-        $penalty = config('game_config.direct_travel.fuel_penalty_multiplier', 2.5);
+        // Direct jumps use reduced warp efficiency — gates are engineered for warp drives
+        $efficiencyFactor = config('game_config.direct_travel.warp_efficiency_factor', 0.25);
+        $warpLevel = $ship->warp_drive ?? 1;
+        $directEfficiency = 1 + (($warpLevel - 1) * 0.2 * $efficiencyFactor);
+        $baseCost = max(1, (int) ceil(ceil($distance) / $directEfficiency));
+
+        $penalty = config('game_config.direct_travel.fuel_penalty_multiplier', 4.0);
 
         return (int) ceil($baseCost * $penalty);
     }
@@ -328,6 +337,10 @@ class TravelService
         // Update player location
         $player->current_poi_id = $targetPoi->id;
         $player->save();
+
+        // Update player knowledge (fog-of-war system)
+        $knowledgeService = app(PlayerKnowledgeService::class);
+        $knowledgeService->markVisited($player, $targetPoi);
 
         // Award reduced XP
         $baseXp = $this->calculateTravelXP($distance);
