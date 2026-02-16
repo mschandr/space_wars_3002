@@ -86,7 +86,7 @@ class ShipStatusController extends BaseApiController
         $ship->regenerateFuel();
 
         $timeToFull = $ship->getTimeUntilFullFuel();
-        $regenRate = 3600 / PlayerShip::FUEL_REGEN_RATE; // Fuel units per hour
+        $regenRate = 3600 / PlayerShip::fuelRegenRate(); // Fuel units per hour
 
         return $this->success([
             'current_fuel' => $ship->current_fuel,

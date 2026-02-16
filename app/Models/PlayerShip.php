@@ -13,7 +13,15 @@ class PlayerShip extends Model
 {
     use HasFactory;
 
-    const FUEL_REGEN_RATE = 30; // seconds per fuel point
+    const FUEL_REGEN_RATE_DEFAULT = 30; // fallback if config missing
+
+    /**
+     * Get base fuel regen rate (seconds per fuel unit) from config.
+     */
+    public static function fuelRegenRate(): int
+    {
+        return (int) config('game_config.ships.fuel_regen_seconds_per_unit', self::FUEL_REGEN_RATE_DEFAULT);
+    }
 
     protected $fillable = [
         'uuid',
@@ -77,6 +85,12 @@ class PlayerShip extends Model
         static::creating(function ($playerShip) {
             if (empty($playerShip->uuid)) {
                 $playerShip->uuid = Str::uuid();
+            }
+        });
+
+        static::retrieved(function ($playerShip) {
+            if ($playerShip->is_active) {
+                $playerShip->regenerateFuel();
             }
         });
     }
@@ -196,10 +210,8 @@ class PlayerShip extends Model
      * Calculate and update fuel based on time elapsed.
      * Applies fuel_regen_modifier for ship variations (e.g., 1.2 = 20% faster, 0.8 = 20% slower)
      *
-     * TODO: (Critical - Fuel Regen Not Auto-Triggered) This method is only called via getCurrentFuel().
-     * Direct access to $ship->current_fuel bypasses regeneration entirely (e.g., in TravelService).
-     * Consider: (a) Using an Eloquent 'retrieved' event to auto-trigger, (b) Creating an accessor
-     * via Attribute::make(), or (c) Ensuring all callers use getCurrentFuel() instead of direct access.
+     * Auto-triggered via the Eloquent 'retrieved' event in boot(), so fuel is always
+     * up-to-date whenever a PlayerShip is loaded from the database.
      */
     public function regenerateFuel(): void
     {
@@ -211,9 +223,10 @@ class PlayerShip extends Model
         $lastUpdate = Carbon::parse($this->fuel_last_updated_at);
         $secondsElapsed = (int) abs($now->diffInSeconds($lastUpdate));
 
-        // Apply fuel regen modifier (higher modifier = faster regen = lower seconds per fuel)
+        // Apply fuel regen modifier and warp drive bonus (higher = faster regen = lower seconds per fuel)
         $regenModifier = $this->fuel_regen_modifier ?? 1.0;
-        $effectiveRegenRate = max(5, (int) (self::FUEL_REGEN_RATE / $regenModifier));
+        $warpDriveBonus = 1 + ($this->warp_drive - 1) * 0.3;
+        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / ($regenModifier * $warpDriveBonus)));
 
         $fuelToRegenerate = (int) floor($secondsElapsed / $effectiveRegenRate);
 
@@ -283,8 +296,11 @@ class PlayerShip extends Model
         }
 
         $fuelNeeded = $this->max_fuel - $this->current_fuel;
+        $regenModifier = $this->fuel_regen_modifier ?? 1.0;
+        $warpDriveBonus = 1 + ($this->warp_drive - 1) * 0.3;
+        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / ($regenModifier * $warpDriveBonus)));
 
-        return $fuelNeeded * self::FUEL_REGEN_RATE;
+        return $fuelNeeded * $effectiveRegenRate;
     }
 
     /**

@@ -6,11 +6,13 @@ use App\Models\Colony;
 use App\Models\CombatParticipant;
 use App\Models\CombatSession;
 use App\Models\Player;
+use App\Models\PointOfInterest;
 
 class ColonyCombatService
 {
     public function __construct(
-        private readonly TeamCombatService $teamCombatService
+        private readonly TeamCombatService $teamCombatService,
+        private readonly OrbitalStructureService $orbitalStructureService,
     ) {}
 
     /**
@@ -98,7 +100,7 @@ class ColonyCombatService
     }
 
     /**
-     * Generate NPC defenders based on colony strength
+     * Generate NPC defenders based on colony strength and orbital defenses.
      */
     private function generateDefenders(Colony $colony): array
     {
@@ -122,6 +124,19 @@ class ColonyCombatService
                 'hull' => $baseHull,
                 'weapons' => $baseWeapons,
             ];
+        }
+
+        // Add orbital defense platforms as additional defenders
+        $poi = PointOfInterest::find($colony->poi_id);
+        if ($poi) {
+            $orbitalDamage = $this->orbitalStructureService->calculateOrbitalDefenseDamage($poi);
+            if ($orbitalDamage > 0) {
+                $defenders[] = [
+                    'name' => 'Orbital Defense Grid',
+                    'hull' => 500,
+                    'weapons' => $orbitalDamage,
+                ];
+            }
         }
 
         return $defenders;

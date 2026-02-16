@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\MiningController;
 use App\Http\Controllers\Api\MirrorUniverseController;
 use App\Http\Controllers\Api\NavigationController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OrbitalStructureController;
 use App\Http\Controllers\Api\PirateFactionController;
 use App\Http\Controllers\Api\PlansShopController;
 use App\Http\Controllers\Api\PlayerController;
@@ -392,4 +393,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('salvage-yard/purchase', [SalvageYardController::class, 'purchase']);
         Route::post('ship-components/{componentId}/uninstall', [SalvageYardController::class, 'uninstall']);
     });
+
+    // Orbital Structure routes
+    Route::get('poi/{uuid}/orbital-structures', [OrbitalStructureController::class, 'listAtBody']);
+    Route::get('players/{uuid}/orbital-structures', [OrbitalStructureController::class, 'listPlayerStructures']);
+    Route::post('players/{uuid}/orbital-structures/build', [OrbitalStructureController::class, 'build']);
+    Route::get('orbital-structures/{uuid}', [OrbitalStructureController::class, 'show']);
+    Route::put('orbital-structures/{uuid}/upgrade', [OrbitalStructureController::class, 'upgrade']);
+    Route::delete('orbital-structures/{uuid}', [OrbitalStructureController::class, 'demolish']);
+    Route::post('orbital-structures/{uuid}/collect', [OrbitalStructureController::class, 'collect']);
 });

@@ -402,6 +402,8 @@ Hidden somewhere in every galaxy is the legendary Precursor ship "Void Strider" 
     │ • Moons             │
     │ • Asteroid belts    │
     │ • Stations          │
+    │ • Orbital presence  │  (always visible)
+    │ • Defenses          │  (sensor level 5+)
     └──────────┬──────────┘
                │
                ▼
@@ -411,10 +413,11 @@ Hidden somewhere in every galaxy is the legendary Precursor ship "Void Strider" 
     │  • Mineral-rich asteroids for mining    │
     │  • Derelicts with salvage               │
     │  • Hidden locations                     │
+    │  • Orbital defenses & threat levels     │
     └─────────────────────────────────────────┘
 ```
 
-**Narrative**: Beyond the civilized core lies the frontier - uncharted systems full of opportunity and danger. Higher sensor levels reveal more of the unknown. Star charts can be purchased from cartographers, or earned through exploration. Some pilots make their fortune finding habitable worlds to colonize.
+**Narrative**: Beyond the civilized core lies the frontier - uncharted systems full of opportunity and danger. Higher sensor levels reveal more of the unknown. Star charts can be purchased from cartographers, or earned through exploration. Some pilots make their fortune finding habitable worlds to colonize. Orbital structures — defense platforms, bases, mining rigs — are always visible in orbit, but a detailed defensive breakdown (garrison strength, fighter squadrons, threat level) requires sensor level 5 or higher.
 
 ---
 

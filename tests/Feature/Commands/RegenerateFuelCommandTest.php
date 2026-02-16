@@ -9,6 +9,7 @@ use App\Models\Ship;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class RegenerateFuelCommandTest extends TestCase
@@ -131,6 +132,8 @@ class RegenerateFuelCommandTest extends TestCase
 
     public function test_it_regenerates_more_fuel_with_higher_warp_drive()
     {
+        config(['game_config.ships.fuel_regen_seconds_per_unit' => 30]);
+
         $galaxy = Galaxy::factory()->create();
         $user = User::factory()->create();
         $player = Player::factory()->create([
@@ -195,8 +198,9 @@ class RegenerateFuelCommandTest extends TestCase
         $this->artisan('fuel:regenerate --dry-run')
             ->assertExitCode(0);
 
-        $playerShip->refresh();
-        $this->assertEquals(50, $playerShip->current_fuel);
+        // Check raw DB value to avoid triggering auto-regen via retrieved event
+        $dbFuel = DB::table('player_ships')->where('id', $playerShip->id)->value('current_fuel');
+        $this->assertEquals(50, $dbFuel);
     }
 
     public function test_it_processes_specific_player()
@@ -242,11 +246,12 @@ class RegenerateFuelCommandTest extends TestCase
             ->assertExitCode(0);
 
         $ship1->refresh();
-        $ship2->refresh();
 
         // Only ship1 should have regenerated
         $this->assertGreaterThan(50, $ship1->current_fuel);
-        $this->assertEquals(50, $ship2->current_fuel);
+        // Check ship2 via raw DB to avoid triggering auto-regen via retrieved event
+        $ship2Fuel = DB::table('player_ships')->where('id', $ship2->id)->value('current_fuel');
+        $this->assertEquals(50, $ship2Fuel);
     }
 
     public function test_it_updates_fuel_last_updated_at()

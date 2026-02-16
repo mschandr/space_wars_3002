@@ -256,6 +256,8 @@ class TravelServiceTest extends TestCase
     /** @test */
     public function test_successful_travel_updates_location_and_consumes_fuel()
     {
+        config(['game_config.ships.fuel_regen_seconds_per_unit' => 30]);
+
         $player = Player::factory()->create();
         $ship = Ship::factory()->create();
         $playerShip = PlayerShip::factory()->create([

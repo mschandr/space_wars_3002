@@ -8,6 +8,7 @@ use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
 use App\Models\WarpGate;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Travel Service
@@ -93,7 +94,10 @@ class TravelService
             }
         }
 
-        $destination = $gate->destinationPoi;
+        // Gates are bidirectional — resolve the other end based on player's current location
+        $destination = $gate->source_poi_id === $player->current_poi_id
+            ? $gate->destinationPoi
+            : $gate->sourcePoi;
         $distance = $gate->distance ?? $gate->calculateDistance();
         $fuelCost = $this->calculateFuelCost($distance, $ship);
 
@@ -152,6 +156,9 @@ class TravelService
         $player->addExperience($xpEarned);
         $newLevel = $player->level;
 
+        // Check for magnetic mines at destination
+        $mineResult = $this->checkMagneticMines($player, $destination);
+
         // Auto-scan destination if enabled
         $scanResult = null;
         if (config('game_config.scanning.auto_scan_on_arrival', true)) {
@@ -172,6 +179,7 @@ class TravelService
             'mirror_gate' => $mirrorGate,
             'universe' => $player->isInMirrorUniverse() ? 'mirror' : 'prime',
             'scan' => $scanResult,
+            'mine_encounter' => $mineResult,
         ];
     }
 
@@ -342,6 +350,9 @@ class TravelService
         $knowledgeService = app(PlayerKnowledgeService::class);
         $knowledgeService->markVisited($player, $targetPoi);
 
+        // Check for magnetic mines at destination
+        $mineResult = $this->checkMagneticMines($player, $targetPoi);
+
         // Award reduced XP
         $baseXp = $this->calculateTravelXP($distance);
         $xpMultiplier = config('game_config.direct_travel.xp_multiplier', 0.75);
@@ -371,6 +382,7 @@ class TravelService
             'leveled_up' => $newLevel > $oldLevel,
             'jump_type' => 'direct',
             'scan' => $scanResult,
+            'mine_encounter' => $mineResult,
         ];
     }
 
@@ -408,6 +420,26 @@ class TravelService
             'is_hidden' => false,
             'attributes' => [],
         ]);
+    }
+
+    /**
+     * Check for magnetic mines at destination.
+     */
+    private function checkMagneticMines(Player $player, PointOfInterest $destination): ?array
+    {
+        try {
+            $orbitalService = app(OrbitalStructureService::class);
+
+            return $orbitalService->checkMagneticMines($player, $destination);
+        } catch (\Throwable $e) {
+            Log::warning('Magnetic mine check failed', [
+                'player_id' => $player->id,
+                'destination_id' => $destination->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**

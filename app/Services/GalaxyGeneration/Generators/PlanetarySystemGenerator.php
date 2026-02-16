@@ -33,9 +33,11 @@ final class PlanetarySystemGenerator implements GeneratorInterface
 
     private const PLANET_SIZES = ['small', 'medium', 'large', 'massive'];
 
-    private const MOON_SIZES = ['tiny', 'small'];
+    private const MOON_SIZES = ['tiny', 'small', 'medium', 'large'];
 
     private const BELT_DENSITIES = ['sparse', 'moderate', 'dense'];
+
+    private const MOON_TYPES = ['rocky', 'icy', 'volcanic', 'habitable', 'forest'];
 
     /**
      * Base planet count ranges per stellar class [min, max].
@@ -218,8 +220,13 @@ final class PlanetarySystemGenerator implements GeneratorInterface
             }
 
             $specRegion = $spec['region'] ?? RegionType::OUTER->value;
+            $parentType = $spec['parent_planet_type'] ?? PointOfInterestType::TERRESTRIAL->value;
 
             for ($i = 1; $i <= $spec['moon_count']; $i++) {
+                $size = $this->getMoonSize($parentType);
+                $moonTypeStr = $this->getMoonType($parentType, $i, $spec['moon_count']);
+                $habitability = $this->getMoonHabitability($moonTypeStr, $size);
+
                 $moonRows[] = [
                     'uuid' => (string) Str::uuid(),
                     'galaxy_id' => $spec['galaxy_id'],
@@ -230,7 +237,13 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                     'x' => $spec['x'],
                     'y' => $spec['y'],
                     'name' => $spec['planet_name'].'-'.chr(96 + $i),
-                    'attributes' => '{"orbital_distance":'.(($i * 2) + ($i % 3)).',"size":"'.self::MOON_SIZES[$i % 2].'"}',
+                    'attributes' => json_encode([
+                        'orbital_distance' => ($i * 2) + ($i % 3),
+                        'size' => $size,
+                        'moon_type' => $moonTypeStr,
+                        'habitability_score' => $habitability,
+                        'habitable' => $habitability > 0.0,
+                    ]),
                     'is_hidden' => false,
                     'is_inhabited' => false,
                     'is_charted' => false,
@@ -296,6 +309,7 @@ final class PlanetarySystemGenerator implements GeneratorInterface
                     'planet_uuid' => $planetUuid,
                     'planet_name' => $planetName,
                     'moon_count' => $moonCount,
+                    'parent_planet_type' => $type,
                     'galaxy_id' => $galaxyId,
                     'x' => $x,
                     'y' => $y,
@@ -607,5 +621,100 @@ final class PlanetarySystemGenerator implements GeneratorInterface
             PointOfInterestType::TERRESTRIAL, PointOfInterestType::OCEAN, PointOfInterestType::LAVA => 'medium',
             default => 'small',
         };
+    }
+
+    /**
+     * Get moon size weighted by parent planet type.
+     */
+    private function getMoonSize(int $parentType): string
+    {
+        $weights = match ($parentType) {
+            PointOfInterestType::GAS_GIANT->value, PointOfInterestType::HOT_JUPITER->value => [
+                'tiny' => 10, 'small' => 30, 'medium' => 40, 'large' => 20,
+            ],
+            PointOfInterestType::ICE_GIANT->value => [
+                'tiny' => 20, 'small' => 40, 'medium' => 30, 'large' => 10,
+            ],
+            PointOfInterestType::SUPER_EARTH->value => [
+                'tiny' => 40, 'small' => 45, 'medium' => 15,
+            ],
+            default => [
+                'tiny' => 60, 'small' => 35, 'medium' => 5,
+            ],
+        };
+
+        return $this->weightedPickString($weights);
+    }
+
+    /**
+     * Get moon type based on parent planet type and orbital position.
+     */
+    private function getMoonType(int $parentType, int $orbitalIndex, int $moonCount): string
+    {
+        if ($parentType === PointOfInterestType::GAS_GIANT->value || $parentType === PointOfInterestType::HOT_JUPITER->value) {
+            $normalizedPos = $moonCount > 1 ? ($orbitalIndex - 1) / ($moonCount - 1) : 0.5;
+
+            if ($normalizedPos < 0.33) {
+                // Inner moons
+                $weights = ['volcanic' => 50, 'rocky' => 40, 'icy' => 10];
+            } elseif ($normalizedPos < 0.66) {
+                // Mid moons
+                $weights = ['rocky' => 50, 'icy' => 25, 'volcanic' => 15, 'habitable' => 5, 'forest' => 5];
+            } else {
+                // Outer moons
+                $weights = ['icy' => 70, 'rocky' => 25, 'habitable' => 3, 'forest' => 2];
+            }
+
+            return $this->weightedPickString($weights);
+        }
+
+        if ($parentType === PointOfInterestType::ICE_GIANT->value) {
+            return $this->weightedPickString([
+                'icy' => 60, 'rocky' => 35, 'habitable' => 3, 'forest' => 2,
+            ]);
+        }
+
+        // Terrestrial, Super Earth, and others
+        return $this->weightedPickString([
+            'rocky' => 70, 'icy' => 29, 'habitable' => 1,
+        ]);
+    }
+
+    /**
+     * Get moon habitability score based on type and size.
+     * Only habitable/forest moons that are medium or large get a score.
+     */
+    private function getMoonHabitability(string $moonType, string $size): float
+    {
+        if (! in_array($moonType, ['habitable', 'forest'])) {
+            return 0.0;
+        }
+
+        if (! in_array($size, ['medium', 'large'])) {
+            return 0.0;
+        }
+
+        return round(random_int(40, 70) / 100, 2);
+    }
+
+    /**
+     * Pick a string value from a weighted array using cumulative weights.
+     *
+     * @param  array<string, int>  $weights  Map of string => weight
+     */
+    private function weightedPickString(array $weights): string
+    {
+        $total = array_sum($weights);
+        $roll = random_int(1, $total);
+        $cumulative = 0;
+
+        foreach ($weights as $value => $weight) {
+            $cumulative += $weight;
+            if ($roll <= $cumulative) {
+                return $value;
+            }
+        }
+
+        return array_key_first($weights);
     }
 }

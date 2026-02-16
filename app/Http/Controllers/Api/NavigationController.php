@@ -2,17 +2,25 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Defense\SystemDefenseType;
+use App\Enums\OrbitalStructureType;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Http\Controllers\Api\Builders\PoiCategorizer;
 use App\Http\Resources\PointOfInterestResource;
+use App\Models\ColonyBuilding;
 use App\Models\Player;
 use App\Models\PointOfInterest;
+use App\Services\TravelService;
 use App\Support\SensorRangeCalculator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class NavigationController extends BaseApiController
 {
+    public function __construct(
+        private TravelService $travelService
+    ) {}
+
     /**
      * Get current location details
      *
@@ -92,7 +100,8 @@ class NavigationController extends BaseApiController
         }
 
         $currentLocation = $player->currentLocation;
-        $sensorLevel = $player->activeShip->sensors;
+        $ship = $player->activeShip;
+        $sensorLevel = $ship->sensors;
         $sensorRange = SensorRangeCalculator::getRangeLY($sensorLevel);
 
         // Find all POIs within sensor range
@@ -115,25 +124,81 @@ class NavigationController extends BaseApiController
             ->limit(50)
             ->get();
 
+        // Pre-load outgoing warp gates for fuel cost calculations (single query)
+        $outgoingGates = $currentLocation->outgoingGates()
+            ->where('is_hidden', false)
+            ->where('status', 'active')
+            ->get()
+            ->keyBy('destination_poi_id');
+
+        $maxJumpRange = $this->travelService->getMaxJumpDistance($ship);
+        $currentFuel = $ship->current_fuel;
+
         // Pre-load all charted POI IDs once (prevents N+1 queries)
         $chartedPoiIds = $player->getChartedPoiIds();
 
-        $systems = $nearbySystems->map(function ($system) use ($chartedPoiIds) {
+        $systems = $nearbySystems->map(function ($system) use ($chartedPoiIds, $ship, $outgoingGates, $maxJumpRange, $currentFuel) {
             // Check if player has a star chart for this system (in-memory lookup)
             $hasChart = in_array($system->id, $chartedPoiIds, true);
             $typeLabel = is_object($system->type) ? $system->type->label() : $system->type;
+            $distance = (float) $system->distance;
+
+            // Warp gate option (instantaneous travel, lower fuel cost)
+            $warpGateOption = null;
+            $gate = $outgoingGates->get($system->id);
+            if ($gate) {
+                $gateDistance = $gate->distance ?? $distance;
+                $gateFuelCost = $this->travelService->calculateFuelCost($gateDistance, $ship);
+                $warpGateOption = [
+                    'gate_uuid' => $gate->uuid,
+                    'fuel_cost' => $gateFuelCost,
+                    'can_afford' => $currentFuel >= $gateFuelCost,
+                ];
+            }
+
+            // Direct jump option (4x fuel penalty, range-limited by warp drive)
+            $directJumpFuelCost = $this->travelService->calculateDirectJumpFuelCost($distance, $ship);
+            $inRange = $distance <= $maxJumpRange;
+            $directJumpOption = [
+                'fuel_cost' => $directJumpFuelCost,
+                'in_range' => $inRange,
+                'can_afford' => $inRange && $currentFuel >= $directJumpFuelCost,
+            ];
+
+            // Determine cheapest reachable option
+            $cheapestCost = null;
+            $cheapestOption = null;
+
+            if ($warpGateOption && $currentFuel >= $warpGateOption['fuel_cost']) {
+                $cheapestCost = $warpGateOption['fuel_cost'];
+                $cheapestOption = 'warp_gate';
+            }
+
+            if ($inRange && $currentFuel >= $directJumpFuelCost) {
+                if ($cheapestCost === null || $directJumpFuelCost < $cheapestCost) {
+                    $cheapestCost = $directJumpFuelCost;
+                    $cheapestOption = 'direct_jump';
+                }
+            }
 
             return [
                 'uuid' => $system->uuid,
                 'name' => $hasChart ? $system->name : 'Unknown System',
                 'type' => $typeLabel,
-                'distance' => round($system->distance, 2),
+                'distance' => round($distance, 2),
                 'coordinates' => $hasChart ? [
                     'x' => (float) $system->x,
                     'y' => (float) $system->y,
                 ] : null,
                 'is_inhabited' => $system->is_inhabited,
                 'has_chart' => $hasChart,
+                'travel' => [
+                    'warp_gate' => $warpGateOption,
+                    'direct_jump' => $directJumpOption,
+                    'cheapest_option' => $cheapestOption,
+                    'cheapest_fuel_cost' => $cheapestCost,
+                    'can_reach' => $cheapestOption !== null,
+                ],
             ];
         });
 
@@ -147,6 +212,12 @@ class NavigationController extends BaseApiController
             ],
             'sensor_range' => $sensorRange,
             'sensor_level' => $sensorLevel,
+            'ship' => [
+                'current_fuel' => $currentFuel,
+                'max_fuel' => $ship->max_fuel,
+                'warp_drive' => $ship->warp_drive,
+                'max_jump_range' => $maxJumpRange,
+            ],
             'systems_detected' => $systems->count(),
             'nearby_systems' => $systems,
         ]);
@@ -260,7 +331,7 @@ class NavigationController extends BaseApiController
 
         $player = Player::where('uuid', $uuid)
             ->where('user_id', $user->id)
-            ->with(['currentLocation.sector'])
+            ->with(['currentLocation.sector', 'activeShip'])
             ->first();
 
         if (! $player) {
@@ -273,8 +344,23 @@ class NavigationController extends BaseApiController
             return $this->error('Player has no current location', 'NO_LOCATION', null, 400);
         }
 
-        // Get all children (planets, moons, asteroid belts, etc.)
+        $sensorLevel = $player->activeShip?->sensors ?? 1;
+
+        // Get all children with eager-loaded orbital and defense data
         $children = $currentLocation->children()
+            ->with([
+                'orbitalStructures' => fn ($q) => $q->where('status', '!=', 'destroyed'),
+                'orbitalStructures.player:id,uuid,call_sign',
+                'systemDefenses' => fn ($q) => $q->active(),
+                'colony.buildings',
+                'colony.player:id,uuid,call_sign',
+                'children' => fn ($q) => $q->where('type', PointOfInterestType::MOON),
+                'children.orbitalStructures' => fn ($q) => $q->where('status', '!=', 'destroyed'),
+                'children.orbitalStructures.player:id,uuid,call_sign',
+                'children.systemDefenses' => fn ($q) => $q->active(),
+                'children.colony.buildings',
+                'children.colony.player:id,uuid,call_sign',
+            ])
             ->orderBy('orbital_index')
             ->get();
 
@@ -298,18 +384,21 @@ class NavigationController extends BaseApiController
                 'is_inhabited' => $child->is_inhabited ?? false,
                 'has_colony' => $child->colony !== null,
                 'attributes' => $this->getVisibleAttributes($child),
+                'orbital_presence' => $this->getOrbitalPresence($child),
+                'defensive_capability' => $this->getDefensiveCapability($child, $sensorLevel),
             ];
 
-            // Check for moons of this body
-            $moons = $child->children()
-                ->where('type', PointOfInterestType::MOON)
-                ->get();
+            // Check for moons of this body (already eager-loaded, filtered to MOON type)
+            $moons = $child->children;
 
-            if ($moons->isNotEmpty()) {
+            if ($moons && $moons->isNotEmpty()) {
                 $bodyData['moons'] = $moons->map(fn ($moon) => [
                     'uuid' => $moon->uuid,
                     'name' => $moon->name,
                     'is_inhabited' => $moon->is_inhabited ?? false,
+                    'has_colony' => $moon->colony !== null,
+                    'orbital_presence' => $this->getOrbitalPresence($moon),
+                    'defensive_capability' => $this->getDefensiveCapability($moon, $sensorLevel),
                 ])->toArray();
             }
 
@@ -385,5 +474,117 @@ class NavigationController extends BaseApiController
         }
 
         return $visible;
+    }
+
+    /**
+     * Build always-visible orbital presence data for a body.
+     */
+    private function getOrbitalPresence(PointOfInterest $body): array
+    {
+        $structures = $body->orbitalStructures->map(fn ($s) => [
+            'type' => $s->structure_type->value,
+            'name' => $s->name,
+            'level' => $s->level,
+            'status' => $s->status,
+            'owner' => $s->player ? [
+                'uuid' => $s->player->uuid,
+                'call_sign' => $s->player->call_sign,
+            ] : null,
+        ])->toArray();
+
+        $systemDefenses = $body->systemDefenses->map(fn ($d) => [
+            'type' => $d->defense_type->value,
+            'quantity' => $d->quantity,
+            'level' => $d->level,
+        ])->toArray();
+
+        return [
+            'structures' => $structures,
+            'system_defenses' => $systemDefenses,
+        ];
+    }
+
+    /**
+     * Calculate detailed defensive capability for a body (sensor-gated).
+     *
+     * Returns null if sensor level is below the advanced threshold.
+     */
+    private function getDefensiveCapability(PointOfInterest $body, int $sensorLevel): ?array
+    {
+        $advancedSensorThreshold = 5;
+        if ($sensorLevel < $advancedSensorThreshold) {
+            return null;
+        }
+
+        // Player-built orbital defense platforms
+        $orbitalDefenseDamage = $body->orbitalStructures
+            ->sum(fn ($s) => $s->calculateDamage());
+
+        // System defenses (pre-built)
+        $systemDefenseDamage = 0;
+        $fighterDamage = 0;
+        $planetaryShieldHp = 0;
+
+        foreach ($body->systemDefenses as $defense) {
+            if ($defense->defense_type === SystemDefenseType::PLANETARY_SHIELD) {
+                $planetaryShieldHp += $defense->health;
+            } elseif ($defense->defense_type === SystemDefenseType::FIGHTER_PORT) {
+                $fighterDamage += $defense->calculateDamage() + $defense->calculateFighterDamage();
+            } else {
+                $systemDefenseDamage += $defense->calculateDamage();
+            }
+        }
+
+        // Magnetic mines (count only — damage is per-detonation, not per-round)
+        $magneticMineCount = $body->orbitalStructures
+            ->where('structure_type', OrbitalStructureType::MAGNETIC_MINE)
+            ->count();
+
+        // Colony defenses
+        $colonyGarrison = 0;
+        $colonyDefenseBuildings = 0;
+        $colony = $body->colony;
+
+        if ($colony) {
+            // Garrison damage mirrors ColonyCombatService formula
+            $garrisonUnits = (int) floor(($colony->garrison_strength ?? 0) / 50);
+            $colonyGarrison = $garrisonUnits * (15 + ($colony->development_level ?? 0) * 3);
+
+            // Colony defense buildings (orbital_defense type)
+            if ($colony->relationLoaded('buildings') && $colony->buildings) {
+                $colonyDefenseBuildings = $colony->buildings
+                    ->where('building_type', 'orbital_defense')
+                    ->where('status', 'operational')
+                    ->sum(fn ($b) => ColonyBuilding::getBuildingEffects($b->building_type, $b->level)['defense_rating'] ?? 0);
+            }
+        }
+
+        $totalDamage = $orbitalDefenseDamage + $systemDefenseDamage + $fighterDamage + $colonyGarrison + $colonyDefenseBuildings;
+
+        return [
+            'orbital_defense_platforms' => $orbitalDefenseDamage,
+            'system_defenses' => $systemDefenseDamage,
+            'fighter_squadrons' => $fighterDamage,
+            'colony_garrison' => $colonyGarrison,
+            'colony_defense_buildings' => $colonyDefenseBuildings,
+            'magnetic_mines' => $magneticMineCount,
+            'planetary_shield_hp' => $planetaryShieldHp,
+            'total_damage_per_round' => $totalDamage,
+            'threat_level' => $this->getThreatLevel($totalDamage),
+        ];
+    }
+
+    /**
+     * Map total damage per round to a human-readable threat label.
+     */
+    private function getThreatLevel(int $totalDamage): string
+    {
+        return match (true) {
+            $totalDamage === 0 => 'none',
+            $totalDamage <= 50 => 'minimal',
+            $totalDamage <= 150 => 'moderate',
+            $totalDamage <= 400 => 'heavy',
+            default => 'fortress',
+        };
     }
 }

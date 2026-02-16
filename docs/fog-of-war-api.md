@@ -441,7 +441,7 @@ GET /api/players/{uuid}/scan-local
 
 ### 5. Local Bodies (Orbital System)
 
-Get planets, moons, asteroid belts, and stations orbiting the current star.
+Get planets, moons, asteroid belts, and stations orbiting the current star. Each body includes an always-visible `orbital_presence` showing large physical structures in orbit, and a sensor-gated `defensive_capability` breakdown available only when the player's ship sensors are level 5 or higher.
 
 ```
 GET /api/players/{uuid}/local-bodies
@@ -481,11 +481,45 @@ GET /api/players/{uuid}/local-bodies
             "temperature": "temperate",
             "atmosphere": "breathable"
           },
+          "orbital_presence": {
+            "structures": [
+              {
+                "type": "orbital_defense",
+                "name": "Defense Platform Alpha",
+                "level": 2,
+                "status": "operational",
+                "owner": {
+                  "uuid": "player-uuid",
+                  "call_sign": "Captain Vex"
+                }
+              }
+            ],
+            "system_defenses": [
+              { "type": "orbital_cannon", "quantity": 4, "level": 3 }
+            ]
+          },
+          "defensive_capability": {
+            "orbital_defense_platforms": 32,
+            "system_defenses": 230,
+            "fighter_squadrons": 500,
+            "colony_garrison": 90,
+            "colony_defense_buildings": 100,
+            "magnetic_mines": 3,
+            "planetary_shield_hp": 10000,
+            "total_damage_per_round": 952,
+            "threat_level": "fortress"
+          },
           "moons": [
             {
               "uuid": "...",
               "name": "Moon Alpha-1",
-              "is_inhabited": false
+              "is_inhabited": false,
+              "has_colony": false,
+              "orbital_presence": {
+                "structures": [],
+                "system_defenses": []
+              },
+              "defensive_capability": null
             }
           ]
         }
@@ -500,7 +534,12 @@ GET /api/players/{uuid}/local-bodies
           "orbital_index": 2,
           "is_inhabited": false,
           "has_colony": false,
-          "attributes": { "mineral_richness": "high" }
+          "attributes": { "mineral_richness": "high" },
+          "orbital_presence": {
+            "structures": [],
+            "system_defenses": []
+          },
+          "defensive_capability": null
         }
       ],
       "stations": [],
@@ -522,6 +561,22 @@ GET /api/players/{uuid}/local-bodies
 - `summary.moons` counts only direct children of the star (moons orbiting planets appear nested in their parent planet's `moons` array)
 - Bodies are ordered by `orbital_index`
 - `sector` is `null` if the star has no assigned sector
+- `orbital_presence` is **always visible** on every body — large orbital structures (defense platforms, bases, stations, mining platforms) and system defenses (cannons, lasers, missiles, shields, fighter ports) are physically obvious
+- `defensive_capability` is **sensor-gated** — requires ship sensor level >= 5 to populate; returns `null` otherwise
+- `defensive_capability.threat_level` is one of: `none` (0 damage), `minimal` (1-50), `moderate` (51-150), `heavy` (151-400), `fortress` (401+)
+- `defensive_capability.magnetic_mines` is a count, not a damage value (mines detonate per-hit, not per-round)
+- `defensive_capability.planetary_shield_hp` is absorb capacity, not damage output
+- `defensive_capability.total_damage_per_round` sums: orbital defense platforms + system defenses + fighter squadrons + colony garrison + colony defense buildings
+- Moon sub-items include `has_colony`, `orbital_presence`, and `defensive_capability` (same rules as parent bodies)
+
+**CHANGELOG**
+---
+**2026-02-15**
+- Added `orbital_presence` (always visible) to every body and moon, showing player-built orbital structures and system defenses in orbit
+- Added `defensive_capability` (sensor-gated, requires sensor level >= 5) to every body and moon, providing a full defensive breakdown and `total_damage_per_round` summary with `threat_level` label
+- Added `has_colony` to moon sub-items
+- Player's active ship is now eager-loaded for sensor level access
+- Orbital structures, system defenses, and colony data (buildings, owner) are now eager-loaded to prevent N+1 queries
 
 ---
 
@@ -903,7 +958,7 @@ Players can only access their own data. Attempting to access another user's play
 | `GET` | `/api/players/{uuid}/location` | Current location details |
 | `GET` | `/api/players/{uuid}/nearby-systems` | Systems within sensor range |
 | `GET` | `/api/players/{uuid}/scan-local` | All POIs within sensor range |
-| `GET` | `/api/players/{uuid}/local-bodies` | Orbital bodies at current star |
+| `GET` | `/api/players/{uuid}/local-bodies` | Orbital bodies at current star + orbital presence + defensive capability (sensor 5+) |
 | `POST` | `/api/players/{uuid}/scan-system` | Perform progressive scan |
 | `GET` | `/api/players/{uuid}/scan-results/{poiUuid}` | Get existing scan data |
 | `GET` | `/api/players/{uuid}/exploration-log` | All scanned systems log |

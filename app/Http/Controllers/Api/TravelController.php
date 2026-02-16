@@ -37,16 +37,24 @@ class TravelController extends BaseApiController
 
         $location = $result;
 
-        $gates = WarpGate::where('source_poi_id', $location->id)
+        $gates = WarpGate::where(function ($query) use ($location) {
+                $query->where('source_poi_id', $location->id)
+                    ->orWhere('destination_poi_id', $location->id);
+            })
             ->where('is_hidden', false)
             ->where('status', 'active')
-            ->with('destinationPoi')
+            ->with(['sourcePoi', 'destinationPoi'])
             ->get();
 
-        $gatesData = $gates->map(function ($gate) {
+        $gatesData = $gates->map(function ($gate) use ($location) {
+            // Gate is bidirectional — show the other end as the destination
+            $connectedPoi = $gate->source_poi_id === $location->id
+                ? $gate->destinationPoi
+                : $gate->sourcePoi;
+
             return [
                 'uuid' => $gate->uuid,
-                'destination' => new PointOfInterestResource($gate->destinationPoi),
+                'destination' => new PointOfInterestResource($connectedPoi),
                 'fuel_cost' => $gate->fuel_cost,
                 'distance' => round($gate->distance, 2),
             ];
@@ -86,7 +94,10 @@ class TravelController extends BaseApiController
         $player = $result;
 
         $gate = WarpGate::where('uuid', $validated['gate_uuid'])
-            ->where('source_poi_id', $player->current_poi_id)
+            ->where(function ($query) use ($player) {
+                $query->where('source_poi_id', $player->current_poi_id)
+                    ->orWhere('destination_poi_id', $player->current_poi_id);
+            })
             ->first();
 
         if (! $gate) {

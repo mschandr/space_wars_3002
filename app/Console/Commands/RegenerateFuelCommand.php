@@ -56,7 +56,10 @@ class RegenerateFuelCommand extends Command
             $query->whereHas('player', fn ($q) => $q->where('uuid', $playerUuid));
         }
 
-        $ships = $query->get();
+        // In dry-run mode, load without triggering auto-regen events
+        $ships = $this->option('dry-run')
+            ? PlayerShip::withoutEvents(fn () => $query->get())
+            : $query->get();
 
         if ($ships->isEmpty()) {
             $this->info('No ships need fuel regeneration');

@@ -99,6 +99,11 @@ class Player extends Model
         return $this->hasMany(Colony::class);
     }
 
+    public function orbitalStructures(): HasMany
+    {
+        return $this->hasMany(OrbitalStructure::class);
+    }
+
     public function combatParticipations(): HasMany
     {
         return $this->hasMany(CombatParticipant::class);

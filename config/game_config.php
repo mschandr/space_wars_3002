@@ -89,6 +89,19 @@ return [
 
     /**
      * |--------------------------------------------------------------------------
+     * | Moons
+     * |--------------------------------------------------------------------------
+     * | Moon generation parameters for planetary systems.
+     */
+    'moons' => [
+        'habitable_chance_gas_giant' => 0.05,
+        'habitable_chance_ice_giant' => 0.02,
+        'habitable_chance_other' => 0.01,
+        'habitable_min_size' => 'medium',
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
      * | Ore & Economy
      * |--------------------------------------------------------------------------
      */
@@ -121,6 +134,7 @@ return [
      */
     'ships' => [
         'starting_credits' => 100_000,
+        'fuel_regen_seconds_per_unit' => 1, // TESTING: normal value is 30. Seconds between each 1-fuel regeneration tick.
         'classes' => [
             'scout' => [
                 'cargo' => 50,
@@ -297,6 +311,23 @@ return [
 
         // Pirate intel
         'pirate_danger_radius_ly' => 5,         // Danger zone radius around known pirate lanes
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
+     * | Orbital Structures
+     * |--------------------------------------------------------------------------
+     * | Player-buildable structures that orbit planets and moons.
+     * | Defense platforms, magnetic mines, mining platforms, orbital bases.
+     */
+    'orbital_structures' => [
+        'construction_rate' => 10,              // % progress per cycle
+        'max_level' => 5,                       // Maximum upgrade level
+        'mine_detection_base' => 0.30,          // 30% base detection chance
+        'mine_detection_per_sensor' => 0.10,    // +10% per sensor level
+        'mine_detection_max' => 0.90,           // 90% cap
+        'mining_platform_base_rate' => 50,      // Minerals per cycle
+        'mining_platform_storage' => 500,       // Max stored minerals
     ],
 
     /**

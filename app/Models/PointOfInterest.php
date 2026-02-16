@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use mschandr\WeightedRandom\Generator\WeightedRandomGenerator;
@@ -220,11 +221,27 @@ class PointOfInterest extends Model
     }
 
     /**
+     * Player-built orbital structures at this POI
+     */
+    public function orbitalStructures(): HasMany
+    {
+        return $this->hasMany(OrbitalStructure::class, 'poi_id');
+    }
+
+    /**
      * System defenses at this POI (for fortified systems)
      */
     public function systemDefenses()
     {
         return $this->hasMany(SystemDefense::class, 'poi_id');
+    }
+
+    /**
+     * Colony at this POI (if any)
+     */
+    public function colony(): HasOne
+    {
+        return $this->hasOne(Colony::class, 'poi_id');
     }
 
     /**

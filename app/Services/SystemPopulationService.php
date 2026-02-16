@@ -206,66 +206,60 @@ class SystemPopulationService
     {
         $stations = [];
 
-        // Trading Station (1-2 per system)
-        $tradingStationCount = mt_rand(1, 2);
-        for ($i = 1; $i <= $tradingStationCount; $i++) {
-            $stations[] = $this->createStation(
-                $system,
-                PointOfInterestType::TRADING_STATION,
-                $system->name.' Commerce Hub'.($tradingStationCount > 1 ? ' '.$this->romanNumeral($i) : ''),
-                [
-                    'station_class' => $this->weightedRandom([
-                        'outpost' => 10,
-                        'standard' => 40,
-                        'major' => 35,
-                        'hub' => 15,
-                    ]),
-                    'docking_bays' => mt_rand(8, 24),
-                    'cargo_capacity' => mt_rand(50000, 200000),
-                    'services' => ['trading', 'refueling', 'repairs', 'crew_quarters'],
-                    'market_specialization' => $this->weightedRandom([
-                        'general' => 40,
-                        'minerals' => 20,
-                        'technology' => 15,
-                        'luxury_goods' => 10,
-                        'industrial' => 15,
-                    ]),
-                ]
-            );
-        }
+        // Trading Station (1 per system)
+        $stations[] = $this->createStation(
+            $system,
+            PointOfInterestType::TRADING_STATION,
+            $system->name.' Commerce Hub',
+            [
+                'station_class' => $this->weightedRandom([
+                    'outpost' => 10,
+                    'standard' => 40,
+                    'major' => 35,
+                    'hub' => 15,
+                ]),
+                'docking_bays' => mt_rand(8, 24),
+                'cargo_capacity' => mt_rand(50000, 200000),
+                'services' => ['trading', 'refueling', 'repairs', 'crew_quarters'],
+                'market_specialization' => $this->weightedRandom([
+                    'general' => 40,
+                    'minerals' => 20,
+                    'technology' => 15,
+                    'luxury_goods' => 10,
+                    'industrial' => 15,
+                ]),
+            ]
+        );
 
-        // Shipyard (1 per system, maybe 2 for major systems)
-        $shipyardCount = mt_rand(1, 100) <= 30 ? 2 : 1;
-        for ($i = 1; $i <= $shipyardCount; $i++) {
-            $stations[] = $this->createStation(
-                $system,
-                PointOfInterestType::SHIPYARD,
-                $system->name.' Shipyard'.($shipyardCount > 1 ? ' '.$this->romanNumeral($i) : ''),
-                [
-                    'shipyard_class' => $this->weightedRandom([
-                        'light' => 20,
-                        'standard' => 40,
-                        'heavy' => 30,
-                        'capital' => 10,
-                    ]),
-                    'dry_docks' => mt_rand(4, 12),
-                    'construction_bays' => mt_rand(2, 6),
-                    'max_ship_class' => $this->weightedRandom([
-                        'frigate' => 15,
-                        'cruiser' => 35,
-                        'battleship' => 35,
-                        'dreadnought' => 15,
-                    ]),
-                    'services' => ['construction', 'repairs', 'upgrades', 'refitting'],
-                    'specialization' => $this->weightedRandom([
-                        'military' => 30,
-                        'civilian' => 30,
-                        'industrial' => 20,
-                        'mixed' => 20,
-                    ]),
-                ]
-            );
-        }
+        // Shipyard (1 per system)
+        $stations[] = $this->createStation(
+            $system,
+            PointOfInterestType::SHIPYARD,
+            $system->name.' Shipyard',
+            [
+                'shipyard_class' => $this->weightedRandom([
+                    'light' => 20,
+                    'standard' => 40,
+                    'heavy' => 30,
+                    'capital' => 10,
+                ]),
+                'dry_docks' => mt_rand(4, 12),
+                'construction_bays' => mt_rand(2, 6),
+                'max_ship_class' => $this->weightedRandom([
+                    'frigate' => 15,
+                    'cruiser' => 35,
+                    'battleship' => 35,
+                    'dreadnought' => 15,
+                ]),
+                'services' => ['construction', 'repairs', 'upgrades', 'refitting'],
+                'specialization' => $this->weightedRandom([
+                    'military' => 30,
+                    'civilian' => 30,
+                    'industrial' => 20,
+                    'mixed' => 20,
+                ]),
+            ]
+        );
 
         // Salvage Yard (1 per system)
         $stations[] = $this->createStation(

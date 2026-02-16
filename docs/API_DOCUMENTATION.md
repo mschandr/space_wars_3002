@@ -1711,7 +1711,7 @@ Get detailed scan of all nearby POIs (not just stars).
 
 ### 5.4 Get Local Bodies
 
-Get orbital bodies at current location (planets, moons, asteroids).
+Get orbital bodies at current location (planets, moons, asteroids). Includes orbital presence data for all bodies (always visible) and a detailed defensive capability breakdown when the player's ship sensors are level 5 or higher.
 
 | Property | Value |
 |----------|-------|
@@ -1753,16 +1753,59 @@ Get orbital bodies at current location (planets, moons, asteroids).
             "in_goldilocks_zone": true,
             "temperature": 288
           },
+          "orbital_presence": {
+            "structures": [
+              {
+                "type": "orbital_defense",
+                "name": "Orbital Defense Platform",
+                "level": 2,
+                "status": "operational",
+                "owner": { "uuid": "player-uuid", "call_sign": "Captain Vex" }
+              }
+            ],
+            "system_defenses": [
+              { "type": "orbital_cannon", "quantity": 4, "level": 3 }
+            ]
+          },
+          "defensive_capability": {
+            "orbital_defense_platforms": 32,
+            "system_defenses": 230,
+            "fighter_squadrons": 500,
+            "colony_garrison": 90,
+            "colony_defense_buildings": 100,
+            "magnetic_mines": 3,
+            "planetary_shield_hp": 10000,
+            "total_damage_per_round": 952,
+            "threat_level": "fortress"
+          },
           "moons": [
-            { "uuid": "moon-001", "name": "Luna", "is_inhabited": false }
+            {
+              "uuid": "moon-001",
+              "name": "Luna",
+              "is_inhabited": false,
+              "has_colony": false,
+              "orbital_presence": { "structures": [], "system_defenses": [] },
+              "defensive_capability": null
+            }
           ]
         }
       ],
       "moons": [],
       "asteroid_belts": [
-        { "uuid": "belt-001", "name": "Main Belt", "type": "asteroid_belt", "orbital_index": 4 }
+        {
+          "uuid": "belt-001",
+          "name": "Main Belt",
+          "type": "asteroid_belt",
+          "orbital_index": 4,
+          "is_inhabited": false,
+          "has_colony": false,
+          "attributes": {},
+          "orbital_presence": { "structures": [], "system_defenses": [] },
+          "defensive_capability": null
+        }
       ],
       "stations": [],
+      "defense_platforms": [],
       "other": []
     },
     "summary": {
@@ -1775,6 +1818,38 @@ Get orbital bodies at current location (planets, moons, asteroids).
   }
 }
 ```
+
+**Field Reference:**
+
+| Field | Always Present | Description |
+|-------|:-:|-------------|
+| `orbital_presence` | Yes | Large structures and system defenses visibly orbiting the body |
+| `orbital_presence.structures[]` | Yes | Player-built orbital structures (type, name, level, status, owner) |
+| `orbital_presence.system_defenses[]` | Yes | Pre-built system defenses (type, quantity, level) |
+| `defensive_capability` | No | Detailed defense breakdown; `null` when ship sensors < 5 |
+| `defensive_capability.total_damage_per_round` | Sensor 5+ | Sum of all damage sources (key number for attack planning) |
+| `defensive_capability.threat_level` | Sensor 5+ | `none` / `minimal` / `moderate` / `heavy` / `fortress` |
+| `defensive_capability.magnetic_mines` | Sensor 5+ | Count only (mines detonate per-hit, not per-round) |
+| `defensive_capability.planetary_shield_hp` | Sensor 5+ | Shield absorb HP (not damage output) |
+
+**Threat Level Thresholds:**
+
+| Damage/Round | Label |
+|---|---|
+| 0 | `none` |
+| 1-50 | `minimal` |
+| 51-150 | `moderate` |
+| 151-400 | `heavy` |
+| 401+ | `fortress` |
+
+**CHANGELOG**
+---
+**2026-02-15**
+- Added `orbital_presence` to every body and moon (always visible)
+- Added `defensive_capability` to every body and moon (sensor-gated, requires level >= 5)
+- Added `has_colony` to moon sub-items
+- Added `defense_platforms` category to bodies response
+- Response now requires active ship for sensor level (defaults to 1 if no active ship)
 
 ---
 
@@ -2029,8 +2104,10 @@ Calculate fuel cost for travel.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `distance` | number | Yes | Travel distance |
 | `ship_uuid` | string | Yes | Ship UUID |
+| `poi_uuid` | string | Yes (unless x,y provided) | Destination POI UUID |
+| `x` | number | Yes (unless poi_uuid provided) | Destination X coordinate |
+| `y` | number | Yes (unless poi_uuid provided) | Destination Y coordinate |
 
 **Response (200 OK):**
 
@@ -2039,12 +2116,15 @@ Calculate fuel cost for travel.
   "success": true,
   "message": null,
   "data": {
-    "distance": 100,
-    "base_fuel_cost": 10,
-    "warp_drive_level": 3,
-    "effective_fuel_cost": 4,
-    "current_fuel": 85,
-    "can_afford": true
+    "from": { "uuid": "...", "name": "Current System", "x": 100, "y": 100 },
+    "to": { "uuid": "...", "name": "Destination System", "x": 200, "y": 200 },
+    "distance": 141.42,
+    "ship": { "current_fuel": 85, "max_fuel": 100, "warp_drive": 3 },
+    "warp_gate": null,
+    "direct_jump": { "distance": 141.42, "fuel_cost": 48, "can_afford": true, "in_range": true, "max_range": 500 },
+    "cheapest_option": "direct_jump",
+    "cheapest_fuel_cost": 48,
+    "can_reach": true
   }
 }
 ```
