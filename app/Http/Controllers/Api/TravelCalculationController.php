@@ -109,14 +109,14 @@ class TravelCalculationController extends BaseApiController
         $warpGate = null;
         if ($destination) {
             $warpGate = WarpGate::where(function ($query) use ($currentLocation, $destination) {
-                    $query->where(function ($q) use ($currentLocation, $destination) {
-                        $q->where('source_poi_id', $currentLocation->id)
-                            ->where('destination_poi_id', $destination->id);
-                    })->orWhere(function ($q) use ($currentLocation, $destination) {
-                        $q->where('source_poi_id', $destination->id)
-                            ->where('destination_poi_id', $currentLocation->id);
-                    });
-                })
+                $query->where(function ($q) use ($currentLocation, $destination) {
+                    $q->where('source_poi_id', $currentLocation->id)
+                        ->where('destination_poi_id', $destination->id);
+                })->orWhere(function ($q) use ($currentLocation, $destination) {
+                    $q->where('source_poi_id', $destination->id)
+                        ->where('destination_poi_id', $currentLocation->id);
+                });
+            })
                 ->where('is_hidden', false)
                 ->where('status', 'active')
                 ->first();

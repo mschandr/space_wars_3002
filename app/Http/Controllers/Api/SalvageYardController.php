@@ -2,16 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
-use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\PlayerShipComponent;
+use App\Models\PointOfInterest;
 use App\Models\SalvageYardInventory;
 use App\Services\SalvageYardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class SalvageYardController extends Controller
+class SalvageYardController extends BaseApiController
 {
     public function __construct(
         private SalvageYardService $salvageYardService
@@ -22,39 +21,29 @@ class SalvageYardController extends Controller
      *
      * GET /api/players/{uuid}/salvage-yard
      */
-    public function index(string $uuid): JsonResponse
+    public function index(Request $request, string $uuid): JsonResponse
     {
-        $player = Player::where('uuid', $uuid)->first();
+        $player = $this->findAuthenticatedPlayerOrFail($uuid, $request, ['currentLocation.tradingHub']);
 
-        if (! $player) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Player not found',
-            ], 404);
+        if ($player instanceof JsonResponse) {
+            return $player;
         }
 
-        // Get current location trading hub
         $hub = $player->currentLocation?->tradingHub;
 
         if (! $hub) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You are not at a trading hub with a salvage yard.',
-            ], 400);
+            return $this->error('You are not at a trading hub with a salvage yard.', 'NO_SALVAGE_YARD');
         }
 
         $inventory = $this->salvageYardService->getInventoryByType($hub);
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'hub' => [
-                    'id' => $hub->id,
-                    'name' => $hub->name,
-                    'tier' => $hub->getTier(),
-                ],
-                'inventory' => $inventory,
+        return $this->success([
+            'hub' => [
+                'id' => $hub->id,
+                'name' => $hub->name,
+                'tier' => $hub->getTier(),
             ],
+            'inventory' => $inventory,
         ]);
     }
 
@@ -63,38 +52,24 @@ class SalvageYardController extends Controller
      *
      * GET /api/players/{uuid}/ship-components
      */
-    public function shipComponents(string $uuid): JsonResponse
+    public function shipComponents(Request $request, string $uuid): JsonResponse
     {
-        $player = Player::where('uuid', $uuid)->first();
+        $player = $this->findPlayerWithShipOrFail($uuid, $request);
 
-        if (! $player) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Player not found',
-            ], 404);
+        if ($player instanceof JsonResponse) {
+            return $player;
         }
 
         $ship = $player->activeShip;
-
-        if (! $ship) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No active ship.',
-            ], 400);
-        }
-
         $components = $this->salvageYardService->getInstalledComponents($ship);
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'ship' => [
-                    'id' => $ship->id,
-                    'name' => $ship->name,
-                    'class' => $ship->ship->name ?? 'Unknown',
-                ],
-                'components' => $components,
+        return $this->success([
+            'ship' => [
+                'id' => $ship->id,
+                'name' => $ship->name,
+                'class' => $ship->ship->name ?? 'Unknown',
             ],
+            'components' => $components,
         ]);
     }
 
@@ -102,20 +77,13 @@ class SalvageYardController extends Controller
      * Purchase a component from the salvage yard.
      *
      * POST /api/players/{uuid}/salvage-yard/purchase
-     *
-     * @bodyParam inventory_id int required The salvage yard inventory item ID
-     * @bodyParam slot_index int required Which slot to install the component in (1-based)
-     * @bodyParam ship_id int optional The ship to install on (defaults to active ship)
      */
     public function purchase(Request $request, string $uuid): JsonResponse
     {
-        $player = Player::where('uuid', $uuid)->first();
+        $player = $this->findAuthenticatedPlayerOrFail($uuid, $request, ['currentLocation.tradingHub']);
 
-        if (! $player) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Player not found',
-            ], 404);
+        if ($player instanceof JsonResponse) {
+            return $player;
         }
 
         $validated = $request->validate([
@@ -124,36 +92,24 @@ class SalvageYardController extends Controller
             'ship_id' => 'nullable|integer',
         ]);
 
-        // Get the hub at current location
         $hub = $player->currentLocation?->tradingHub;
 
         if (! $hub) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You are not at a trading hub with a salvage yard.',
-            ], 400);
+            return $this->error('You are not at a trading hub with a salvage yard.', 'NO_SALVAGE_YARD');
         }
 
-        // Get the inventory item
         $item = SalvageYardInventory::find($validated['inventory_id']);
 
         if (! $item || $item->trading_hub_id !== $hub->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Item not available at this salvage yard.',
-            ], 400);
+            return $this->error('Item not available at this salvage yard.', 'ITEM_NOT_AVAILABLE');
         }
 
-        // Get the ship
         $ship = isset($validated['ship_id'])
             ? PlayerShip::where('id', $validated['ship_id'])->where('player_id', $player->id)->first()
             : $player->activeShip;
 
         if (! $ship) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ship not found.',
-            ], 400);
+            return $this->error('Ship not found.', 'SHIP_NOT_FOUND');
         }
 
         $result = $this->salvageYardService->purchaseComponent(
@@ -164,49 +120,37 @@ class SalvageYardController extends Controller
             $validated['slot_index']
         );
 
-        return response()->json([
-            'success' => $result['success'],
-            'message' => $result['message'] ?? $result['error'] ?? null,
-            'data' => $result['success'] ? [
-                'component_id' => $result['component']->id,
-                'credits_remaining' => $result['credits_remaining'],
-            ] : null,
-        ], $result['success'] ? 200 : 400);
+        if (! $result['success']) {
+            return $this->error($result['error'] ?? $result['message'] ?? 'Purchase failed');
+        }
+
+        return $this->success([
+            'component_id' => $result['component']->id,
+            'credits_remaining' => $result['credits_remaining'],
+        ], $result['message'] ?? 'Component purchased.');
     }
 
     /**
      * Uninstall a component from the player's ship.
      *
      * POST /api/players/{uuid}/ship-components/{componentId}/uninstall
-     *
-     * @bodyParam sell bool optional Whether to sell the component (default false)
      */
     public function uninstall(Request $request, string $uuid, int $componentId): JsonResponse
     {
-        $player = Player::where('uuid', $uuid)->first();
+        $player = $this->findAuthenticatedPlayerOrFail($uuid, $request);
 
-        if (! $player) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Player not found',
-            ], 404);
+        if ($player instanceof JsonResponse) {
+            return $player;
         }
 
         $component = PlayerShipComponent::find($componentId);
 
         if (! $component) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Component not found.',
-            ], 404);
+            return $this->notFound('Component not found.');
         }
 
-        // Verify ownership
         if ($component->playerShip->player_id !== $player->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This component is not installed on your ship.',
-            ], 403);
+            return $this->forbidden('This component is not installed on your ship.');
         }
 
         $sellToYard = $request->boolean('sell', false);
@@ -217,13 +161,84 @@ class SalvageYardController extends Controller
             $sellToYard
         );
 
-        return response()->json([
-            'success' => $result['success'],
-            'message' => $result['message'] ?? $result['error'] ?? null,
-            'data' => $result['success'] ? [
-                'credits_received' => $result['credits_received'] ?? 0,
-                'credits_total' => $result['credits_total'] ?? $player->credits,
-            ] : null,
-        ], $result['success'] ? 200 : 400);
+        if (! $result['success']) {
+            return $this->error($result['error'] ?? $result['message'] ?? 'Uninstall failed');
+        }
+
+        return $this->success([
+            'credits_received' => $result['credits_received'] ?? 0,
+            'credits_total' => $result['credits_total'] ?? $player->credits,
+        ], $result['message'] ?? 'Component uninstalled.');
+    }
+
+    /**
+     * Browse salvage yard components at a specific system POI.
+     * Triggers lazy inventory generation on first visit.
+     *
+     * GET /api/systems/{uuid}/salvage-yard
+     */
+    public function indexBySystem(string $uuid): JsonResponse
+    {
+        $poi = PointOfInterest::where('uuid', $uuid)->first();
+
+        if (! $poi) {
+            return $this->notFound('System not found.');
+        }
+
+        $this->salvageYardService->ensureSalvageYardInventory($poi);
+
+        $inventory = $this->salvageYardService->getInventoryByPoi($poi);
+
+        return $this->success([
+            'system' => [
+                'uuid' => $poi->uuid,
+                'name' => $poi->name,
+            ],
+            'inventory' => $inventory,
+        ]);
+    }
+
+    /**
+     * Sell a ship to the salvage yard for lump-sum credits.
+     *
+     * POST /api/players/{uuid}/salvage-yard/sell-ship
+     */
+    public function sellShip(Request $request, string $uuid): JsonResponse
+    {
+        $player = $this->findPlayerWithLocationOrFail($uuid, $request);
+
+        if ($player instanceof JsonResponse) {
+            return $player;
+        }
+
+        $validated = $request->validate([
+            'ship_uuid' => 'required|string',
+        ]);
+
+        $ship = PlayerShip::where('uuid', $validated['ship_uuid'])
+            ->where('player_id', $player->id)
+            ->first();
+
+        if (! $ship) {
+            return $this->notFound('Ship not found.');
+        }
+
+        $poi = $player->currentLocation;
+
+        $result = $this->salvageYardService->sellShipToSalvageYard($player, $ship, $poi);
+
+        if (! $result['success']) {
+            return $this->error($result['error']);
+        }
+
+        return $this->success([
+            'credits_received' => $result['credits_received'],
+            'components_salvaged' => $result['components_salvaged'],
+            'credits_total' => $player->fresh()->credits,
+        ], sprintf(
+            'Ship sold for %s credits. %d components salvaged.',
+            number_format($result['credits_received']),
+            $result['components_salvaged']
+        ));
     }
 }

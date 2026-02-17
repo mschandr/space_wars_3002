@@ -2,16 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class PlayerShip extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     const FUEL_REGEN_RATE_DEFAULT = 30; // fallback if config missing
 
@@ -81,12 +81,6 @@ class PlayerShip extends Model
     protected static function boot()
     {
         parent::boot();
-
-        static::creating(function ($playerShip) {
-            if (empty($playerShip->uuid)) {
-                $playerShip->uuid = Str::uuid();
-            }
-        });
 
         static::retrieved(function ($playerShip) {
             if ($playerShip->is_active) {

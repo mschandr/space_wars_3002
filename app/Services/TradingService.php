@@ -6,6 +6,7 @@ use App\Models\Player;
 use App\Models\PlayerCargo;
 use App\Models\PlayerShip;
 use App\Models\TradingHubInventory;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Trading Service
@@ -54,32 +55,35 @@ class TradingService
             ];
         }
 
-        // Execute transaction
-        $player->deductCredits($totalCost);
-        $inventory->removeStock($quantity);
-
-        // Add to player cargo
-        $playerCargo = PlayerCargo::firstOrNew([
-            'player_ship_id' => $ship->id,
-            'mineral_id' => $mineral->id,
-        ]);
-        $playerCargo->quantity = ($playerCargo->quantity ?? 0) + $quantity;
-        $playerCargo->save();
-
-        // Update ship cargo
-        $ship->current_cargo += $quantity;
-        $ship->save();
-
-        // Award XP for trading
+        // Execute transaction atomically
         $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
-        $player->addExperience($xpEarned);
 
-        return [
-            'success' => true,
-            'message' => "Successfully purchased {$quantity} units of {$mineral->name}",
-            'total_cost' => $totalCost,
-            'xp_earned' => $xpEarned,
-        ];
+        return DB::transaction(function () use ($player, $ship, $inventory, $mineral, $quantity, $totalCost, $xpEarned) {
+            $player->deductCredits($totalCost);
+            $inventory->removeStock($quantity);
+
+            // Add to player cargo
+            $playerCargo = PlayerCargo::firstOrNew([
+                'player_ship_id' => $ship->id,
+                'mineral_id' => $mineral->id,
+            ]);
+            $playerCargo->quantity = ($playerCargo->quantity ?? 0) + $quantity;
+            $playerCargo->save();
+
+            // Update ship cargo
+            $ship->current_cargo += $quantity;
+            $ship->save();
+
+            // Award XP for trading
+            $player->addExperience($xpEarned);
+
+            return [
+                'success' => true,
+                'message' => "Successfully purchased {$quantity} units of {$mineral->name}",
+                'total_cost' => $totalCost,
+                'xp_earned' => $xpEarned,
+            ];
+        });
     }
 
     /**
@@ -102,32 +106,35 @@ class TradingService
 
         $totalRevenue = $hubInventory->buy_price * $quantity;
 
-        // Execute transaction
-        $player->addCredits($totalRevenue);
-        $hubInventory->addStock($quantity);
-
-        // Remove from player cargo
-        $cargo->quantity -= $quantity;
-        if ($cargo->quantity <= 0) {
-            $cargo->delete();
-        } else {
-            $cargo->save();
-        }
-
-        // Update ship cargo
-        $ship->current_cargo -= $quantity;
-        $ship->save();
-
-        // Award XP for trading
+        // Execute transaction atomically
         $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits, min 10
-        $player->addExperience($xpEarned);
 
-        return [
-            'success' => true,
-            'message' => "Successfully sold {$quantity} units of {$mineral->name}",
-            'total_revenue' => $totalRevenue,
-            'xp_earned' => $xpEarned,
-        ];
+        return DB::transaction(function () use ($player, $ship, $cargo, $hubInventory, $mineral, $quantity, $totalRevenue, $xpEarned) {
+            $player->addCredits($totalRevenue);
+            $hubInventory->addStock($quantity);
+
+            // Remove from player cargo
+            $cargo->quantity -= $quantity;
+            if ($cargo->quantity <= 0) {
+                $cargo->delete();
+            } else {
+                $cargo->save();
+            }
+
+            // Update ship cargo
+            $ship->current_cargo -= $quantity;
+            $ship->save();
+
+            // Award XP for trading
+            $player->addExperience($xpEarned);
+
+            return [
+                'success' => true,
+                'message' => "Successfully sold {$quantity} units of {$mineral->name}",
+                'total_revenue' => $totalRevenue,
+                'xp_earned' => $xpEarned,
+            ];
+        });
     }
 
     /**

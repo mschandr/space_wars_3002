@@ -332,6 +332,74 @@ return [
 
     /**
      * |--------------------------------------------------------------------------
+     * | Rarity System
+     * |--------------------------------------------------------------------------
+     * | Unified rarity tiers for ships and components.
+     * | Weights control drop frequency. Multipliers scale stats and prices.
+     */
+    'rarity' => [
+        'weights' => [
+            'common' => 60,
+            'uncommon' => 30,
+            'rare' => 5,
+            'epic' => 3,
+            'unique' => 2,
+            'exotic' => 1,
+        ],
+        'stat_multipliers' => [
+            'common' => 1.0,
+            'uncommon' => 1.1,
+            'rare' => 1.25,
+            'epic' => 1.5,
+            'unique' => 1.8,
+            'exotic' => 2.2,
+        ],
+        'price_multipliers' => [
+            'common' => 1.0,
+            'uncommon' => 1.5,
+            'rare' => 3.0,
+            'epic' => 6.0,
+            'unique' => 12.0,
+            'exotic' => 30.0,
+        ],
+        'jitter_percentage' => 0.05, // +/- 5% per stat for uniqueness
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
+     * | Shipyard Configuration
+     * |--------------------------------------------------------------------------
+     * | Shipyard POIs sell unique pre-rolled ships. Inventory generated lazily
+     * | on first player visit and persists forever.
+     */
+    'shipyard' => [
+        'inventory_size' => [
+            'capital' => [4, 8],    // min, max ships
+            'heavy' => [3, 6],
+            'standard' => [2, 4],
+            'light' => [1, 3],
+        ],
+        'sell_value_percentage' => 0.40, // 40% of value when selling to salvage
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
+     * | Salvage Yard Configuration
+     * |--------------------------------------------------------------------------
+     * | Salvage yards buy whole ships for lump-sum credits and sell components.
+     */
+    'salvage_yard' => [
+        'inventory_size' => [
+            'major' => [8, 15],     // min, max components
+            'standard' => [5, 10],
+            'minor' => [3, 6],
+        ],
+        'component_sell_percentage' => 0.50, // 50% of component value
+        'ship_sell_percentage' => 0.35,      // 35% of ship value (lump sum)
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
      * | Progressive Scanning System
      * |--------------------------------------------------------------------------
      * | Sensor-based progressive revelation system. Ship sensor level determines

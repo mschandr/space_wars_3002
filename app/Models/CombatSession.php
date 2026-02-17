@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class CombatSession extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $table = 'combat_sessions';
 
@@ -42,9 +42,6 @@ class CombatSession extends Model
         parent::boot();
 
         static::creating(function ($session) {
-            if (empty($session->uuid)) {
-                $session->uuid = Str::uuid();
-            }
             if (empty($session->started_at)) {
                 $session->started_at = now();
             }

@@ -50,6 +50,7 @@ class PointOfInterest extends Model
         'region',
         'is_fortified',
         'owner_id',
+        'inventory_generated_at',
         'version',
     ];
 
@@ -63,6 +64,7 @@ class PointOfInterest extends Model
         'status' => PointOfInterestStatus::class,
         'type' => PointOfInterestType::class,
         'region' => RegionType::class,
+        'inventory_generated_at' => 'datetime',
     ];
 
     /**
@@ -226,6 +228,39 @@ class PointOfInterest extends Model
     public function orbitalStructures(): HasMany
     {
         return $this->hasMany(OrbitalStructure::class, 'poi_id');
+    }
+
+    /**
+     * Shipyard inventory items at this POI
+     */
+    public function shipyardInventory(): HasMany
+    {
+        return $this->hasMany(ShipyardInventory::class, 'poi_id');
+    }
+
+    /**
+     * Salvage yard inventory items at this POI
+     */
+    public function salvageYardInventory(): HasMany
+    {
+        return $this->hasMany(SalvageYardInventory::class, 'poi_id');
+    }
+
+    /**
+     * Check if inventory has been generated for this POI.
+     */
+    public function isInventoryGenerated(): bool
+    {
+        return $this->inventory_generated_at !== null;
+    }
+
+    /**
+     * Mark inventory as generated.
+     */
+    public function markInventoryGenerated(): void
+    {
+        $this->inventory_generated_at = now();
+        $this->save();
     }
 
     /**

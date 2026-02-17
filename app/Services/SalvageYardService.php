@@ -5,10 +5,12 @@ namespace App\Services;
 use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\PlayerShipComponent;
+use App\Models\PointOfInterest;
 use App\Models\SalvageYardInventory;
 use App\Models\ShipComponent;
 use App\Models\TradingHub;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Service for handling salvage yard operations.
@@ -157,43 +159,37 @@ class SalvageYardService
             ];
         }
 
-        // TODO: TECH DEBT - Wrap in DB::transaction()
-        //       Issue: Credit deduction, inventory decrement, and component install are not atomic
-        //       Risk: If any step fails after credits deducted, player loses credits without
-        //             receiving component (or inventory decremented without installation)
-        //       Fix: Use DB::transaction(function() { ... }) around all three operations
-        //       Priority: Low (pre-release)
+        // Process purchase atomically
+        return DB::transaction(function () use ($player, $item, $ship, $slotType, $slotIndex) {
+            $player->deductCredits($item->current_price);
 
-        // Process purchase
-        $player->credits -= $item->current_price;
-        $player->save();
+            $item->quantity--;
+            $item->save();
 
-        $item->quantity--;
-        $item->save();
+            // Install component on ship
+            $installedComponent = PlayerShipComponent::create([
+                'player_ship_id' => $ship->id,
+                'ship_component_id' => $item->ship_component_id,
+                'slot_type' => $slotType,
+                'slot_index' => $slotIndex,
+                'condition' => $item->condition,
+                'ammo' => $item->component->getEffect('max_ammo'),
+                'max_ammo' => $item->component->getEffect('max_ammo'),
+                'is_active' => true,
+            ]);
 
-        // Install component on ship
-        $installedComponent = PlayerShipComponent::create([
-            'player_ship_id' => $ship->id,
-            'ship_component_id' => $item->ship_component_id,
-            'slot_type' => $slotType,
-            'slot_index' => $slotIndex,
-            'condition' => $item->condition,
-            'ammo' => $item->component->getEffect('max_ammo'),
-            'max_ammo' => $item->component->getEffect('max_ammo'),
-            'is_active' => true,
-        ]);
-
-        return [
-            'success' => true,
-            'component' => $installedComponent,
-            'message' => sprintf(
-                '%s installed in %s slot %d.',
-                $item->component->name,
-                str_replace('_', ' ', $slotType),
-                $slotIndex
-            ),
-            'credits_remaining' => $player->credits,
-        ];
+            return [
+                'success' => true,
+                'component' => $installedComponent,
+                'message' => sprintf(
+                    '%s installed in %s slot %d.',
+                    $item->component->name,
+                    str_replace('_', ' ', $slotType),
+                    $slotIndex
+                ),
+                'credits_remaining' => $player->credits,
+            ];
+        });
     }
 
     /**
@@ -213,14 +209,6 @@ class SalvageYardService
         }
 
         $componentName = $component->component->name;
-        $sellValue = 0;
-
-        // TODO: TECH DEBT - Wrap in DB::transaction()
-        //       Issue: Credit addition, inventory update, and component deletion are not atomic
-        //       Risk: Failure mid-way could credit player without removing component,
-        //             or delete component without crediting
-        //       Fix: Use DB::transaction(function() { ... }) around all operations
-        //       Priority: Low (pre-release)
 
         if ($sellToYard) {
             // Get current location trading hub
@@ -238,39 +226,47 @@ class SalvageYardService
             $conditionMultiplier = $component->condition / 100;
             $sellValue = (int) ($basePrice * 0.5 * $conditionMultiplier);
 
-            $player->credits += $sellValue;
-            $player->save();
+            return DB::transaction(function () use ($player, $component, $hub, $componentName, $basePrice, $sellValue) {
+                $player->addCredits($sellValue);
 
-            // Add to salvage yard inventory
-            $existingInventory = SalvageYardInventory::where('trading_hub_id', $hub->id)
-                ->where('ship_component_id', $component->ship_component_id)
-                ->where('condition', $component->condition)
-                ->where('source', 'salvage')
-                ->first();
+                // Add to salvage yard inventory
+                $existingInventory = SalvageYardInventory::where('trading_hub_id', $hub->id)
+                    ->where('ship_component_id', $component->ship_component_id)
+                    ->where('condition', $component->condition)
+                    ->where('source', 'salvage')
+                    ->first();
 
-            if ($existingInventory) {
-                $existingInventory->quantity++;
-                $existingInventory->save();
-            } else {
-                SalvageYardInventory::create([
-                    'trading_hub_id' => $hub->id,
-                    'ship_component_id' => $component->ship_component_id,
-                    'quantity' => 1,
-                    'current_price' => $basePrice * 0.7, // Slightly cheaper as salvage
-                    'condition' => $component->condition,
-                    'source' => 'salvage',
-                ]);
-            }
+                if ($existingInventory) {
+                    $existingInventory->quantity++;
+                    $existingInventory->save();
+                } else {
+                    SalvageYardInventory::create([
+                        'trading_hub_id' => $hub->id,
+                        'ship_component_id' => $component->ship_component_id,
+                        'quantity' => 1,
+                        'current_price' => $basePrice * 0.7, // Slightly cheaper as salvage
+                        'condition' => $component->condition,
+                        'source' => 'salvage',
+                    ]);
+                }
+
+                $component->delete();
+
+                return [
+                    'success' => true,
+                    'message' => sprintf('%s sold for %s credits.', $componentName, number_format($sellValue)),
+                    'credits_received' => $sellValue,
+                    'credits_total' => $player->credits,
+                ];
+            });
         }
 
         $component->delete();
 
         return [
             'success' => true,
-            'message' => $sellToYard
-                ? sprintf('%s sold for %s credits.', $componentName, number_format($sellValue))
-                : sprintf('%s uninstalled.', $componentName),
-            'credits_received' => $sellValue,
+            'message' => sprintf('%s uninstalled.', $componentName),
+            'credits_received' => 0,
             'credits_total' => $player->credits,
         ];
     }
@@ -412,5 +408,164 @@ class SalvageYardService
         $conditionMultiplier = 0.5 + ($condition / 200); // 0.5 to 1.0
 
         return $baseMultiplier * $conditionMultiplier;
+    }
+
+    /**
+     * Sell a whole ship to a salvage yard for lump-sum credits.
+     * Components are extracted and placed in the salvage yard inventory.
+     *
+     * @return array{success: bool, credits_received?: int, components_salvaged?: int, error?: string}
+     */
+    public function sellShipToSalvageYard(
+        Player $player,
+        PlayerShip $ship,
+        PointOfInterest $salvageYardPoi
+    ): array {
+        if ($ship->player_id !== $player->id) {
+            return ['success' => false, 'error' => 'You do not own this ship.'];
+        }
+
+        // Cannot sell only ship
+        $shipCount = PlayerShip::where('player_id', $player->id)->count();
+        if ($shipCount <= 1) {
+            return ['success' => false, 'error' => 'You cannot sell your only ship.'];
+        }
+
+        if ($ship->is_active) {
+            return ['success' => false, 'error' => 'You cannot sell your active ship. Switch to another ship first.'];
+        }
+
+        $blueprint = $ship->ship;
+        $basePrice = (float) ($blueprint->base_price ?? 0);
+        $sellPct = config('game_config.salvage_yard.ship_sell_percentage', 0.35);
+        $conditionPct = $ship->max_hull > 0 ? ($ship->hull / $ship->max_hull) : 1.0;
+        $creditsReceived = (int) round($basePrice * $sellPct * $conditionPct);
+
+        return DB::transaction(function () use ($player, $ship, $salvageYardPoi, $creditsReceived) {
+            $player->addCredits($creditsReceived);
+
+            // Extract installed components into salvage yard inventory
+            $componentsSalvaged = 0;
+            $installedComponents = PlayerShipComponent::where('player_ship_id', $ship->id)
+                ->with('component')
+                ->get();
+
+            foreach ($installedComponents as $installed) {
+                SalvageYardInventory::create([
+                    'poi_id' => $salvageYardPoi->id,
+                    'ship_component_id' => $installed->ship_component_id,
+                    'quantity' => 1,
+                    'current_price' => (float) $installed->component->base_price * 0.7,
+                    'condition' => $installed->condition,
+                    'source' => 'salvage',
+                ]);
+                $componentsSalvaged++;
+            }
+
+            // Delete cargo, components, then ship
+            $ship->cargo()->delete();
+            $ship->components()->delete();
+            $ship->delete();
+
+            return [
+                'success' => true,
+                'credits_received' => $creditsReceived,
+                'components_salvaged' => $componentsSalvaged,
+            ];
+        });
+    }
+
+    /**
+     * Ensure salvage yard inventory exists, generating lazily if needed.
+     */
+    public function ensureSalvageYardInventory(PointOfInterest $salvageYardPoi): void
+    {
+        if ($salvageYardPoi->isInventoryGenerated()) {
+            return;
+        }
+
+        $this->generateSalvageYardInventory($salvageYardPoi);
+    }
+
+    /**
+     * Generate salvage yard inventory at a POI.
+     *
+     * @return int Number of items generated
+     */
+    public function generateSalvageYardInventory(PointOfInterest $salvageYardPoi): int
+    {
+        $components = ShipComponent::where('is_available', true)->get();
+
+        if ($components->isEmpty()) {
+            $salvageYardPoi->markInventoryGenerated();
+
+            return 0;
+        }
+
+        $importance = $salvageYardPoi->attributes['importance'] ?? 'standard';
+        $ranges = config('game_config.salvage_yard.inventory_size', []);
+        $range = $ranges[$importance] ?? $ranges['standard'] ?? [5, 10];
+        $count = random_int($range[0], $range[1]);
+
+        $created = 0;
+
+        for ($i = 0; $i < $count; $i++) {
+            $component = $components->random();
+            $source = $this->randomSource();
+            $condition = $this->randomCondition($source);
+            $priceMultiplier = $this->getPriceMultiplier($source, $condition);
+            $price = (float) $component->base_price * $priceMultiplier;
+
+            SalvageYardInventory::create([
+                'poi_id' => $salvageYardPoi->id,
+                'ship_component_id' => $component->id,
+                'quantity' => rand(1, 5),
+                'current_price' => $price,
+                'condition' => $condition,
+                'source' => $source,
+            ]);
+
+            $created++;
+        }
+
+        $salvageYardPoi->markInventoryGenerated();
+
+        return $created;
+    }
+
+    /**
+     * Get inventory at a salvage yard POI.
+     */
+    public function getInventoryByPoi(PointOfInterest $poi): Collection
+    {
+        return SalvageYardInventory::where('poi_id', $poi->id)
+            ->where('quantity', '>', 0)
+            ->with('component')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'component' => [
+                        'id' => $item->component->id,
+                        'uuid' => $item->component->uuid,
+                        'name' => $item->component->name,
+                        'type' => $item->component->type,
+                        'slot_type' => $item->component->slot_type,
+                        'description' => $item->component->description,
+                        'slots_required' => $item->component->slots_required,
+                        'rarity' => $item->component->rarity,
+                        'rarity_color' => $item->component->getRarityColor(),
+                        'effects' => $item->component->effects,
+                        'requirements' => $item->component->requirements,
+                    ],
+                    'quantity' => $item->quantity,
+                    'price' => (float) $item->current_price,
+                    'condition' => $item->condition,
+                    'condition_description' => $item->getConditionDescription(),
+                    'source' => $item->source,
+                    'source_description' => $item->getSourceDescription(),
+                    'is_new' => $item->isNew(),
+                ];
+            });
     }
 }

@@ -26,6 +26,7 @@ class SalvageYardInventory extends Model
 
     protected $fillable = [
         'trading_hub_id',
+        'poi_id',
         'ship_component_id',
         'quantity',
         'current_price',
@@ -45,6 +46,14 @@ class SalvageYardInventory extends Model
     public function tradingHub(): BelongsTo
     {
         return $this->belongsTo(TradingHub::class);
+    }
+
+    /**
+     * Get the salvage yard POI this item belongs to
+     */
+    public function salvageYard(): BelongsTo
+    {
+        return $this->belongsTo(PointOfInterest::class, 'poi_id');
     }
 
     /**

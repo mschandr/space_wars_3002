@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class ColonyShipProduction extends Model
 {
+    use HasUuid;
+
     protected $table = 'colony_ship_production';
 
     protected $fillable = [
@@ -34,20 +37,6 @@ class ColonyShipProduction extends Model
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
     ];
-
-    /**
-     * Boot the model
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($production) {
-            if (empty($production->uuid)) {
-                $production->uuid = Str::uuid();
-            }
-        });
-    }
 
     /**
      * Get the colony this production belongs to

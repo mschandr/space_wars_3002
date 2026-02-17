@@ -4,7 +4,6 @@ namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 use Assert\AssertionFailedException;
 
 /**
@@ -37,12 +36,7 @@ final class RandomScatter extends AbstractPointGenerator implements PointGenerat
             // At this point: either unique, or forced duplicate after 3 tries
             $points[$key] = [$x, $y];
         }
-        if (config('game_config.feature.persist_data')) {
-            PointOfInterest::createPointsForGalaxy($galaxy, array_values($points));
-
-            // Generate star systems (planets, moons, asteroids)
-            $this->generateStarSystems($galaxy);
-        }
+        $this->persistIfEnabled($galaxy, array_values($points));
 
         return array_values($points);
     }

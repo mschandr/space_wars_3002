@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 /**
  * Ship Component Blueprint
@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
  */
 class ShipComponent extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -41,17 +41,6 @@ class ShipComponent extends Model
         'requirements' => 'array',
         'is_available' => 'boolean',
     ];
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($component) {
-            if (empty($component->uuid)) {
-                $component->uuid = Str::uuid();
-            }
-        });
-    }
 
     /**
      * Get all instances of this component installed on ships
@@ -125,8 +114,9 @@ class ShipComponent extends Model
     public function getRarityColor(): string
     {
         return match ($this->rarity) {
-            'legendary' => 'orange',
-            'very_rare' => 'purple',
+            'exotic' => 'red',
+            'unique' => 'orange',
+            'epic' => 'purple',
             'rare' => 'blue',
             'uncommon' => 'green',
             default => 'gray',

@@ -5,6 +5,10 @@ namespace App\Services;
 use App\Models\Player;
 use App\Models\PlayerShip;
 
+/**
+ * @deprecated Use discrete swappable components via ShipyardInventoryService and SalvageYardService instead.
+ *             This service will be removed once all consumers have migrated.
+ */
 class ShipUpgradeService
 {
     // Base upgrade costs

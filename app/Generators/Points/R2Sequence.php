@@ -4,7 +4,6 @@ namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 
 /**
  * R2 Low-Discrepancy Sequence Generator
@@ -39,7 +38,9 @@ final class R2Sequence extends AbstractPointGenerator implements PointGeneratorI
     public function sample(Galaxy $galaxy): array
     {
         $pts = [];
+        $seen = [];
         $i = 0;
+        $safetyLimit = $this->count * 100;
 
         while (count($pts) < $this->count) {
             // R2 sequence formula
@@ -60,28 +61,16 @@ final class R2Sequence extends AbstractPointGenerator implements PointGeneratorI
                     $pts[] = [$x, $y];
                 }
             } else {
-                // TODO: (Performance) O(n) linear search for uniqueness. The $key variable is computed
-                // but never used. Use a hash set ($seen[$key] = true / isset($seen[$key])) for O(1) lookups
-                // instead of iterating the full $pts array. With 3000+ points this becomes O(n²).
                 $key = $x.':'.$y;
-                $found = false;
-                foreach ($pts as [$px, $py]) {
-                    if ($px === $x && $py === $y) {
-                        $found = true;
-                        break;
-                    }
-                }
-                if (! $found) {
+                if (! isset($seen[$key])) {
                     $pts[] = [$x, $y];
+                    $seen[$key] = true;
                 }
             }
 
             $i++;
 
-            // TODO: (Robustness) Safety limit of count * 1000 is extremely high (3,000,000 for 3000 points).
-            // If the loop breaks early, fewer points are silently returned without logging.
-            // Consider a lower limit (count * 100) and log a warning when the limit is reached.
-            if ($i > $this->count * 1000) {
+            if ($i > $safetyLimit) {
                 break;
             }
         }
@@ -89,12 +78,7 @@ final class R2Sequence extends AbstractPointGenerator implements PointGeneratorI
         // Ensure we have exactly the requested count
         $pts = array_slice($pts, 0, $this->count);
 
-        if (config('game_config.feature.persist_data')) {
-            PointOfInterest::createPointsForGalaxy($galaxy, $pts);
-
-            // Generate star systems (planets, moons, asteroids)
-            $this->generateStarSystems($galaxy);
-        }
+        $this->persistIfEnabled($galaxy, $pts);
 
         return $pts;
     }

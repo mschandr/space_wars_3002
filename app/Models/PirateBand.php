@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
 
 /**
  * Mobile pirate bands that roam within their sector.
@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
  */
 class PirateBand extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -40,17 +40,6 @@ class PirateBand extends Model
         'last_encounter_at' => 'datetime',
         'roaming_radius_ly' => 'float',
     ];
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($band) {
-            if (empty($band->uuid)) {
-                $band->uuid = Str::uuid();
-            }
-        });
-    }
 
     public function galaxy(): BelongsTo
     {

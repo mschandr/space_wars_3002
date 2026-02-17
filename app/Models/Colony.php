@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class Colony extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -63,9 +63,6 @@ class Colony extends Model
         parent::boot();
 
         static::creating(function ($colony) {
-            if (empty($colony->uuid)) {
-                $colony->uuid = Str::uuid();
-            }
             if (empty($colony->established_at)) {
                 $colony->established_at = now();
             }

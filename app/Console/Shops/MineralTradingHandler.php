@@ -2,37 +2,19 @@
 
 namespace App\Console\Shops;
 
-use App\Console\Traits\ConsoleBoxRenderer;
-use App\Console\Traits\ConsoleColorizer;
-use App\Console\Traits\TerminalInputHandler;
 use App\Models\Player;
 use App\Models\PlayerCargo;
 use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
-use Illuminate\Console\Command;
 
-class MineralTradingHandler
+class MineralTradingHandler extends BaseShopHandler
 {
-    use ConsoleBoxRenderer;
-    use ConsoleColorizer;
-    use TerminalInputHandler;
-
-    private Command $command;
-
-    private int $termWidth;
-
-    public function __construct(Command $command, int $termWidth = 120)
-    {
-        $this->command = $command;
-        $this->termWidth = $termWidth;
-    }
-
     /**
      * Display the mineral trading interface
      */
     public function show(Player $player, TradingHub $tradingHub): void
     {
-        system('stty sane');
+        $this->resetTerminal();
 
         $running = true;
         while ($running) {
@@ -48,10 +30,7 @@ class MineralTradingHandler
             $this->clearScreen();
 
             // Header
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->line($this->colorize('  MINERAL TRADING', 'header'));
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->newLine();
+            $this->renderShopHeader('MINERAL TRADING');
 
             $this->line('  Trading Hub: '.$this->colorize($tradingHub->name, 'trade'));
             $this->line('  Credits: '.$this->colorize(number_format($player->credits, 2), 'highlight'));
@@ -143,15 +122,14 @@ class MineralTradingHandler
             }
 
             $this->newLine();
-            $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+            $this->renderSeparator();
             $this->line('  '.$this->colorize('[b1-b9]', 'label').' Buy mineral  |  '.$this->colorize('[s1-s9]', 'label').' Sell mineral  |  '.$this->colorize('[q]', 'label').' Exit');
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+            $this->renderBorder();
 
             // Get input
-            system('stty -icanon -echo');
-            $char = fgetc(STDIN);
+            $char = $this->readChar();
 
-            if ($char === 'q' || $char === "\033") {
+            if ($this->isQuitKey($char)) {
                 $running = false;
             } elseif ($char === 'b') {
                 // Buy mode - read next char for number
@@ -186,10 +164,7 @@ class MineralTradingHandler
         $ship = $player->activeShip;
 
         $this->clearScreen();
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  BUY MINERAL - '.strtoupper($mineral->name), 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('BUY MINERAL - '.strtoupper($mineral->name));
 
         $this->line('  Available Stock: '.$this->colorize(number_format($inventory->quantity).' units', 'highlight'));
         $this->line('  Price per Unit: '.$this->colorize(number_format($inventory->sell_price, 2).' credits', 'highlight'));
@@ -198,7 +173,7 @@ class MineralTradingHandler
         $this->newLine();
 
         $this->line($this->colorize('  How many units to buy? (0 to cancel): ', 'label'));
-        system('stty sane');
+        $this->resetTerminal();
         $quantity = (int) trim(fgets(STDIN));
 
         if ($quantity <= 0) {
@@ -210,24 +185,14 @@ class MineralTradingHandler
             $this->clearScreen();
             $this->error('  Insufficient stock available');
             $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
+            $this->waitForAnyKey();
 
             return;
         }
 
         $totalCost = $inventory->sell_price * $quantity;
         if ($player->credits < $totalCost) {
-            $this->clearScreen();
-            $this->error('  Insufficient credits');
-            $this->newLine();
-            $this->line('  Required: '.number_format($totalCost, 2).' credits');
-            $this->line('  You have: '.number_format($player->credits, 2).' credits');
-            $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
+            $this->showInsufficientCredits($totalCost, $player->credits);
 
             return;
         }
@@ -240,19 +205,14 @@ class MineralTradingHandler
             $this->line('  Required: '.$quantity.' units');
             $this->line('  Available: '.$availableSpace.' units');
             $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
+            $this->waitForAnyKey();
 
             return;
         }
 
         // Confirmation
         $this->clearScreen();
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  CONFIRM PURCHASE', 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('CONFIRM PURCHASE');
         $this->line('  Mineral: '.$this->colorize($mineral->name, 'trade'));
         $this->line('  Quantity: '.$this->colorize(number_format($quantity).' units', 'highlight'));
         $this->line('  Price per Unit: '.$this->colorize(number_format($inventory->sell_price, 2).' credits', 'dim'));
@@ -263,8 +223,7 @@ class MineralTradingHandler
         $this->newLine();
         $this->line($this->colorize('  Confirm purchase? [y/n]: ', 'label'));
 
-        system('stty -icanon -echo');
-        $confirm = fgetc(STDIN);
+        $confirm = $this->readChar();
 
         if ($confirm !== 'y' && $confirm !== 'Y') {
             return;
@@ -297,10 +256,7 @@ class MineralTradingHandler
 
         // Success message
         $this->clearScreen();
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  ✓ PURCHASE SUCCESSFUL', 'trade'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->showSuccess('✓ PURCHASE SUCCESSFUL');
         $this->line('  Purchased: '.number_format($quantity).' units of '.$mineral->name);
         $this->line('  Cost: '.number_format($totalCost, 2).' credits');
         $this->line('  XP Earned: '.$this->colorize('+'.$xpEarned.' XP', 'highlight'));
@@ -310,8 +266,7 @@ class MineralTradingHandler
         }
 
         $this->newLine();
-        $this->line($this->colorize('  Press any key to continue...', 'dim'));
-        fgetc(STDIN);
+        $this->waitForAnyKey();
     }
 
     /**
@@ -339,17 +294,14 @@ class MineralTradingHandler
         }
 
         $this->clearScreen();
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  SELL MINERAL - '.strtoupper($mineral->name), 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('SELL MINERAL - '.strtoupper($mineral->name));
 
         $this->line('  Your Quantity: '.$this->colorize(number_format($cargo->quantity).' units', 'highlight'));
         $this->line('  Hub Buys At: '.$this->colorize(number_format($hubInventory->buy_price, 2).' credits/unit', 'highlight'));
         $this->newLine();
 
         $this->line($this->colorize('  How many units to sell? (0 to cancel): ', 'label'));
-        system('stty sane');
+        $this->resetTerminal();
         $quantity = (int) trim(fgets(STDIN));
 
         if ($quantity <= 0) {
@@ -364,9 +316,7 @@ class MineralTradingHandler
             $this->line('  You have: '.number_format($cargo->quantity).' units');
             $this->line('  Trying to sell: '.number_format($quantity).' units');
             $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
+            $this->waitForAnyKey();
 
             return;
         }
@@ -375,10 +325,7 @@ class MineralTradingHandler
 
         // Confirmation
         $this->clearScreen();
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  CONFIRM SALE', 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('CONFIRM SALE');
         $this->line('  Mineral: '.$this->colorize($mineral->name, 'trade'));
         $this->line('  Quantity: '.$this->colorize(number_format($quantity).' units', 'highlight'));
         $this->line('  Price per Unit: '.$this->colorize(number_format($hubInventory->buy_price, 2).' credits', 'dim'));
@@ -389,8 +336,7 @@ class MineralTradingHandler
         $this->newLine();
         $this->line($this->colorize('  Confirm sale? [y/n]: ', 'label'));
 
-        system('stty -icanon -echo');
-        $confirm = fgetc(STDIN);
+        $confirm = $this->readChar();
 
         if ($confirm !== 'y' && $confirm !== 'Y') {
             return;
@@ -420,10 +366,7 @@ class MineralTradingHandler
 
         // Success message
         $this->clearScreen();
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  ✓ SALE SUCCESSFUL', 'trade'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->showSuccess('✓ SALE SUCCESSFUL');
         $this->line('  Sold: '.number_format($quantity).' units of '.$mineral->name);
         $this->line('  Revenue: '.number_format($totalRevenue, 2).' credits');
         $this->line('  XP Earned: '.$this->colorize('+'.$xpEarned.' XP', 'highlight'));
@@ -433,31 +376,6 @@ class MineralTradingHandler
         }
 
         $this->newLine();
-        $this->line($this->colorize('  Press any key to continue...', 'dim'));
-        fgetc(STDIN);
-    }
-
-    /**
-     * Proxy method to output a line
-     */
-    private function line(string $text): void
-    {
-        $this->command->line($text);
-    }
-
-    /**
-     * Proxy method to output a newline
-     */
-    private function newLine(int $count = 1): void
-    {
-        $this->command->newLine($count);
-    }
-
-    /**
-     * Proxy method to output an error
-     */
-    private function error(string $text): void
-    {
-        $this->command->error($text);
+        $this->waitForAnyKey();
     }
 }

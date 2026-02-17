@@ -3,14 +3,14 @@
 namespace App\Models;
 
 use App\Enums\Trading\MineralRarity;
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class Mineral extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -27,17 +27,6 @@ class Mineral extends Model
         'rarity' => MineralRarity::class,
         'attributes' => 'array',
     ];
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($mineral) {
-            if (empty($mineral->uuid)) {
-                $mineral->uuid = Str::uuid();
-            }
-        });
-    }
 
     /**
      * Get all trading hub inventories for this mineral

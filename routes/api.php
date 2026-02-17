@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\ShipController;
 use App\Http\Controllers\Api\ShipServiceController;
 use App\Http\Controllers\Api\ShipShopController;
 use App\Http\Controllers\Api\ShipStatusController;
+use App\Http\Controllers\Api\ShipyardController;
 use App\Http\Controllers\Api\StarSystemController;
 use App\Http\Controllers\Api\TeamCombatController;
 use App\Http\Controllers\Api\TradingController;
@@ -385,12 +386,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('rumors', [PrecursorRumorController::class, 'getCollectedRumors']);
     });
 
+    // Shipyard routes (unique pre-rolled ships)
+    Route::get('systems/{uuid}/shipyard', [ShipyardController::class, 'index']);
+    Route::get('shipyard-inventory/{uuid}', [ShipyardController::class, 'show']);
+    Route::post('players/{uuid}/shipyard/purchase', [ShipyardController::class, 'purchase']);
+
     // Salvage Yard routes
     // Salvage yards sell ship components: weapons, shield regenerators, hull patches
+    Route::get('systems/{uuid}/salvage-yard', [SalvageYardController::class, 'indexBySystem']);
     Route::prefix('players/{uuid}')->group(function () {
         Route::get('salvage-yard', [SalvageYardController::class, 'index']);
         Route::get('ship-components', [SalvageYardController::class, 'shipComponents']);
         Route::post('salvage-yard/purchase', [SalvageYardController::class, 'purchase']);
+        Route::post('salvage-yard/sell-ship', [SalvageYardController::class, 'sellShip']);
         Route::post('ship-components/{componentId}/uninstall', [SalvageYardController::class, 'uninstall']);
     });
 

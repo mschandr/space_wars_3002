@@ -4,7 +4,6 @@ namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 
 /**
  * Uniform Random Generator
@@ -39,12 +38,7 @@ final class UniformRandom extends AbstractPointGenerator implements PointGenerat
             }
         }
 
-        if (config('game_config.feature.persist_data')) {
-            PointOfInterest::createPointsForGalaxy($galaxy, $pts);
-
-            // Generate star systems (planets, moons, asteroids)
-            $this->generateStarSystems($galaxy);
-        }
+        $this->persistIfEnabled($galaxy, $pts);
 
         return $pts;
     }

@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
 
 class Ship extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -40,17 +40,6 @@ class Ship extends Model
         'attributes' => 'array',
         'is_available' => 'boolean',
     ];
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($ship) {
-            if (empty($ship->uuid)) {
-                $ship->uuid = Str::uuid();
-            }
-        });
-    }
 
     /**
      * Get the ship's overall combat rating

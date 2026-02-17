@@ -1,4 +1,6 @@
-# Space Wars 3002 - API Documentation
+# OBSOLETE - Space Wars 3002 - API Documentation
+
+> **This file is obsolete.** See `/API_DOCUMENTATION.md` in the project root for the current comprehensive API reference.
 
 **Version:** 1.0
 **Base URL:** `/api`

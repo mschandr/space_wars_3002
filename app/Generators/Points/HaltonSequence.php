@@ -4,7 +4,6 @@ namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 
 final class HaltonSequence extends AbstractPointGenerator implements PointGeneratorInterface
 {
@@ -30,12 +29,7 @@ final class HaltonSequence extends AbstractPointGenerator implements PointGenera
 
             $i++;
         }
-        if (config('game_config.feature.persist_data')) {
-            PointOfInterest::createPointsForGalaxy($galaxy, array_values($pts));
-
-            // Generate star systems (planets, moons, asteroids)
-            $this->generateStarSystems($galaxy);
-        }
+        $this->persistIfEnabled($galaxy, array_values($pts));
 
         return $pts;
     }

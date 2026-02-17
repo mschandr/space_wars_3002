@@ -4,7 +4,6 @@ namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 
 /**
  * Stratified Grid Generator
@@ -60,6 +59,12 @@ final class StratifiedGrid extends AbstractPointGenerator implements PointGenera
         // Ensure uniqueness (very rare collisions at cell boundaries)
         $pts = $this->unique($pts);
 
+        // Build hash set from existing points for O(1) lookups
+        $seen = [];
+        foreach ($pts as [$px, $py]) {
+            $seen[$px.':'.$py] = true;
+        }
+
         // If we lost points to collisions, add more in random cells
         while (count($pts) < $this->count) {
             $col = $this->randomizer->getInt(0, $cellsPerRow - 1);
@@ -78,19 +83,14 @@ final class StratifiedGrid extends AbstractPointGenerator implements PointGenera
             $x = $this->randomizer->getInt($minX, $maxX);
             $y = $this->randomizer->getInt($minY, $maxY);
 
-            // TODO: (Performance) in_array() is O(n) per check. In the collision recovery loop this
-            // results in O(n²) behavior. Use a hash set ($seen["$x:$y"]) for O(1) lookups.
-            if (! in_array([$x, $y], $pts, true)) {
+            $key = $x.':'.$y;
+            if (! isset($seen[$key])) {
                 $pts[] = [$x, $y];
+                $seen[$key] = true;
             }
         }
 
-        if (config('game_config.feature.persist_data')) {
-            PointOfInterest::createPointsForGalaxy($galaxy, $pts);
-
-            // Generate star systems (planets, moons, asteroids)
-            $this->generateStarSystems($galaxy);
-        }
+        $this->persistIfEnabled($galaxy, $pts);
 
         return $pts;
     }

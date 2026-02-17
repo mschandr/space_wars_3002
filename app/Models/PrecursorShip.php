@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,7 +24,7 @@ use Illuminate\Support\Str;
  */
 class PrecursorShip extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -77,10 +78,6 @@ class PrecursorShip extends Model
         parent::boot();
 
         static::creating(function ($ship) {
-            if (empty($ship->uuid)) {
-                $ship->uuid = Str::uuid();
-            }
-
             // Set default Precursor tech capabilities
             if (empty($ship->precursor_tech)) {
                 $ship->precursor_tech = [

@@ -4,7 +4,6 @@ namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 
 /**
  * Latin Hypercube Sampling Generator
@@ -71,6 +70,12 @@ final class LatinHypercube extends AbstractPointGenerator implements PointGenera
         // Latin Hypercube should guarantee uniqueness, but check anyway
         $pts = $this->unique($pts);
 
+        // Build hash set from existing points for O(1) lookups
+        $seen = [];
+        foreach ($pts as [$px, $py]) {
+            $seen[$px.':'.$py] = true;
+        }
+
         // Handle rare edge case of collisions
         while (count($pts) < $this->count) {
             $i = count($pts);
@@ -87,11 +92,6 @@ final class LatinHypercube extends AbstractPointGenerator implements PointGenera
             $minY = max(0, min($this->height - 1, $minY));
             $maxY = max(0, min($this->height - 1, $maxY));
 
-            $minX = max(0, $minX);
-            $maxX = min($this->width - 1, $maxX);
-            $minY = max(0, $minY);
-            $maxY = min($this->height - 1, $maxY);
-
             // Ensure valid range
             if ($maxX < $minX) {
                 $maxX = $minX;
@@ -100,24 +100,17 @@ final class LatinHypercube extends AbstractPointGenerator implements PointGenera
                 $maxY = $minY;
             }
 
-            // TODO: (Debug Leftover) Remove this file_put_contents debug logging before production.
-            // Writing to /tmp on every point generation is a performance drag and a debug artifact.
-            file_put_contents('/tmp/permlo.mark', __METHOD__.'::'.__LINE__."\tmin x = ".$minX."\tmax x = ".$maxX, FILE_APPEND);
-
             $x = $this->randomizer->getInt($minX, $maxX);
             $y = $this->randomizer->getInt($minY, $maxY);
 
-            if (! in_array([$x, $y], $pts, true)) {
+            $key = $x.':'.$y;
+            if (! isset($seen[$key])) {
                 $pts[] = [$x, $y];
+                $seen[$key] = true;
             }
         }
 
-        if (config('game_config.feature.persist_data')) {
-            PointOfInterest::createPointsForGalaxy($galaxy, $pts);
-
-            // Generate star systems (planets, moons, asteroids)
-            $this->generateStarSystems($galaxy);
-        }
+        $this->persistIfEnabled($galaxy, $pts);
 
         return $pts;
     }

@@ -2,36 +2,18 @@
 
 namespace App\Console\Shops;
 
-use App\Console\Traits\ConsoleBoxRenderer;
-use App\Console\Traits\ConsoleColorizer;
-use App\Console\Traits\TerminalInputHandler;
 use App\Models\Player;
 use App\Models\TradingHub;
 use App\Services\ShipUpgradeService;
-use Illuminate\Console\Command;
 
-class ComponentShopHandler
+class ComponentShopHandler extends BaseShopHandler
 {
-    use ConsoleBoxRenderer;
-    use ConsoleColorizer;
-    use TerminalInputHandler;
-
-    private Command $command;
-
-    private int $termWidth;
-
-    public function __construct(Command $command, int $termWidth = 120)
-    {
-        $this->command = $command;
-        $this->termWidth = $termWidth;
-    }
-
     /**
      * Display the component shop interface
      */
     public function show(Player $player, TradingHub $tradingHub): void
     {
-        system('stty sane');
+        $this->resetTerminal();
 
         $upgradeService = app(ShipUpgradeService::class);
 
@@ -45,10 +27,7 @@ class ComponentShopHandler
             $this->clearScreen();
 
             // Header
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->line($this->colorize('  COMPONENT SHOP - SHIP UPGRADES', 'header'));
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->newLine();
+            $this->renderShopHeader('COMPONENT SHOP - SHIP UPGRADES');
 
             // Location and player info
             $this->line($this->colorize('  Trading Hub: ', 'label').$this->colorize($tradingHub->name, 'trade'));
@@ -101,15 +80,14 @@ class ComponentShopHandler
             $this->line($this->colorize('  [1-6]', 'label').' - Purchase upgrade    '.
                        $this->colorize('[ESC/q]', 'label').' - Back to main interface');
             $this->newLine();
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+            $this->renderBorder();
 
             // TODO: (Input Handling) fgetc(STDIN) reads one byte. If user types "12", the "2" stays
             // in the input buffer and gets processed as the next input. Consider flushing the input
             // buffer after reading, or switching to fgets() with validation.
-            system('stty -icanon -echo');
-            $char = fgetc(STDIN);
+            $char = $this->readChar();
 
-            if ($char === 'q' || $char === "\033") {
+            if ($this->isQuitKey($char)) {
                 $running = false;
             } elseif (is_numeric($char) && $char >= '1' && $char <= '6') {
                 $componentIndex = (int) $char - 1;
@@ -118,7 +96,7 @@ class ComponentShopHandler
             }
         }
 
-        system('stty sane');
+        $this->resetTerminal();
     }
 
     /**
@@ -126,23 +104,18 @@ class ComponentShopHandler
      */
     private function purchaseUpgrade(Player $player, string $component, array $info, ShipUpgradeService $upgradeService): void
     {
-        system('stty sane');
+        $this->resetTerminal();
         $this->clearScreen();
 
         $ship = $player->activeShip;
         $componentName = strtoupper(str_replace('_', ' ', $component));
 
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  CONFIRM PURCHASE', 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('CONFIRM PURCHASE');
 
         if (! $info['can_upgrade']) {
             $this->line($this->colorize('  This component is already at maximum level!', 'dim'));
             $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
+            $this->waitForAnyKey();
 
             return;
         }
@@ -160,36 +133,30 @@ class ComponentShopHandler
                    $this->colorize(number_format($player->credits, 2), 'highlight'));
 
         if ($player->credits < $info['upgrade_cost']) {
-            $this->newLine();
-            $this->line($this->colorize('  INSUFFICIENT CREDITS!', 'dim'));
-            $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
+            $this->showInsufficientCredits($info['upgrade_cost'], $player->credits);
 
             return;
         }
 
         $this->newLine();
-        $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+        $this->renderSeparator();
         $this->newLine();
         $this->line($this->colorize('  Confirm purchase? ', 'header').
                    $this->colorize('[y]', 'label').' Yes  '.
                    $this->colorize('[n]', 'label').' No');
         $this->newLine();
 
-        system('stty -icanon -echo');
-        $confirm = fgetc(STDIN);
+        $confirm = $this->readChar();
 
         if (strtolower($confirm) === 'y') {
             $result = $upgradeService->upgrade($ship, $component);
 
             $this->clearScreen();
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+            $this->renderBorder();
 
             if ($result['success']) {
                 $this->line($this->colorize('  ✓ UPGRADE SUCCESSFUL!', 'trade'));
-                $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+                $this->renderBorder();
                 $this->newLine();
                 $this->line($this->colorize('  '.$result['message'], 'highlight'));
                 $this->line($this->colorize('  New Value: ', 'label').$this->colorize($result['new_value'], 'trade'));
@@ -201,7 +168,7 @@ class ComponentShopHandler
                 $player->refresh();
             } else {
                 $this->line($this->colorize('  ✗ UPGRADE FAILED', 'dim'));
-                $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+                $this->renderBorder();
                 $this->newLine();
                 $this->line($this->colorize('  '.$result['message'], 'dim'));
             }
@@ -211,32 +178,6 @@ class ComponentShopHandler
         }
 
         $this->newLine();
-        $this->line($this->colorize('  Press any key to continue...', 'dim'));
-        system('stty -icanon -echo');
-        fgetc(STDIN);
-    }
-
-    /**
-     * Proxy method to output a line
-     */
-    private function line(string $text): void
-    {
-        $this->command->line($text);
-    }
-
-    /**
-     * Proxy method to output a newline
-     */
-    private function newLine(int $count = 1): void
-    {
-        $this->command->newLine($count);
-    }
-
-    /**
-     * Proxy method to output an error
-     */
-    private function error(string $text): void
-    {
-        $this->command->error($text);
+        $this->waitForAnyKey();
     }
 }

@@ -3,14 +3,14 @@
 namespace App\Models;
 
 use App\Enums\OrbitalStructureType;
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
 
 class OrbitalStructure extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -42,17 +42,6 @@ class OrbitalStructure extends Model
         'credits_per_cycle' => 'integer',
         'minerals_per_cycle' => 'integer',
     ];
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($structure) {
-            if (empty($structure->uuid)) {
-                $structure->uuid = Str::uuid();
-            }
-        });
-    }
 
     public function poi(): BelongsTo
     {

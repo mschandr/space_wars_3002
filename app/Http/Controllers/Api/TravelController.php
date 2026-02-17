@@ -38,9 +38,9 @@ class TravelController extends BaseApiController
         $location = $result;
 
         $gates = WarpGate::where(function ($query) use ($location) {
-                $query->where('source_poi_id', $location->id)
-                    ->orWhere('destination_poi_id', $location->id);
-            })
+            $query->where('source_poi_id', $location->id)
+                ->orWhere('destination_poi_id', $location->id);
+        })
             ->where('is_hidden', false)
             ->where('status', 'active')
             ->with(['sourcePoi', 'destinationPoi'])

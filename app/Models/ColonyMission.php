@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class ColonyMission extends Model
 {
+    use HasUuid;
+
     protected $fillable = [
         'uuid',
         'colony_id',
@@ -33,20 +36,6 @@ class ColonyMission extends Model
         'arrival_at' => 'datetime',
         'completed_at' => 'datetime',
     ];
-
-    /**
-     * Boot the model
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($mission) {
-            if (empty($mission->uuid)) {
-                $mission->uuid = Str::uuid();
-            }
-        });
-    }
 
     /**
      * Get the colony this mission originated from

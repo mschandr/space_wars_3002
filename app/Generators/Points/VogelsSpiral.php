@@ -4,7 +4,6 @@ namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 
 /**
  * Vogel's Spiral Generator
@@ -61,6 +60,12 @@ final class VogelsSpiral extends AbstractPointGenerator implements PointGenerato
         // Ensure uniqueness (rare collisions at integer rounding)
         $pts = $this->unique($pts);
 
+        // Build hash set from existing points for O(1) lookups
+        $seen = [];
+        foreach ($pts as [$px, $py]) {
+            $seen[$px.':'.$py] = true;
+        }
+
         // If we lost points due to collisions, fill in the gaps
         while (count($pts) < $this->count) {
             $i = count($pts);
@@ -74,17 +79,13 @@ final class VogelsSpiral extends AbstractPointGenerator implements PointGenerato
             $y = max(0, min($this->height - 1, (int) round($y)));
 
             $key = $x.':'.$y;
-            if (! in_array([$x, $y], $pts, true)) {
+            if (! isset($seen[$key])) {
                 $pts[] = [$x, $y];
+                $seen[$key] = true;
             }
         }
 
-        if (config('game_config.feature.persist_data')) {
-            PointOfInterest::createPointsForGalaxy($galaxy, $pts);
-
-            // Generate star systems (planets, moons, asteroids)
-            $this->generateStarSystems($galaxy);
-        }
+        $this->persistIfEnabled($galaxy, $pts);
 
         return $pts;
     }
