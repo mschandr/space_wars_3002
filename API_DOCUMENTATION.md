@@ -955,7 +955,7 @@ Find systems near the player's current location.
 ```json
 {
   "data": {
-    "current_location": { "uuid": "...", "x": 150.0, "y": 200.0 },
+    "current_location": { "uuid": "...", "name": "Sol", "x": 150.0, "y": 200.0 },
     "sensor_range": 500,
     "nearby_systems": [
       {
@@ -1019,7 +1019,7 @@ Get orbital bodies (planets, moons, asteroids) at the current star system.
 ```json
 {
   "data": {
-    "system": { "uuid": "...", "name": "Sol" },
+    "system": { "uuid": "...", "name": "Sol", "type": "star", "x": 150.0, "y": 200.0, "is_inhabited": true },
     "bodies": {
       "planets": [ ... ],
       "moons": [ ... ],
@@ -1452,13 +1452,16 @@ Get the player's fog-of-war map — only systems they know about.
     },
     "player": {
       "uuid": "...",
-      "location": { "x": 150.0, "y": 200.0, "poi_uuid": "..." },
+      "x": 150.0,
+      "y": 200.0,
+      "poi_uuid": "...",
+      "sector_uuid": "...",
       "sensor_range_ly": 500,
       "sensor_level": 3
     },
     "known_systems": [
       {
-        "poi_uuid": "...",
+        "uuid": "...",
         "x": 150.0,
         "y": 200.0,
         "knowledge_level": 3,
@@ -1492,6 +1495,7 @@ Get the player's fog-of-war map — only systems they know about.
         "to_poi_uuid": "...",
         "from": { "x": 150.0, "y": 200.0 },
         "to": { "x": 155.0, "y": 205.0 },
+        "distance": 7.07,
         "has_pirate": true,
         "pirate_freshness": 0.8,
         "discovery_method": "traversal"
@@ -1527,6 +1531,8 @@ Get the player's fog-of-war map — only systems they know about.
 **Caveats:**
 - This is the **primary endpoint for rendering the galaxy map** in the frontend.
 - Data is filtered by what the player actually knows — everything else is fog of war.
+- `known_lanes` automatically includes all active, non-hidden warp gates at the player's current location (with `discovery_method: "current_location"`), merged with previously discovered lanes.
+- Each lane includes `distance` (raw Euclidean). FE can compute fuel cost locally: `ceil(distance / (1 + (warp_drive - 1) * 0.2))`.
 - `freshness` decays over time (1.0 = just discovered, approaches 0.0 over ~7 days).
 - `pirate_freshness` similarly decays; `null` if pirate status unknown.
 - Pirate confidence varies by sensor level: Low (<3), Medium (3-4), High (5+).
@@ -1959,9 +1965,9 @@ Get maintenance status overview.
 
 > These endpoints use the `trading_hub_ships` inventory system. For the newer unique-ship system, see [Shipyard](#shipyard-unique-ships).
 
-### `GET /api/trading-hubs/{uuid}/shipyard`
+### `GET /api/trading-hubs/{uuid}/ship-shop`
 
-Check if a trading hub has a shipyard and list available ships.
+Check if a trading hub has a ship shop and list available ships.
 
 **Parameters:**
 
@@ -3979,3 +3985,33 @@ Get aggregate stats per sector instead of individual stars.
 9. **Destructive Actions**: Deleting players, abandoning colonies, and selling ships are **irreversible**. All associated data is permanently removed.
 
 10. **Rate Limiting**: No explicit rate limiting is documented, but bulk endpoints (like `bulk-scan-levels`) have built-in limits (max 500 items).
+
+---
+
+## Changelog
+
+### 2026-02-17 — FE API Integration Improvements
+
+**`GET /api/players/{playerUuid}/knowledge-map`:**
+- Player object: Flattened `location: { x, y, poi_uuid }` to flat `x`, `y`, `poi_uuid` directly on the player object
+- Player object: Added `sector_uuid` field (already eager-loaded via `currentLocation.sector`)
+- Known systems: Renamed `poi_uuid` to `uuid` for consistency with other endpoints
+- Known lanes: Added `distance` (raw Euclidean) to each lane — FE can compute fuel cost locally: `ceil(distance / (1 + (warp_drive - 1) * 0.2))`
+- Known lanes: Now automatically includes all active non-hidden warp gates at the player's current location (with `discovery_method: "current_location"`), merged with previously-discovered lanes. Eliminates the need for a separate `GET /warp-gates/{locationUuid}` call.
+
+**`GET /api/players/{uuid}/nearby-systems`:**
+- `current_location`: Flattened `coordinates: { x, y }` to flat `x`, `y`; added `uuid`
+- `nearby_systems[]`: Flattened `coordinates: { x, y }` to flat `x`, `y` (null when no chart)
+
+**`GET /api/players/{uuid}/scan-local`:**
+- `current_location`: Flattened `coordinates: { x, y }` to flat `x`, `y`; added `uuid`
+- `pois_by_type[]` items: Flattened `coordinates: { x, y }` to flat `x`, `y` (null when no chart)
+
+**`GET /api/players/{uuid}/local-bodies`:**
+- `system`: Flattened `coordinates: { x, y }` to flat `x`, `y`; fixed `(int)` cast to `(float)`
+
+**`GET /api/trading-hubs/{uuid}/ship-shop`:**
+- Route renamed from `/api/trading-hubs/{uuid}/shipyard` to `/api/trading-hubs/{uuid}/ship-shop` to disambiguate from the unique-ship shipyard endpoint (`/api/systems/{uuid}/shipyard`)
+
+**`PointOfInterestResource`:**
+- Removed internal `id` field from the resource. Use `uuid` as the public identifier.

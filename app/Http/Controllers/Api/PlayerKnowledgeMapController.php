@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\Exploration\KnowledgeLevel;
 use App\Models\Player;
 use App\Models\PointOfInterest;
+use App\Models\WarpGate;
 use App\Services\LaneKnowledgeService;
 use App\Services\PlayerKnowledgeService;
 use App\Support\SensorRangeCalculator;
@@ -97,7 +98,7 @@ class PlayerKnowledgeMapController extends BaseApiController
             $stellarClass = $attrs['stellar_class'] ?? null;
 
             $system = [
-                'poi_uuid' => $poi->uuid,
+                'uuid' => $poi->uuid,
                 'x' => (float) $poi->x,
                 'y' => (float) $poi->y,
                 'knowledge_level' => $level,
@@ -172,11 +173,45 @@ class PlayerKnowledgeMapController extends BaseApiController
                     'x' => (float) ($gate->dest_x ?? $gate->destinationPoi?->x),
                     'y' => (float) ($gate->dest_y ?? $gate->destinationPoi?->y),
                 ],
+                'distance' => round($gate->distance ?? $gate->calculateDistance(), 2),
                 'has_pirate' => $laneKnowledge->pirate_risk_known,
                 'pirate_freshness' => $laneKnowledge->last_pirate_check
                     ? max(0.1, 1.0 - ($laneKnowledge->last_pirate_check->diffInHours(now()) / 168))
                     : null,
                 'discovery_method' => $laneKnowledge->discovery_method,
+            ];
+        }
+
+        // Merge warp gates at player's current location (not already in known lanes)
+        $knownGateUuids = collect($knownLanesResponse)->pluck('gate_uuid')->toArray();
+
+        $currentLocationGates = WarpGate::where(function ($q) use ($currentLocation) {
+            $q->where('source_poi_id', $currentLocation->id)
+                ->orWhere('destination_poi_id', $currentLocation->id);
+        })
+            ->where('is_hidden', false)
+            ->where('status', 'active')
+            ->whereNotIn('uuid', $knownGateUuids)
+            ->with(['sourcePoi', 'destinationPoi'])
+            ->get();
+
+        foreach ($currentLocationGates as $gate) {
+            $knownLanesResponse[] = [
+                'gate_uuid' => $gate->uuid,
+                'from_poi_uuid' => $gate->sourcePoi?->uuid,
+                'to_poi_uuid' => $gate->destinationPoi?->uuid,
+                'from' => [
+                    'x' => (float) ($gate->source_x ?? $gate->sourcePoi?->x),
+                    'y' => (float) ($gate->source_y ?? $gate->sourcePoi?->y),
+                ],
+                'to' => [
+                    'x' => (float) ($gate->dest_x ?? $gate->destinationPoi?->x),
+                    'y' => (float) ($gate->dest_y ?? $gate->destinationPoi?->y),
+                ],
+                'distance' => round($gate->distance ?? $gate->calculateDistance(), 2),
+                'has_pirate' => false,
+                'pirate_freshness' => null,
+                'discovery_method' => 'current_location',
             ];
         }
 
@@ -204,11 +239,10 @@ class PlayerKnowledgeMapController extends BaseApiController
             ],
             'player' => [
                 'uuid' => $player->uuid,
-                'location' => [
-                    'x' => (float) $currentLocation->x,
-                    'y' => (float) $currentLocation->y,
-                    'poi_uuid' => $currentLocation->uuid,
-                ],
+                'x' => (float) $currentLocation->x,
+                'y' => (float) $currentLocation->y,
+                'poi_uuid' => $currentLocation->uuid,
+                'sector_uuid' => $currentLocation->sector?->uuid,
                 'sensor_range_ly' => $sensorRange,
                 'sensor_level' => $sensorLevel,
             ],

@@ -295,7 +295,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('ships/{uuid}/repair/all', [ShipServiceController::class, 'repairAll']);
 
     // Ship shopping routes
-    Route::get('trading-hubs/{uuid}/shipyard', [ShipShopController::class, 'getShipyard']);
+    Route::get('trading-hubs/{uuid}/ship-shop', [ShipShopController::class, 'getShipyard']);
     Route::get('ships/catalog', [ShipShopController::class, 'getCatalog']);
     Route::post('players/{uuid}/ships/purchase', [ShipShopController::class, 'purchaseShip']);
     Route::post('players/{uuid}/ships/switch', [ShipShopController::class, 'switchShip']);

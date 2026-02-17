@@ -186,10 +186,8 @@ class NavigationController extends BaseApiController
                 'name' => $hasChart ? $system->name : 'Unknown System',
                 'type' => $typeLabel,
                 'distance' => round($distance, 2),
-                'coordinates' => $hasChart ? [
-                    'x' => (float) $system->x,
-                    'y' => (float) $system->y,
-                ] : null,
+                'x' => $hasChart ? (float) $system->x : null,
+                'y' => $hasChart ? (float) $system->y : null,
                 'is_inhabited' => $system->is_inhabited,
                 'has_chart' => $hasChart,
                 'travel' => [
@@ -204,11 +202,10 @@ class NavigationController extends BaseApiController
 
         return $this->success([
             'current_location' => [
+                'uuid' => $currentLocation->uuid,
                 'name' => $currentLocation->name,
-                'coordinates' => [
-                    'x' => (float) $currentLocation->x,
-                    'y' => (float) $currentLocation->y,
-                ],
+                'x' => (float) $currentLocation->x,
+                'y' => (float) $currentLocation->y,
             ],
             'sensor_range' => $sensorRange,
             'sensor_level' => $sensorLevel,
@@ -286,10 +283,8 @@ class NavigationController extends BaseApiController
                     'name' => $hasChart ? $poi->name : "Unknown {$typeLabel}",
                     'type' => $typeLabel,
                     'distance' => round($poi->distance, 2),
-                    'coordinates' => $hasChart ? [
-                        'x' => (float) $poi->x,
-                        'y' => (float) $poi->y,
-                    ] : null,
+                    'x' => $hasChart ? (float) $poi->x : null,
+                    'y' => $hasChart ? (float) $poi->y : null,
                     'is_inhabited' => $poi->is_inhabited ?? false,
                     'has_chart' => $hasChart,
                     'parent_poi' => $poi->parent_poi_id ? [
@@ -301,12 +296,11 @@ class NavigationController extends BaseApiController
 
         return $this->success([
             'current_location' => [
+                'uuid' => $currentLocation->uuid,
                 'name' => $currentLocation->name,
                 'type' => $currentLocation->type,
-                'coordinates' => [
-                    'x' => (float) $currentLocation->x,
-                    'y' => (float) $currentLocation->y,
-                ],
+                'x' => (float) $currentLocation->x,
+                'y' => (float) $currentLocation->y,
             ],
             'sensor_range' => $sensorRange,
             'sensor_level' => $sensorLevel,
@@ -423,10 +417,8 @@ class NavigationController extends BaseApiController
                 'uuid' => $currentLocation->uuid,
                 'name' => $currentLocation->name,
                 'type' => $currentLocation->type?->value,
-                'coordinates' => [
-                    'x' => (int) $currentLocation->x,
-                    'y' => (int) $currentLocation->y,
-                ],
+                'x' => (float) $currentLocation->x,
+                'y' => (float) $currentLocation->y,
                 'is_inhabited' => $currentLocation->is_inhabited,
             ],
             'sector' => $sector ? [

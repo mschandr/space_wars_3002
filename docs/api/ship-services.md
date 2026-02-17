@@ -295,11 +295,13 @@ Get overall maintenance assessment for a ship.
 
 Legacy ship purchasing system based at trading hubs. Ships are purchased from inventory with optional trade-in.
 
-### Get Shipyard at Trading Hub
+### Get Ship Shop at Trading Hub
 
-**GET** `/api/trading-hubs/{uuid}/shipyard`
+**GET** `/api/trading-hubs/{uuid}/ship-shop`
 
-Check if a trading hub has a shipyard and list available ships.
+Check if a trading hub has a ship shop and list available ships.
+
+> **Changed 2026-02-17:** Route renamed from `/api/trading-hubs/{uuid}/shipyard` to `/api/trading-hubs/{uuid}/ship-shop` to disambiguate from the unique-ship shipyard (`/api/systems/{uuid}/shipyard`).
 
 **Authentication:** Not required
 

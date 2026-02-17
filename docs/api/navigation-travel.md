@@ -58,7 +58,6 @@ Get detailed information about the player's current location including trading h
   "success": true,
   "data": {
     "location": {
-      "id": 12345,
       "uuid": "550e8400-e29b-41d4-a716-446655440000",
       "name": "Alpha Centauri",
       "type": "star",
@@ -127,11 +126,10 @@ Scan for star systems within sensor range. Returns travel options for each detec
   "success": true,
   "data": {
     "current_location": {
+      "uuid": "550e8400-e29b-41d4-a716-446655440000",
       "name": "Sol",
-      "coordinates": {
-        "x": 0.0,
-        "y": 0.0
-      }
+      "x": 0.0,
+      "y": 0.0
     },
     "sensor_range": 300.0,
     "sensor_level": 3,
@@ -148,10 +146,8 @@ Scan for star systems within sensor range. Returns travel options for each detec
         "name": "Proxima Centauri",
         "type": "star",
         "distance": 4.24,
-        "coordinates": {
-          "x": 4.0,
-          "y": 1.5
-        },
+        "x": 4.0,
+        "y": 1.5,
         "is_inhabited": true,
         "has_chart": true,
         "travel": {
@@ -175,7 +171,8 @@ Scan for star systems within sensor range. Returns travel options for each detec
         "name": "Unknown System",
         "type": "star",
         "distance": 125.8,
-        "coordinates": null,
+        "x": null,
+        "y": null,
         "is_inhabited": false,
         "has_chart": false,
         "travel": {
@@ -201,7 +198,7 @@ Scan for star systems within sensor range. Returns travel options for each detec
 - `ship.max_jump_range`: Maximum direct jump distance based on warp drive
 - `nearby_systems`: Array of detected systems (limited to 50 closest)
   - `name`: Actual name if player has chart, otherwise "Unknown System"
-  - `coordinates`: Null if player doesn't have chart for uninhabited systems
+  - `x`, `y`: Null if player doesn't have chart for uninhabited systems
   - `has_chart`: Whether player owns a star chart for this system
   - `travel.warp_gate`: Null if no gate exists
   - `travel.direct_jump.fuel_cost`: 4x penalty compared to gate travel
@@ -220,7 +217,7 @@ Scan for star systems within sensor range. Returns travel options for each detec
 - Systems are sorted by distance (closest first)
 - Limited to 50 systems maximum
 - Direct jump has 4x fuel penalty compared to warp gates
-- Coordinates are hidden for uninhabited systems without charts
+- `x`, `y` are null for uninhabited systems without charts
 
 ---
 
@@ -248,10 +245,8 @@ Get all orbital bodies (planets, moons, asteroid belts, stations) within the cur
       "uuid": "bb0e8400-e29b-41d4-a716-446655440000",
       "name": "Tau Ceti",
       "type": "star",
-      "coordinates": {
-        "x": 50,
-        "y": 75
-      },
+      "x": 50.0,
+      "y": 75.0,
       "is_inhabited": true
     },
     "sector": {
@@ -414,12 +409,11 @@ Comprehensive scan of all nearby POIs (not just stars) within sensor range. Incl
   "success": true,
   "data": {
     "current_location": {
+      "uuid": "vega-uuid-...",
       "name": "Vega",
       "type": "star",
-      "coordinates": {
-        "x": 100.0,
-        "y": 150.0
-      }
+      "x": 100.0,
+      "y": 150.0
     },
     "sensor_range": 500.0,
     "sensor_level": 5,
@@ -431,10 +425,8 @@ Comprehensive scan of all nearby POIs (not just stars) within sensor range. Incl
           "name": "Altair",
           "type": "Star",
           "distance": 124.5,
-          "coordinates": {
-            "x": 150.0,
-            "y": 200.0
-          },
+          "x": 150.0,
+          "y": 200.0,
           "is_inhabited": true,
           "has_chart": true,
           "parent_poi": null
@@ -446,7 +438,8 @@ Comprehensive scan of all nearby POIs (not just stars) within sensor range. Incl
           "name": "Unknown Terrestrial Planet",
           "type": "Terrestrial Planet",
           "distance": 45.2,
-          "coordinates": null,
+          "x": null,
+          "y": null,
           "is_inhabited": false,
           "has_chart": false,
           "parent_poi": {
@@ -460,10 +453,8 @@ Comprehensive scan of all nearby POIs (not just stars) within sensor range. Incl
           "name": "Vega Belt",
           "type": "Asteroid Belt",
           "distance": 12.3,
-          "coordinates": {
-            "x": 105.0,
-            "y": 155.0
-          },
+          "x": 105.0,
+          "y": 155.0,
           "is_inhabited": false,
           "has_chart": true,
           "parent_poi": {
@@ -477,10 +468,8 @@ Comprehensive scan of all nearby POIs (not just stars) within sensor range. Incl
           "name": "Crimson Nebula",
           "type": "Nebula",
           "distance": 230.8,
-          "coordinates": {
-            "x": 200.0,
-            "y": 300.0
-          },
+          "x": 200.0,
+          "y": 300.0,
           "is_inhabited": false,
           "has_chart": true,
           "parent_poi": null
@@ -495,7 +484,7 @@ Comprehensive scan of all nearby POIs (not just stars) within sensor range. Incl
 - `pois_by_type`: Grouped by POI type (dynamic keys based on detected types)
   - Keys are the POI type enum values (star, terrestrial_planet, gas_giant, asteroid_belt, nebula, derelict, anomaly, etc.)
   - `name`: "Unknown {Type}" if player lacks chart and system is uninhabited
-  - `coordinates`: Hidden (null) for uninhabited POIs without charts
+  - `x`, `y`: Hidden (null) for uninhabited POIs without charts
   - `parent_poi`: Reference to parent POI ID (e.g., planet's parent star)
   - `has_chart`: Whether player owns a star chart for this POI
 - `total_pois_detected`: Total count across all types (limited to 100)
@@ -512,7 +501,7 @@ Comprehensive scan of all nearby POIs (not just stars) within sensor range. Incl
 **Warnings**:
 - Returns up to 100 POIs maximum
 - Includes all POI types, not just stars
-- Coordinates are masked for uninhabited systems without charts
+- `x`, `y` are null for uninhabited systems without charts
 - Results sorted by distance (closest first)
 
 ---
@@ -555,7 +544,6 @@ Execute travel through a warp gate. Gates are bidirectional and provide efficien
     "fuel_consumed": 15,
     "xp_earned": 75,
     "new_location": {
-      "id": 456,
       "uuid": "070e8400-e29b-41d4-a716-446655440000",
       "name": "Betelgeuse",
       "type": "star",
@@ -644,7 +632,6 @@ Execute a direct jump to specific coordinates without using a warp gate. Has 4x 
     "fuel_consumed": 60,
     "xp_earned": 75,
     "new_location": {
-      "id": 789,
       "uuid": "080e8400-e29b-41d4-a716-446655440000",
       "name": "Rigel",
       "type": "star",
@@ -894,7 +881,6 @@ Get all active, non-hidden warp gates at a specific location. Gates are bidirect
   "success": true,
   "data": {
     "location": {
-      "id": 123,
       "uuid": "0d0e8400-e29b-41d4-a716-446655440000",
       "name": "Sirius",
       "type": "star",
@@ -909,7 +895,6 @@ Get all active, non-hidden warp gates at a specific location. Gates are bidirect
       {
         "uuid": "0e0e8400-e29b-41d4-a716-446655440000",
         "destination": {
-          "id": 456,
           "uuid": "0f0e8400-e29b-41d4-a716-446655440000",
           "name": "Procyon",
           "type": "star",
@@ -925,7 +910,6 @@ Get all active, non-hidden warp gates at a specific location. Gates are bidirect
       {
         "uuid": "100e8400-e29b-41d4-a716-446655440000",
         "destination": {
-          "id": 789,
           "uuid": "110e8400-e29b-41d4-a716-446655440000",
           "name": "Vega",
           "type": "star",

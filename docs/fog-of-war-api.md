@@ -99,17 +99,16 @@ GET /api/players/{playerUuid}/knowledge-map
     },
     "player": {
       "uuid": "abc-123-...",
-      "location": {
-        "x": 150.0,
-        "y": 200.0,
-        "poi_uuid": "def-456-..."
-      },
+      "x": 150.0,
+      "y": 200.0,
+      "poi_uuid": "def-456-...",
+      "sector_uuid": "sec-789-...",
       "sensor_range_ly": 4.0,
       "sensor_level": 3
     },
     "known_systems": [
       {
-        "poi_uuid": "def-456-...",
+        "uuid": "def-456-...",
         "x": 150.0,
         "y": 200.0,
         "knowledge_level": 4,
@@ -138,7 +137,7 @@ GET /api/players/{playerUuid}/knowledge-map
         "has_scan_data": true
       },
       {
-        "poi_uuid": "ghi-789-...",
+        "uuid": "ghi-789-...",
         "x": 155.0,
         "y": 202.0,
         "knowledge_level": 1,
@@ -153,7 +152,7 @@ GET /api/players/{playerUuid}/knowledge-map
         }
       },
       {
-        "poi_uuid": "jkl-012-...",
+        "uuid": "jkl-012-...",
         "x": 148.0,
         "y": 195.0,
         "knowledge_level": 2,
@@ -183,6 +182,7 @@ GET /api/players/{playerUuid}/knowledge-map
         "to_poi_uuid": "xyz-789-...",
         "from": { "x": 150.0, "y": 200.0 },
         "to": { "x": 180.0, "y": 220.0 },
+        "distance": 36.06,
         "has_pirate": true,
         "pirate_freshness": 0.8,
         "discovery_method": "travel"
@@ -210,7 +210,7 @@ GET /api/players/{playerUuid}/knowledge-map
 
 | Field | DETECTED (1) | BASIC (2) | SURVEYED (3) | VISITED (4) |
 |-------|:---:|:---:|:---:|:---:|
-| `poi_uuid` | Y | Y | Y | Y |
+| `uuid` | Y | Y | Y | Y |
 | `x`, `y` | Y | Y | Y | Y |
 | `knowledge_level` | Y | Y | Y | Y |
 | `knowledge_label` | Y | Y | Y | Y |
@@ -332,8 +332,10 @@ GET /api/players/{uuid}/nearby-systems
   "success": true,
   "data": {
     "current_location": {
+      "uuid": "loc-uuid-...",
       "name": "Kepler-442",
-      "coordinates": { "x": 150.0, "y": 200.0 }
+      "x": 150.0,
+      "y": 200.0
     },
     "sensor_range": 4.0,
     "sensor_level": 3,
@@ -344,7 +346,8 @@ GET /api/players/{uuid}/nearby-systems
         "name": "Proxima Hub",
         "type": "Star",
         "distance": 2.24,
-        "coordinates": { "x": 152.0, "y": 201.0 },
+        "x": 152.0,
+        "y": 201.0,
         "is_inhabited": true,
         "has_chart": true
       },
@@ -353,7 +356,8 @@ GET /api/players/{uuid}/nearby-systems
         "name": "Unknown System",
         "type": "Star",
         "distance": 3.61,
-        "coordinates": null,
+        "x": null,
+        "y": null,
         "is_inhabited": false,
         "has_chart": false
       }
@@ -364,7 +368,7 @@ GET /api/players/{uuid}/nearby-systems
 
 **Notes:**
 - `name` shows "Unknown System" if the player has no star chart for it
-- `coordinates` is `null` if no star chart (the system is just a blip)
+- `x`, `y` are `null` if no star chart (the system is just a blip)
 - Results capped at 50 systems
 - Only returns star-type POIs (not planets/asteroids)
 
@@ -393,9 +397,11 @@ GET /api/players/{uuid}/scan-local
   "success": true,
   "data": {
     "current_location": {
+      "uuid": "loc-uuid-...",
       "name": "Kepler-442",
       "type": "star",
-      "coordinates": { "x": 150.0, "y": 200.0 }
+      "x": 150.0,
+      "y": 200.0
     },
     "sensor_range": 4.0,
     "sensor_level": 3,
@@ -407,7 +413,8 @@ GET /api/players/{uuid}/scan-local
           "name": "Nearby Star",
           "type": "Star",
           "distance": 2.5,
-          "coordinates": { "x": 152.0, "y": 201.0 },
+          "x": 152.0,
+          "y": 201.0,
           "is_inhabited": true,
           "has_chart": true,
           "parent_poi": null
@@ -419,7 +426,8 @@ GET /api/players/{uuid}/scan-local
           "name": "Unknown Terrestrial",
           "type": "Terrestrial",
           "distance": 0.5,
-          "coordinates": null,
+          "x": null,
+          "y": null,
           "is_inhabited": false,
           "has_chart": false,
           "parent_poi": { "id": 42 }
@@ -435,7 +443,7 @@ GET /api/players/{uuid}/scan-local
 - Groups POIs by their type enum value
 - Returns all POI types, not just stars
 - Results capped at 100 POIs
-- Same chart-based name/coordinate visibility as nearby-systems
+- Same chart-based name/coordinate visibility as nearby-systems (`x`, `y` are null without chart)
 
 ---
 
@@ -457,7 +465,8 @@ GET /api/players/{uuid}/local-bodies
       "uuid": "...",
       "name": "Kepler-442",
       "type": "star",
-      "coordinates": { "x": 150, "y": 200 },
+      "x": 150.0,
+      "y": 200.0,
       "is_inhabited": true
     },
     "sector": {
@@ -825,7 +834,7 @@ The contents of `system_data` vary based on the player's scan level. Higher scan
    - Highlight pirate lanes (red/orange if `has_pirate: true`)
 5. **Draw danger zones** from `danger_zones[]`:
    - Translucent red circles at `center` with `radius_ly`
-6. **Draw sensor range** circle centered on `player.location` with radius `player.sensor_range_ly`
+6. **Draw sensor range** circle centered on `player.x`, `player.y` with radius `player.sensor_range_ly`
 7. **Everything NOT in `known_systems` is fog** — do not render any system not in the response
 
 ### System Node Styling
@@ -964,3 +973,27 @@ Players can only access their own data. Attempting to access another user's play
 | `GET` | `/api/players/{uuid}/exploration-log` | All scanned systems log |
 | `POST` | `/api/players/{uuid}/bulk-scan-levels` | Batch scan level query |
 | `GET` | `/api/players/{uuid}/system-data/{poiUuid}` | Filtered system data by scan level |
+
+---
+
+## Changelog
+
+### 2026-02-17 — FE API Integration Improvements
+
+**Knowledge Map (`GET /api/players/{playerUuid}/knowledge-map`):**
+- `player` object: Flattened `location: { x, y, poi_uuid }` to flat `x`, `y`, `poi_uuid` on the player object
+- `player` object: Added `sector_uuid` field
+- `known_systems`: Renamed `poi_uuid` to `uuid` for consistency
+- `known_lanes`: Added `distance` (raw Euclidean) to each lane
+- `known_lanes`: Now includes all active non-hidden warp gates at the player's current location (with `discovery_method: "current_location"`), removing the need for a separate `GET /warp-gates/{locationUuid}` call
+
+**Nearby Systems (`GET /api/players/{uuid}/nearby-systems`):**
+- `current_location`: Flattened `coordinates: { x, y }` to flat `x`, `y`; added `uuid`
+- `nearby_systems[].coordinates`: Flattened `coordinates: { x, y }` to flat `x`, `y` (null values when no chart)
+
+**Scan Local (`GET /api/players/{uuid}/scan-local`):**
+- `current_location`: Flattened `coordinates: { x, y }` to flat `x`, `y`; added `uuid`
+- `pois_by_type[]` items: Flattened `coordinates: { x, y }` to flat `x`, `y` (null values when no chart)
+
+**Local Bodies (`GET /api/players/{uuid}/local-bodies`):**
+- `system`: Flattened `coordinates: { x, y }` to flat `x`, `y`; fixed `(int)` cast to `(float)`

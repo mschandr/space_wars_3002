@@ -376,7 +376,7 @@ class NavigationTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    'system' => ['uuid', 'name', 'type', 'coordinates', 'is_inhabited'],
+                    'system' => ['uuid', 'name', 'type', 'x', 'y', 'is_inhabited'],
                     'sector',
                     'bodies' => [
                         'planets',
