@@ -15,7 +15,6 @@ class PlayerResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
             'uuid' => $this->uuid,
             'call_sign' => $this->call_sign,
             'credits' => (float) $this->credits,
@@ -33,7 +32,6 @@ class PlayerResource extends JsonResource
             'galaxy' => $this->when(
                 $this->relationLoaded('galaxy'),
                 [
-                    'id' => $this->galaxy->id,
                     'uuid' => $this->galaxy->uuid,
                     'name' => $this->galaxy->name,
                 ]

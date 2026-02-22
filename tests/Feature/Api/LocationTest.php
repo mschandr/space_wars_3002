@@ -82,8 +82,8 @@ class LocationTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.location', 'star_system')
             ->assertJsonPath('data.system_name', 'Alpha Centauri')
-            ->assertJsonPath('data.coordinates.x', 100)
-            ->assertJsonPath('data.coordinates.y', 100);
+            ->assertJsonPath('data.x', 100)
+            ->assertJsonPath('data.y', 100);
     }
 
     public function test_location_returns_system_info_by_uuid(): void
@@ -147,7 +147,8 @@ class LocationTest extends TestCase
                     'location',
                     'system_name',
                     'system_uuid',
-                    'coordinates',
+                    'x',
+                    'y',
                     'inhabited',
                     'has',
                 ],

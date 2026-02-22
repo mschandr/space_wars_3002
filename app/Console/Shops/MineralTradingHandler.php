@@ -23,6 +23,9 @@ class MineralTradingHandler extends BaseShopHandler
             $player->load('activeShip.cargo.mineral');
             $ship = $player->activeShip;
 
+            // Lazy population: stock the hub on first access
+            app(\App\Services\TradingService::class)->ensureInventoryPopulated($tradingHub);
+
             // Load hub inventory
             $hubInventories = $tradingHub->inventories()->with('mineral')->where('quantity', '>', 0)->get();
             $playerCargo = $ship->cargo;

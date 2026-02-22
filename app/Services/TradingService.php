@@ -2,10 +2,15 @@
 
 namespace App\Services;
 
+use App\Models\Mineral;
 use App\Models\Player;
 use App\Models\PlayerCargo;
+use App\Models\PlayerPriceSighting;
 use App\Models\PlayerShip;
+use App\Models\PlayerTradeTransaction;
+use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -57,8 +62,9 @@ class TradingService
 
         // Execute transaction atomically
         $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
+        $unitPrice = $inventory->sell_price; // Capture before removeStock recalculates prices
 
-        return DB::transaction(function () use ($player, $ship, $inventory, $mineral, $quantity, $totalCost, $xpEarned) {
+        return DB::transaction(function () use ($player, $ship, $inventory, $mineral, $quantity, $totalCost, $xpEarned, $unitPrice) {
             $player->deductCredits($totalCost);
             $inventory->removeStock($quantity);
 
@@ -76,6 +82,19 @@ class TradingService
 
             // Award XP for trading
             $player->addExperience($xpEarned);
+
+            // Log transaction
+            PlayerTradeTransaction::create([
+                'player_id' => $player->id,
+                'trading_hub_id' => $inventory->trading_hub_id,
+                'mineral_id' => $mineral->id,
+                'transaction_type' => 'buy',
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'total_amount' => $totalCost,
+                'credits_after' => $player->credits,
+                'transacted_at' => now(),
+            ]);
 
             return [
                 'success' => true,
@@ -104,12 +123,13 @@ class TradingService
             ];
         }
 
-        $totalRevenue = $hubInventory->buy_price * $quantity;
+        $unitPrice = $hubInventory->buy_price; // Capture before addStock recalculates prices
+        $totalRevenue = $unitPrice * $quantity;
 
         // Execute transaction atomically
         $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits, min 10
 
-        return DB::transaction(function () use ($player, $ship, $cargo, $hubInventory, $mineral, $quantity, $totalRevenue, $xpEarned) {
+        return DB::transaction(function () use ($player, $ship, $cargo, $hubInventory, $mineral, $quantity, $totalRevenue, $xpEarned, $unitPrice) {
             $player->addCredits($totalRevenue);
             $hubInventory->addStock($quantity);
 
@@ -127,6 +147,19 @@ class TradingService
 
             // Award XP for trading
             $player->addExperience($xpEarned);
+
+            // Log transaction
+            PlayerTradeTransaction::create([
+                'player_id' => $player->id,
+                'trading_hub_id' => $hubInventory->trading_hub_id,
+                'mineral_id' => $mineral->id,
+                'transaction_type' => 'sell',
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'total_amount' => $totalRevenue,
+                'credits_after' => $player->credits,
+                'transacted_at' => now(),
+            ]);
 
             return [
                 'success' => true,
@@ -154,5 +187,103 @@ class TradingService
     public function getMaxSellableQuantity(PlayerCargo $cargo): int
     {
         return $cargo->quantity;
+    }
+
+    /**
+     * Ensure a trading hub has mineral inventory populated.
+     *
+     * Lazy generation: if a hub has zero inventory rows, populate it
+     * with a random selection of minerals (same logic as the bulk command).
+     *
+     * @return bool True if population was performed, false if already populated
+     */
+    public function ensureInventoryPopulated(TradingHub $hub): bool
+    {
+        if ($hub->inventories()->exists()) {
+            return false;
+        }
+
+        $minerals = Mineral::all();
+
+        if ($minerals->isEmpty()) {
+            return false;
+        }
+
+        // Each hub gets 60-100% of all minerals
+        $count = rand((int) ($minerals->count() * 0.6), $minerals->count());
+        $availableMinerals = $minerals->random($count);
+
+        foreach ($availableMinerals as $mineral) {
+            $baseStock = match ($mineral->rarity) {
+                'common' => rand(5000, 15000),
+                'uncommon' => rand(2000, 8000),
+                'rare' => rand(500, 3000),
+                'very_rare' => rand(100, 1000),
+                'legendary' => rand(10, 200),
+                default => rand(1000, 5000),
+            };
+
+            $demandLevel = rand(30, 70);
+            $supplyLevel = rand(30, 70);
+
+            $baseValue = $mineral->base_value ?? 100;
+            $demandMultiplier = 1 + (($demandLevel - 50) / 100);
+            $supplyMultiplier = 1 - (($supplyLevel - 50) / 100);
+            $currentPrice = $baseValue * $demandMultiplier * $supplyMultiplier;
+
+            $spread = 0.15;
+            $buyPrice = $currentPrice * (1 - $spread);
+            $sellPrice = $currentPrice * (1 + $spread);
+
+            TradingHubInventory::create([
+                'trading_hub_id' => $hub->id,
+                'mineral_id' => $mineral->id,
+                'quantity' => $baseStock,
+                'current_price' => $currentPrice,
+                'buy_price' => $buyPrice,
+                'sell_price' => $sellPrice,
+                'demand_level' => $demandLevel,
+                'supply_level' => $supplyLevel,
+                'last_price_update' => now(),
+            ]);
+        }
+
+        return true;
+    }
+
+    /**
+     * Record price sightings for all minerals at a trading hub.
+     *
+     * Throttled: only records if last sighting for this player+hub was >5 minutes ago.
+     *
+     * @return bool True if sightings were recorded, false if throttled
+     */
+    public function recordPriceSightings(Player $player, TradingHub $hub, Collection $inventory): bool
+    {
+        $lastSighting = PlayerPriceSighting::where('player_id', $player->id)
+            ->where('trading_hub_id', $hub->id)
+            ->orderByDesc('recorded_at')
+            ->first();
+
+        if ($lastSighting && $lastSighting->recorded_at->diffInMinutes(now()) < 5) {
+            return false;
+        }
+
+        $now = now();
+        $sightings = $inventory->map(fn (TradingHubInventory $item) => [
+            'player_id' => $player->id,
+            'trading_hub_id' => $hub->id,
+            'mineral_id' => $item->mineral_id,
+            'buy_price' => $item->buy_price,
+            'sell_price' => $item->sell_price,
+            'quantity' => $item->quantity,
+            'recorded_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->toArray();
+
+        PlayerPriceSighting::insert($sightings);
+
+        return true;
     }
 }

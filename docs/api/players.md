@@ -976,8 +976,10 @@ Get the player's complete knowledge map (fog of war system) including known syst
     "known_lanes": [
       {
         "gate_uuid": "gate-uuid-v4",
-        "from_poi_uuid": "poi-uuid-v4",
-        "to_poi_uuid": "poi-uuid-v4-2",
+        "from_uuid": "poi-uuid-v4",
+        "from_name": "Sol",
+        "to_uuid": "poi-uuid-v4-2",
+        "to_name": "Wolf 359",
         "from": {
           "x": 150.5,
           "y": 200.3
@@ -986,6 +988,7 @@ Get the player's complete knowledge map (fog of war system) including known syst
           "x": 175.2,
           "y": 210.8
         },
+        "distance": 44.6,
         "has_pirate": false,
         "pirate_freshness": 0.92,
         "discovery_method": "traversal"
@@ -1087,12 +1090,15 @@ Get the player's complete knowledge map (fog of war system) including known syst
 
 **known_lanes (array of warp gates):**
 - `gate_uuid`: Warp gate's unique identifier
-- `from_poi_uuid`: Source POI UUID (can be null for hidden gates)
-- `to_poi_uuid`: Destination POI UUID (can be null for hidden gates)
+- `from_uuid`: Source POI UUID
+- `from_name`: Source system display name
+- `to_uuid`: Destination POI UUID
+- `to_name`: Destination system display name
 - `from.x`: Source X coordinate (uses gate's stored coords or POI coords)
 - `from.y`: Source Y coordinate
 - `to.x`: Destination X coordinate
 - `to.y`: Destination Y coordinate
+- `distance`: Distance between the two systems
 - `has_pirate`: Boolean indicating pirate presence is known
 - `pirate_freshness`: Staleness of pirate intel (0.0-1.0, null if never checked)
   - Formula: `max(0.1, 1.0 - (hours_since_check / 168))`

@@ -75,7 +75,7 @@ class MirrorUniverseController extends BaseApiController
             'mirror_gate' => $mirrorGate ? [
                 'uuid' => $mirrorGate->uuid,
                 'location' => [
-                    'poi_uuid' => $mirrorGate->sourcePoi->uuid,
+                    'uuid' => $mirrorGate->sourcePoi->uuid,
                     'name' => $mirrorGate->sourcePoi->name,
                     'x' => $mirrorGate->sourcePoi->x,
                     'y' => $mirrorGate->sourcePoi->y,
@@ -112,20 +112,16 @@ class MirrorUniverseController extends BaseApiController
             'mirror_gate' => [
                 'uuid' => $mirrorGate->uuid,
                 'location' => [
-                    'poi_uuid' => $mirrorGate->sourcePoi->uuid,
+                    'uuid' => $mirrorGate->sourcePoi->uuid,
                     'name' => $mirrorGate->sourcePoi->name,
-                    'coordinates' => [
-                        'x' => $mirrorGate->sourcePoi->x,
-                        'y' => $mirrorGate->sourcePoi->y,
-                    ],
+                    'x' => $mirrorGate->sourcePoi->x,
+                    'y' => $mirrorGate->sourcePoi->y,
                 ],
                 'destination' => $mirrorGate->destinationPoi ? [
-                    'poi_uuid' => $mirrorGate->destinationPoi->uuid,
+                    'uuid' => $mirrorGate->destinationPoi->uuid,
                     'name' => $mirrorGate->destinationPoi->name,
-                    'coordinates' => [
-                        'x' => $mirrorGate->destinationPoi->x,
-                        'y' => $mirrorGate->destinationPoi->y,
-                    ],
+                    'x' => $mirrorGate->destinationPoi->x,
+                    'y' => $mirrorGate->destinationPoi->y,
                 ] : null,
             ],
             'requirements' => [

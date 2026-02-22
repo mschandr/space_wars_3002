@@ -2,12 +2,12 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Mineral;
 use App\Models\Plan;
 use App\Models\Ship;
 use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
 use App\Models\TradingHubShip;
+use App\Services\TradingService;
 use DB;
 use Illuminate\Console\Command;
 
@@ -95,60 +95,19 @@ class TradingHubPopulateInventory extends Command
         $progressBar = $this->output->createProgressBar($hubs->count());
         $progressBar->start();
 
-        $totalInventory = 0;
+        $tradingService = app(TradingService::class);
+        $totalPopulated = 0;
 
         foreach ($hubs as $hub) {
-            // Each hub gets a random selection of minerals (60-100% of all minerals)
-            $availableMinerals = $minerals->random(rand((int) ($minerals->count() * 0.6), $minerals->count()));
-
-            foreach ($availableMinerals as $mineral) {
-                // Random stock levels based on mineral rarity
-                $baseStock = match ($mineral->rarity) {
-                    'common' => rand(5000, 15000),
-                    'uncommon' => rand(2000, 8000),
-                    'rare' => rand(500, 3000),
-                    'very_rare' => rand(100, 1000),
-                    'legendary' => rand(10, 200),
-                    default => rand(1000, 5000),
-                };
-
-                // Random supply and demand levels (affects pricing)
-                $demandLevel = rand(30, 70);
-                $supplyLevel = rand(30, 70);
-
-                // Calculate initial pricing
-                $baseValue = $mineral->base_value ?? 100;
-                $demandMultiplier = 1 + (($demandLevel - 50) / 100);
-                $supplyMultiplier = 1 - (($supplyLevel - 50) / 100);
-                $currentPrice = $baseValue * $demandMultiplier * $supplyMultiplier;
-
-                // Hub buys at lower price, sells at higher price (15% spread)
-                $spread = 0.15;
-                $buyPrice = $currentPrice * (1 - $spread);
-                $sellPrice = $currentPrice * (1 + $spread);
-
-                // Create inventory record with prices
-                TradingHubInventory::create([
-                    'trading_hub_id' => $hub->id,
-                    'mineral_id' => $mineral->id,
-                    'quantity' => $baseStock,
-                    'current_price' => $currentPrice,
-                    'buy_price' => $buyPrice,
-                    'sell_price' => $sellPrice,
-                    'demand_level' => $demandLevel,
-                    'supply_level' => $supplyLevel,
-                    'last_price_update' => now(),
-                ]);
-
-                $totalInventory++;
+            if ($tradingService->ensureInventoryPopulated($hub)) {
+                $totalPopulated++;
             }
-
             $progressBar->advance();
         }
 
         $progressBar->finish();
         $this->newLine();
-        $this->info("Created {$totalInventory} inventory records");
+        $this->info("Populated {$totalPopulated} hubs with mineral inventory");
     }
 
     private function populateUpgradePlans($hubs, $plans): void
@@ -205,9 +164,11 @@ class TradingHubPopulateInventory extends Command
         $totalShips = 0;
 
         foreach ($hubs as $hub) {
-            // Determine if this hub has a shipyard based on tier
-            // Premium hubs: 100% chance, Major hubs: 70% chance, Standard hubs: 30% chance
-            $hasShipyard = match ($hub->getTier()) {
+            // Hub has shipyard if services array declares it, or based on tier probability
+            $hubServices = $hub->services ?? [];
+            $servicesIncludeShipyard = in_array('shipyard', $hubServices)
+                || in_array('ship_sales', $hubServices);
+            $hasShipyard = $servicesIncludeShipyard || match ($hub->getTier()) {
                 'premium' => true,
                 'major' => rand(1, 100) <= 70,
                 'standard' => rand(1, 100) <= 30,

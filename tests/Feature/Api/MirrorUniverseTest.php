@@ -78,7 +78,7 @@ class MirrorUniverseTest extends TestCase
                 ],
                 'mirror_gate' => [
                     'uuid',
-                    'location' => ['poi_uuid', 'name', 'x', 'y'],
+                    'location' => ['uuid', 'name', 'x', 'y'],
                     'is_at_gate',
                 ],
                 'mirror_modifiers',
@@ -144,7 +144,7 @@ class MirrorUniverseTest extends TestCase
                 'galaxy' => ['uuid', 'name'],
                 'mirror_gate' => [
                     'uuid',
-                    'location' => ['poi_uuid', 'name', 'coordinates'],
+                    'location' => ['uuid', 'name', 'x', 'y'],
                     'destination',
                 ],
                 'requirements' => [

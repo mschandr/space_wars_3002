@@ -148,7 +148,7 @@ class PvPCombatController extends BaseApiController
                 'xp_earned' => $result['result']['xp_earned'],
                 'credits_earned' => $result['result']['credits_earned'],
                 'combat_log' => $result['result']['combat_log'],
-                'death_result' => $result['result']['death_result'],
+                'death_result' => $this->transformDeathResult($result['result']['death_result']),
             ],
         ], 'Combat completed');
     }
@@ -236,5 +236,25 @@ class PvPCombatController extends BaseApiController
                 'combat_log' => $session->combat_log,
             ],
         ]);
+    }
+
+    /**
+     * Transform death result for API response, converting respawn_location model to flat fields.
+     */
+    private function transformDeathResult(?array $deathResult): ?array
+    {
+        if (! $deathResult) {
+            return null;
+        }
+
+        $respawn = $deathResult['respawn_location'] ?? null;
+        $deathResult['respawn_location'] = $respawn ? [
+            'uuid' => $respawn->uuid,
+            'name' => $respawn->name,
+            'x' => (float) $respawn->x,
+            'y' => (float) $respawn->y,
+        ] : null;
+
+        return $deathResult;
     }
 }

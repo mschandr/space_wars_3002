@@ -85,7 +85,7 @@ class ScanTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    'system' => ['uuid', 'name', 'coordinates'],
+                    'system' => ['uuid', 'name', 'x', 'y'],
                     'scan_level',
                     'scan_data',
                     'cached',
@@ -210,7 +210,7 @@ class ScanTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    'system' => ['uuid', 'name', 'type', 'coordinates', 'is_inhabited'],
+                    'system' => ['uuid', 'name', 'type', 'x', 'y', 'is_inhabited'],
                     'scan' => [
                         'scan_level',
                         'scan_data',
@@ -254,7 +254,7 @@ class ScanTest extends TestCase
                     'entries' => [
                         '*' => [
                             'uuid',
-                            'system' => ['uuid', 'name', 'type', 'coordinates'],
+                            'system' => ['uuid', 'name', 'type', 'x', 'y'],
                             'scan_level',
                             'scan_level_label',
                             'scanned_at',
@@ -306,7 +306,7 @@ class ScanTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    'system_data' => ['uuid', 'name', 'scan_level', 'coordinates'],
+                    'system_data' => ['uuid', 'name', 'scan_level', 'x', 'y'],
                     'scan_level',
                 ],
             ]);
@@ -486,7 +486,8 @@ class SystemScanServiceTest extends TestCase
         $this->assertArrayHasKey('uuid', $data);
         $this->assertArrayHasKey('name', $data);
         $this->assertArrayHasKey('scan_level', $data);
-        $this->assertArrayHasKey('coordinates', $data);
+        $this->assertArrayHasKey('x', $data);
+        $this->assertArrayHasKey('y', $data);
         $this->assertArrayHasKey('geography', $data);
         $this->assertArrayHasKey('gates', $data);
         $this->assertArrayHasKey('resources', $data);

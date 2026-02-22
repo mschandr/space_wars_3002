@@ -562,12 +562,21 @@ class GalaxyController extends BaseApiController
 
         DB::beginTransaction();
         try {
-            // Find a random inhabited starting location
+            // Find a random inhabited starting location (prefer systems with trading hubs)
             $startingLocation = $galaxy->pointsOfInterest()
                 ->where('type', PointOfInterestType::STAR)
                 ->where('is_inhabited', true)
+                ->whereHas('tradingHub')
                 ->inRandomOrder()
                 ->first();
+
+            if (! $startingLocation) {
+                $startingLocation = $galaxy->pointsOfInterest()
+                    ->where('type', PointOfInterestType::STAR)
+                    ->where('is_inhabited', true)
+                    ->inRandomOrder()
+                    ->first();
+            }
 
             if (! $startingLocation) {
                 DB::rollBack();
@@ -613,6 +622,7 @@ class GalaxyController extends BaseApiController
                 PlayerShip::create([
                     'player_id' => $player->id,
                     'ship_id' => $starterShip->id,
+                    'current_poi_id' => $player->current_poi_id,
                     'name' => "{$player->call_sign}'s Sparrow",
                     'current_fuel' => $attrs['max_fuel'] ?? 100,
                     'max_fuel' => $attrs['max_fuel'] ?? 100,

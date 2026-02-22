@@ -134,6 +134,7 @@ return [
      */
     'ships' => [
         'starting_credits' => 100_000,
+        'rename_fee' => 1_000,
         'fuel_regen_seconds_per_unit' => 1, // TESTING: normal value is 30. Seconds between each 1-fuel regeneration tick.
         'classes' => [
             'scout' => [
@@ -150,6 +151,41 @@ return [
                 'cargo' => 100,
                 'speed' => 2,
                 'combat' => 8,
+            ],
+        ],
+
+        'sales_pitch_fallbacks' => [
+            'free_first_ship' => [
+                "Look, I'm gonna level with you. This thing's been sitting on my lot for months. Nobody wants it. The nav computer glitches, the hull rattles above half-throttle, and I'm pretty sure something is living in the cargo hold. But hey — you need a ship, I need the dock space. She's yours. Free. Just... get it out of here.",
+                "Every pilot's gotta start somewhere, right? This one's on the house. Don't look at me like that — I'm not being generous, I just need the berth for a paying customer. She flies. Mostly. That's all I'm promising.",
+                "You know what? Take it. No, seriously, take it. I've been paying docking fees on this heap for three months and frankly I'd rather eat the loss than look at it for another day. Consider it a business decision on my part.",
+            ],
+            'free' => [
+                "Look, I'm gonna level with you. This thing's been gathering dust and I need the dock space. She's yours if you want her. I'd say 'no returns' but honestly, please don't bring it back.",
+                "Another Sparrow? Yeah, I got one rusting in bay seven. Tell you what — just take it. I'm tired of moving it every time I need to shuffle inventory around.",
+                "Free? Yeah, it's free. You know why it's free? Because the last three people I tried to sell it to laughed at me. My dignity has a price, and apparently it's whatever this thing is worth.",
+            ],
+            'budget' => [
+                "She ain't pretty, but she's honest. Gets you from A to B without any surprises. Well... mostly without surprises.",
+                "Entry-level, sure, but don't let that fool you. I've seen pilots do incredible things in ships like this. Of course, I've also seen pilots do incredibly stupid things, but that's not the ship's fault.",
+                "Good little ship for someone just getting their space legs. Cheap to run, cheap to fix, and if you scratch her up, you won't cry about it.",
+            ],
+            'midrange' => [
+                "Now we're talking. This is a serious vessel for someone who knows what they're doing out there. She's got the bones of something special.",
+                "Solid choice. Not too flashy, not too modest. The kind of ship that says 'I have credits, but I also have taste.'",
+                "I've moved a lot of these and I'll tell you — the pilots who buy this class tend to keep them for a long time. That's either loyalty or stubbornness, but either way it speaks well of the ship.",
+                'This right here is what I call the sweet spot. Enough firepower to handle trouble, enough cargo space to make the trip worthwhile.',
+            ],
+            'premium' => [
+                "Oh, you've got good taste. This is top-shelf hardware. The kind of ship that makes other pilots dock their vessels and pretend they were just leaving.",
+                "I don't show this to just anyone. You want something that turns heads and wins fights? You're looking at it.",
+                "This is the ship that separates the traders from the tycoons. You buy this, you're making a statement. That statement being 'I have a lot of credits and excellent judgment.'",
+            ],
+            'luxury' => [
+                "Now this... this is a once-in-a-lifetime acquisition. I had to call in favors just to get her on my lot. She's priced accordingly, but you'll understand why the moment you sit in that command chair.",
+                "I'm not even going to give you the sales pitch. If you can afford her, you already know what she is. If you can't... well, it's nice to dream.",
+                "Between you and me, I almost kept this one for myself. But I'm a businessman, not a pilot, and she deserves someone who'll put her through her paces. You look like that someone. Assuming your credits clear.",
+                "Capital-class vessel. The real deal. I've seen admirals weep at the sight of ships like this. Not from joy — from the invoice. But also a little from joy.",
             ],
         ],
     ],
@@ -332,6 +368,33 @@ return [
 
     /**
      * |--------------------------------------------------------------------------
+     * | Component System
+     * |--------------------------------------------------------------------------
+     * | Per-component upgrade levels and cost scaling.
+     * | Upgrade effect = base * (1 + level * upgrade_effect_per_level)
+     * | Upgrade cost = upgrade_cost_base * (1 + current_level * upgrade_cost_scaling)
+     */
+    'components' => [
+        'upgrade_effect_per_level' => 0.15,
+        'max_upgrade_by_rarity' => [
+            'common' => [5, 7],
+            'uncommon' => [3, 5],
+            'rare' => [2, 3],
+            'epic' => [1, 2],
+            'unique' => [1, 1],
+            'exotic' => [0, 0],
+        ],
+        'upgrade_cost_ratio' => 0.3,
+        'upgrade_cost_scaling' => 0.5,
+        'hub_max_rarity' => [
+            'minor' => 'rare',
+            'major' => 'epic',
+            'premium' => 'exotic',
+        ],
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
      * | Rarity System
      * |--------------------------------------------------------------------------
      * | Unified rarity tiers for ships and components.
@@ -396,6 +459,21 @@ return [
         ],
         'component_sell_percentage' => 0.50, // 50% of component value
         'ship_sell_percentage' => 0.35,      // 35% of ship value (lump sum)
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
+     * | Merchant Commentary
+     * |--------------------------------------------------------------------------
+     * | Dynamic commentary system for ship and component merchants.
+     * | Thresholds control how items are scored on value, danger, and buyer context.
+     */
+    'merchant_commentary' => [
+        'thresholds' => [
+            'value' => ['deal_ratio' => 0.75, 'overpriced_ratio' => 1.10],
+            'danger' => ['ship_deadly' => 200, 'ship_moderate' => 80, 'weapon_deadly' => 80, 'weapon_moderate' => 40],
+            'buyer' => ['rich_multiplier' => 3.0, 'comfortable_multiplier' => 1.5, 'upgrade_ratio' => 1.3, 'downgrade_ratio' => 0.7],
+        ],
     ],
 
     /**

@@ -283,7 +283,7 @@ class CartographyTest extends TestCase
                         'pirate_warning',
                         'connections',
                     ],
-                    'poi_uuid',
+                    'uuid',
                 ],
             ]);
     }
@@ -328,7 +328,7 @@ class CartographyTest extends TestCase
             ->getJson('/api/star-charts/preview');
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['player_uuid', 'center_poi_uuid']);
+            ->assertJsonValidationErrors(['player_uuid']);
     }
 
     public function test_it_shows_can_afford_flag_correctly()

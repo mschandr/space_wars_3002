@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SlotType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,9 +12,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * Each instance has:
  * - A blueprint (ShipComponent) defining what it is
- * - A slot (weapon_slot or utility_slot) and index
+ * - A slot type and index
  * - Condition (0-100, degrades with use)
  * - Ammo (for weapons that use ammunition)
+ * - Upgrade level (0 to max_upgrade_level, each level adds 15% of base)
+ * - Mechanic bonus (future: NPC mechanic installation quality)
  */
 class PlayerShipComponent extends Model
 {
@@ -28,14 +31,19 @@ class PlayerShipComponent extends Model
         'ammo',
         'max_ammo',
         'is_active',
+        'upgrade_level',
+        'mechanic_bonus',
     ];
 
     protected $casts = [
+        'slot_type' => SlotType::class,
         'slot_index' => 'integer',
         'condition' => 'integer',
         'ammo' => 'integer',
         'max_ammo' => 'integer',
         'is_active' => 'boolean',
+        'upgrade_level' => 'integer',
+        'mechanic_bonus' => 'float',
     ];
 
     /**
@@ -134,8 +142,9 @@ class PlayerShipComponent extends Model
     }
 
     /**
-     * Get the effective value of a stat from this component
-     * (reduced by condition percentage)
+     * Get the effective value of a stat from this component.
+     * Factors in upgrade level, condition, and mechanic bonus:
+     *   base * (1 + upgrade_level * 0.15) * (condition / 100) * (1 + mechanic_bonus)
      */
     public function getEffectiveEffect(string $stat): mixed
     {
@@ -145,9 +154,11 @@ class PlayerShipComponent extends Model
             return $baseEffect;
         }
 
-        // Reduce effectiveness based on condition
+        $perLevel = config('game_config.components.upgrade_effect_per_level', 0.15);
+        $upgradeMultiplier = 1 + ($this->upgrade_level ?? 0) * $perLevel;
         $conditionMultiplier = $this->condition / 100;
+        $mechanicMultiplier = 1 + ($this->mechanic_bonus ?? 0.0);
 
-        return $baseEffect * $conditionMultiplier;
+        return $baseEffect * $upgradeMultiplier * $conditionMultiplier * $mechanicMultiplier;
     }
 }

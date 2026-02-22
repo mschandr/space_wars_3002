@@ -49,7 +49,7 @@ class ScanController extends BaseApiController
         }
 
         // Determine target POI (current location or specified)
-        $targetPoiUuid = $request->input('poi_uuid');
+        $targetPoiUuid = $request->input('uuid') ?? $request->input('poi_uuid');
         if ($targetPoiUuid) {
             $targetPoi = PointOfInterest::where('uuid', $targetPoiUuid)
                 ->where('galaxy_id', $player->galaxy_id)
@@ -98,7 +98,8 @@ class ScanController extends BaseApiController
             'system' => [
                 'uuid' => $targetPoi->uuid,
                 'name' => $targetPoi->name,
-                'coordinates' => ['x' => $targetPoi->x, 'y' => $targetPoi->y],
+                'x' => $targetPoi->x,
+                'y' => $targetPoi->y,
             ],
             'scan_level' => $result['scan_level'],
             'scan_data' => $result['scan_data'],
@@ -147,7 +148,8 @@ class ScanController extends BaseApiController
                 'uuid' => $poi->uuid,
                 'name' => $poi->name,
                 'type' => $poi->type->label(),
-                'coordinates' => ['x' => $poi->x, 'y' => $poi->y],
+                'x' => $poi->x,
+                'y' => $poi->y,
                 'is_inhabited' => $poi->is_inhabited,
             ],
             'scan' => $results,
@@ -187,7 +189,8 @@ class ScanController extends BaseApiController
                     'uuid' => $poi->uuid,
                     'name' => $poi->name,
                     'type' => $poi->type->label(),
-                    'coordinates' => ['x' => $poi->x, 'y' => $poi->y],
+                    'x' => $poi->x,
+                    'y' => $poi->y,
                     'is_inhabited' => $poi->is_inhabited,
                     'region' => $poi->region?->value ?? 'unknown',
                 ],
@@ -237,9 +240,9 @@ class ScanController extends BaseApiController
 
         $this->authorizePlayer($player, $user);
 
-        $poiUuids = $request->input('poi_uuids', []);
+        $poiUuids = $request->input('uuids') ?? $request->input('poi_uuids', []);
         if (empty($poiUuids) || ! is_array($poiUuids)) {
-            return $this->validationError(['poi_uuids' => 'Array of POI UUIDs required']);
+            return $this->validationError(['uuids' => 'Array of system UUIDs required']);
         }
 
         // Limit to prevent abuse

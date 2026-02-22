@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SlotType;
 use App\Models\Traits\HasUuid;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -27,6 +28,7 @@ class PlayerShip extends Model
         'uuid',
         'player_id',
         'ship_id',
+        'current_poi_id',
         'name',
         'current_fuel',
         'max_fuel',
@@ -39,6 +41,13 @@ class PlayerShip extends Model
         'warp_drive',
         'weapon_slots',
         'utility_slots',
+        'engine_slots',
+        'reactor_slots',
+        'hull_plating_slots',
+        'shield_slots',
+        'sensor_slots',
+        'cargo_module_slots',
+        'size_class',
         'shield_strength',
         'fuel_regen_modifier',
         'fuel_consumption_modifier',
@@ -65,6 +74,12 @@ class PlayerShip extends Model
         'warp_drive' => 'integer',
         'weapon_slots' => 'integer',
         'utility_slots' => 'integer',
+        'engine_slots' => 'integer',
+        'reactor_slots' => 'integer',
+        'hull_plating_slots' => 'integer',
+        'shield_slots' => 'integer',
+        'sensor_slots' => 'integer',
+        'cargo_module_slots' => 'integer',
         'shield_strength' => 'integer',
         'fuel_regen_modifier' => 'float',
         'fuel_consumption_modifier' => 'float',
@@ -99,6 +114,11 @@ class PlayerShip extends Model
         return $this->belongsTo(Ship::class);
     }
 
+    public function currentLocation(): BelongsTo
+    {
+        return $this->belongsTo(PointOfInterest::class, 'current_poi_id');
+    }
+
     public function cargo(): HasMany
     {
         return $this->hasMany(PlayerCargo::class);
@@ -121,13 +141,21 @@ class PlayerShip extends Model
     }
 
     /**
+     * Get installed components of a specific slot type.
+     */
+    public function componentsOfType(SlotType $type): HasMany
+    {
+        return $this->hasMany(PlayerShipComponent::class)->where('slot_type', $type->value);
+    }
+
+    /**
      * Get installed weapon components.
      *
      * Note: Named weaponComponents() to avoid shadowing the 'weapons' integer attribute.
      */
     public function weaponComponents(): HasMany
     {
-        return $this->hasMany(PlayerShipComponent::class)->where('slot_type', 'weapon_slot');
+        return $this->componentsOfType(SlotType::WEAPON);
     }
 
     /**
@@ -137,7 +165,23 @@ class PlayerShip extends Model
      */
     public function utilityComponents(): HasMany
     {
-        return $this->hasMany(PlayerShipComponent::class)->where('slot_type', 'utility_slot');
+        return $this->componentsOfType(SlotType::UTILITY);
+    }
+
+    /**
+     * Get number of available slots for a given slot type.
+     */
+    public function getAvailableSlots(SlotType $type): int
+    {
+        $usedSlots = $this->components()
+            ->where('slot_type', $type->value)
+            ->with('component')
+            ->get()
+            ->sum(fn ($c) => $c->component->slots_required ?? 1);
+
+        $totalSlots = (int) ($this->{$type->slotColumn()} ?? 0);
+
+        return max(0, $totalSlots - $usedSlots);
     }
 
     /**
@@ -145,13 +189,7 @@ class PlayerShip extends Model
      */
     public function getAvailableWeaponSlots(): int
     {
-        $usedSlots = $this->components()
-            ->where('slot_type', 'weapon_slot')
-            ->with('component')
-            ->get()
-            ->sum(fn ($c) => $c->component->slots_required ?? 1);
-
-        return max(0, ($this->weapon_slots ?? 0) - $usedSlots);
+        return $this->getAvailableSlots(SlotType::WEAPON);
     }
 
     /**
@@ -159,13 +197,7 @@ class PlayerShip extends Model
      */
     public function getAvailableUtilitySlots(): int
     {
-        $usedSlots = $this->components()
-            ->where('slot_type', 'utility_slot')
-            ->with('component')
-            ->get()
-            ->sum(fn ($c) => $c->component->slots_required ?? 1);
-
-        return max(0, ($this->utility_slots ?? 0) - $usedSlots);
+        return $this->getAvailableSlots(SlotType::UTILITY);
     }
 
     /**

@@ -56,7 +56,7 @@ class GalaxyResource extends JsonResource
             'owner' => $this->when(
                 $this->game_mode === 'single_player' && $this->relationLoaded('owner'),
                 fn () => $this->owner ? [
-                    'id' => $this->owner->id,
+                    'uuid' => $this->owner->uuid ?? $this->owner->id,
                     'name' => $this->owner->name,
                 ] : null
             ),

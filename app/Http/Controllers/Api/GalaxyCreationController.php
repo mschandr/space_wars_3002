@@ -250,7 +250,7 @@ class GalaxyCreationController extends BaseApiController
             'status' => $npc->status,
             'current_activity' => $npc->current_activity,
             'location' => $npc->currentLocation ? [
-                'id' => $npc->currentLocation->id,
+                'uuid' => $npc->currentLocation->uuid,
                 'name' => $npc->currentLocation->name,
                 'x' => $npc->currentLocation->x,
                 'y' => $npc->currentLocation->y,
@@ -311,12 +311,11 @@ class GalaxyCreationController extends BaseApiController
                 'total_trade_volume' => (float) $npc->total_trade_volume,
             ],
             'galaxy' => [
-                'id' => $npc->galaxy->id,
                 'uuid' => $npc->galaxy->uuid,
                 'name' => $npc->galaxy->name,
             ],
             'location' => $npc->currentLocation ? [
-                'id' => $npc->currentLocation->id,
+                'uuid' => $npc->currentLocation->uuid,
                 'name' => $npc->currentLocation->name,
                 'x' => $npc->currentLocation->x,
                 'y' => $npc->currentLocation->y,

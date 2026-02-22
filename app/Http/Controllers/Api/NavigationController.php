@@ -267,6 +267,9 @@ class NavigationController extends BaseApiController
             ->limit(100)
             ->get();
 
+        // Eager load parent relationship for parent_poi UUID resolution
+        $nearbyPOIs->load('parent');
+
         // Pre-load all charted POI IDs once (prevents N+1 queries)
         $chartedPoiIds = $player->getChartedPoiIds();
 
@@ -288,7 +291,7 @@ class NavigationController extends BaseApiController
                     'is_inhabited' => $poi->is_inhabited ?? false,
                     'has_chart' => $hasChart,
                     'parent_poi' => $poi->parent_poi_id ? [
-                        'id' => $poi->parent_poi_id,
+                        'uuid' => $poi->parent?->uuid,
                     ] : null,
                 ];
             })->values();

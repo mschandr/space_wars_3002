@@ -429,29 +429,61 @@ Get current inventory and prices at a trading hub.
 
 Purchase minerals from a trading hub.
 
+> ---
+> **OLD — DO NOT USE** (prior to 2026-02-21)
+>
+> The previous version of this endpoint accepted `mineral_id` (integer) to identify the mineral, `ship_uuid` was not required (the server implicitly used the player's active ship), and there was no ship-at-hub location validation. This allowed remote trading exploits (cargo teleportation / remote arbitrage).
+>
+> **Request Body (OLD):**
+>
+> | Parameter | Type | Required | Description |
+> |-----------|------|----------|-------------|
+> | `player_uuid` | string | Yes | UUID of the player making the purchase |
+> | `mineral_id` | integer | Yes | Database ID of the mineral to buy |
+> | `quantity` | integer | Yes | Amount to purchase (min: 1) |
+>
+> ---
+
+#### Updated: 2026-02-21
+
 **Authentication:** Required (Sanctum)
 
-**Description:** Buy a specified quantity of a mineral from a trading hub. Deducts credits, adds minerals to cargo, consumes cargo space. Awards trading XP on success.
+**Description:** Buy a specified quantity of a mineral from a trading hub. The ship specified by `ship_uuid` must be physically located at the trading hub. Deducts credits, adds minerals to ship cargo, consumes cargo space. Awards trading XP on success. The total cost is calculated server-side (not provided by the client).
 
 #### Request Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `uuid` | string (path) | Yes | UUID of the PointOfInterest where the hub is located |
+| `uuid` | string (path) | Yes | UUID of the PointOfInterest where the hub is located (doubles as location context for price history) |
 
 #### Request Body
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `player_uuid` | string | Yes | UUID of the player making the purchase |
-| `mineral_id` | integer | Yes | Database ID of the mineral to buy |
+| `ship_uuid` | string | Yes | UUID of the player's ship (must be at the hub's POI) |
+| `mineral_uuid` | string | Yes* | UUID of the mineral to buy (*required if `mineral_name` not provided) |
+| `mineral_name` | string | Yes* | Name of the mineral to buy (*required if `mineral_uuid` not provided) |
 | `quantity` | integer | Yes | Amount to purchase (min: 1) |
+
+*Mineral identification: Provide `mineral_uuid` (preferred) or `mineral_name` as fallback. At least one is required.*
 
 **Example Request:**
 ```json
 {
   "player_uuid": "550e8400-e29b-41d4-a716-446655440000",
-  "mineral_id": 1,
+  "ship_uuid": "850e8400-e29b-41d4-a716-446655440030",
+  "mineral_uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "quantity": 100
+}
+```
+
+**Example Request (using mineral_name fallback):**
+```json
+{
+  "player_uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "ship_uuid": "850e8400-e29b-41d4-a716-446655440030",
+  "mineral_name": "Iron Ore",
   "quantity": 100
 }
 ```
@@ -495,29 +527,47 @@ Purchase minerals from a trading hub.
 | `mineral` | object | Mineral object that was purchased |
 | `quantity` | integer | Amount purchased |
 | `price_per_unit` | float | Price per unit paid (hub's `sell_price`) |
-| `total_cost` | float | Total credits deducted (quantity × price_per_unit) |
+| `total_cost` | float | Total credits deducted (quantity x price_per_unit, calculated server-side) |
 | `credits_remaining` | float | Player's credit balance after transaction |
 | `cargo_remaining` | integer | Ship's current cargo capacity used after transaction |
 | `xp_earned` | integer | Trading XP awarded for this transaction |
 
 #### Error Responses
 
-**400 Bad Request:** Validation failed.
+**422 Unprocessable Entity:** Validation failed.
 ```json
 {
   "success": false,
-  "message": "Validation failed",
-  "errors": {
-    "quantity": ["The quantity must be at least 1."]
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "The given data was invalid",
+    "errors": {
+      "ship_uuid": ["The ship uuid field is required."],
+      "quantity": ["The quantity must be at least 1."]
+    }
   }
 }
 ```
 
-**404 Not Found:** Player, hub, or mineral not found.
+**404 Not Found:** Player, hub, ship, or mineral not found.
 ```json
 {
   "success": false,
-  "message": "Player not found"
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Ship not found"
+  }
+}
+```
+
+**400 Bad Request:** Ship is not at the trading hub.
+```json
+{
+  "success": false,
+  "error": {
+    "code": "SHIP_NOT_AT_HUB",
+    "message": "Ship is not at this trading hub"
+  }
 }
 ```
 
@@ -525,29 +575,33 @@ Purchase minerals from a trading hub.
 ```json
 {
   "success": false,
-  "message": "Insufficient credits. You need 15,060 but only have 10,000.",
-  "error_code": "BUY_FAILED"
+  "error": {
+    "code": "BUY_FAILED",
+    "message": "Insufficient credits. You need 15,060 but only have 10,000."
+  }
 }
 ```
 
-**Possible failure messages from TradingService:**
-- "Insufficient credits. You need X but only have Y."
-- "Not enough cargo space. You need X but only have Y available."
-- "Hub only has X in stock, but you requested Y."
-- "No active ship"
+**Possible failure codes:**
+- `SHIP_NOT_AT_HUB` — Ship's `current_poi_id` does not match the hub's POI
+- `BUY_FAILED` — Insufficient credits, insufficient cargo space, or insufficient hub stock
 
 #### Warnings & Caveats
 
 - Player must own the `player_uuid` (validated against authenticated user)
-- Player must have an active ship
+- Ship must belong to the player (`player_id` check on `PlayerShip`)
+- **Ship must be physically at the hub** — `ship.current_poi_id` must equal the hub's POI ID
+- `null` `current_poi_id` on the ship is treated as "not at hub" (surfaces missing location data as errors)
 - Transaction checks (in order):
-  1. Hub has sufficient stock (`quantity` available)
-  2. Player has sufficient credits (`total_cost <= player.credits`)
-  3. Ship has sufficient cargo space (`quantity <= available_space`)
-- `total_cost` uses the hub's `sell_price` (what you pay to buy from them)
+  1. Ship is at the hub (`SHIP_NOT_AT_HUB`)
+  2. Hub has sufficient stock (`quantity` available)
+  3. Player has sufficient credits (`total_cost <= player.credits`)
+  4. Ship has sufficient cargo space (`quantity <= available_space`)
+- `total_cost` is calculated server-side using the hub's `sell_price` (what you pay to buy from them)
 - Cargo space is 1:1 (1 unit mineral = 1 unit cargo)
 - XP formula: `(quantity / 10) * (mineral.base_value / 100)` (approximate, varies by TradingService)
 - Transaction is atomic (all-or-nothing)
+- The path `{uuid}` serves as the location context for price history tracking
 
 ---
 
@@ -555,9 +609,26 @@ Purchase minerals from a trading hub.
 
 Sell minerals to a trading hub.
 
+> ---
+> **OLD — DO NOT USE** (prior to 2026-02-21)
+>
+> The previous version of this endpoint accepted `mineral_id` (integer) to identify the mineral, `ship_uuid` was not required (the server implicitly used the player's active ship), and there was no ship-at-hub location validation. This allowed selling cargo from a ship that wasn't physically at the hub.
+>
+> **Request Body (OLD):**
+>
+> | Parameter | Type | Required | Description |
+> |-----------|------|----------|-------------|
+> | `player_uuid` | string | Yes | UUID of the player making the sale |
+> | `mineral_id` | integer | Yes | Database ID of the mineral to sell |
+> | `quantity` | integer | Yes | Amount to sell (min: 1) |
+>
+> ---
+
+#### Updated: 2026-02-21
+
 **Authentication:** Required (Sanctum)
 
-**Description:** Sell a specified quantity of a mineral from your cargo to a trading hub. Adds credits, removes minerals from cargo, frees cargo space. Awards trading XP on success.
+**Description:** Sell a specified quantity of a mineral from a specific ship's cargo to a trading hub. The ship must be physically located at the hub. Adds credits, removes minerals from cargo, frees cargo space. Awards trading XP on success.
 
 #### Request Parameters
 
@@ -570,14 +641,19 @@ Sell minerals to a trading hub.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `player_uuid` | string | Yes | UUID of the player making the sale |
-| `mineral_id` | integer | Yes | Database ID of the mineral to sell |
+| `ship_uuid` | string | Yes | UUID of the player's ship (must be at the hub's POI) |
+| `mineral_uuid` | string | Yes* | UUID of the mineral to sell (*required if `mineral_name` not provided) |
+| `mineral_name` | string | Yes* | Name of the mineral to sell (*required if `mineral_uuid` not provided) |
 | `quantity` | integer | Yes | Amount to sell (min: 1) |
+
+*Mineral identification: Provide `mineral_uuid` (preferred) or `mineral_name` as fallback. At least one is required.*
 
 **Example Request:**
 ```json
 {
   "player_uuid": "550e8400-e29b-41d4-a716-446655440000",
-  "mineral_id": 1,
+  "ship_uuid": "850e8400-e29b-41d4-a716-446655440030",
+  "mineral_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "quantity": 50
 }
 ```
@@ -621,38 +697,57 @@ Sell minerals to a trading hub.
 | `mineral` | object | Mineral object that was sold |
 | `quantity` | integer | Amount sold |
 | `price_per_unit` | float | Price per unit received (hub's `buy_price`) |
-| `total_revenue` | float | Total credits earned (quantity × price_per_unit) |
+| `total_revenue` | float | Total credits earned (quantity x price_per_unit, calculated server-side) |
 | `credits_remaining` | float | Player's credit balance after transaction |
 | `cargo_remaining` | integer | Ship's current cargo capacity used after transaction |
 | `xp_earned` | integer | Trading XP awarded for this transaction |
 
 #### Error Responses
 
-**400 Bad Request:** Validation failed.
+**422 Unprocessable Entity:** Validation failed.
 ```json
 {
   "success": false,
-  "message": "Validation failed",
-  "errors": {
-    "quantity": ["The quantity must be at least 1."]
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "The given data was invalid",
+    "errors": {
+      "ship_uuid": ["The ship uuid field is required."]
+    }
   }
 }
 ```
 
-**404 Not Found:** Player or hub not found.
+**404 Not Found:** Player, hub, ship, or mineral not found.
 ```json
 {
   "success": false,
-  "message": "Player not found"
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Ship not found"
+  }
 }
 ```
 
-**400 Bad Request:** Player doesn't have the mineral in cargo.
+**400 Bad Request:** Ship is not at the trading hub.
 ```json
 {
   "success": false,
-  "message": "You do not have this mineral in cargo",
-  "error_code": "NO_CARGO"
+  "error": {
+    "code": "SHIP_NOT_AT_HUB",
+    "message": "Ship is not at this trading hub"
+  }
+}
+```
+
+**400 Bad Request:** Player doesn't have the mineral in cargo on that ship.
+```json
+{
+  "success": false,
+  "error": {
+    "code": "NO_CARGO",
+    "message": "You do not have this mineral in cargo"
+  }
 }
 ```
 
@@ -660,7 +755,10 @@ Sell minerals to a trading hub.
 ```json
 {
   "success": false,
-  "message": "This hub does not trade this mineral"
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "This hub does not trade this mineral"
+  }
 }
 ```
 
@@ -668,19 +766,24 @@ Sell minerals to a trading hub.
 ```json
 {
   "success": false,
-  "message": "You only have 30 units but tried to sell 50.",
-  "error_code": "SELL_FAILED"
+  "error": {
+    "code": "SELL_FAILED",
+    "message": "You only have 30 units but tried to sell 50."
+  }
 }
 ```
 
 #### Warnings & Caveats
 
 - Player must own the `player_uuid` (validated against authenticated user)
-- Player must have an active ship
+- Ship must belong to the player (`player_id` check)
+- **Ship must be physically at the hub** — `ship.current_poi_id` must equal the hub's POI ID
+- Cargo lookup uses the specified ship's cargo (not the player's active ship)
 - Transaction checks:
-  1. Player has mineral in cargo (`PlayerCargo` exists)
-  2. Player has sufficient quantity in cargo
-  3. Hub accepts this mineral (`TradingHubInventory` exists for hub + mineral)
+  1. Ship is at the hub (`SHIP_NOT_AT_HUB`)
+  2. Player has mineral in cargo on that ship (`PlayerCargo` exists for `ship.id`)
+  3. Player has sufficient quantity in cargo
+  4. Hub accepts this mineral (`TradingHubInventory` exists for hub + mineral)
 - `total_revenue` uses the hub's `buy_price` (what they pay to buy from you)
 - Selling frees cargo space
 - XP formula: similar to buying (based on quantity and mineral value)
@@ -801,9 +904,26 @@ Get the player's current cargo manifest.
 
 Calculate maximum affordable quantity of a mineral at a hub.
 
+> ---
+> **OLD — DO NOT USE** (prior to 2026-02-21)
+>
+> The previous version accepted `mineral_id` (integer) and did not require `ship_uuid`. Cargo space was calculated from the player's active ship implicitly, with no ship-at-hub validation.
+>
+> **Request Parameters (OLD):**
+>
+> | Parameter | Type | Required | Description |
+> |-----------|------|----------|-------------|
+> | `player_uuid` | string | Yes | UUID of the player |
+> | `hub_uuid` | string | Yes | UUID of the PointOfInterest where the hub is located |
+> | `mineral_id` | integer | Yes | Database ID of the mineral |
+>
+> ---
+
+#### Updated: 2026-02-21
+
 **Authentication:** Required (Sanctum)
 
-**Description:** Calculates the maximum quantity of a mineral a player can afford to purchase, considering both credit limits and cargo space constraints.
+**Description:** Calculates the maximum quantity of a mineral a player can afford to purchase, considering both credit limits and cargo space constraints on the specified ship. The ship must be at the hub.
 
 #### Request Parameters
 
@@ -811,9 +931,13 @@ Calculate maximum affordable quantity of a mineral at a hub.
 |-----------|------|----------|-------------|
 | `player_uuid` | string | Yes | UUID of the player |
 | `hub_uuid` | string | Yes | UUID of the PointOfInterest where the hub is located |
-| `mineral_id` | integer | Yes | Database ID of the mineral |
+| `ship_uuid` | string | Yes | UUID of the player's ship (must be at the hub's POI) |
+| `mineral_uuid` | string | Yes* | UUID of the mineral (*required if `mineral_name` not provided) |
+| `mineral_name` | string | Yes* | Name of the mineral (*required if `mineral_uuid` not provided) |
 
-**Example:** `/api/trading/affordability?player_uuid=550e8400-e29b-41d4-a716-446655440000&hub_uuid=750e8400-e29b-41d4-a716-446655440020&mineral_id=1`
+*Mineral identification: Provide `mineral_uuid` (preferred) or `mineral_name` as fallback. At least one is required.*
+
+**Example:** `/api/trading/affordability?player_uuid=550e8400...&hub_uuid=750e8400...&ship_uuid=850e8400...&mineral_uuid=550e8400...`
 
 #### Success Response
 
@@ -838,29 +962,46 @@ Calculate maximum affordable quantity of a mineral at a hub.
 | Field | Type | Description |
 |-------|------|-------------|
 | `max_affordable` | integer | Maximum quantity affordable based on player's credits |
-| `max_by_cargo_space` | integer | Maximum quantity that fits in available cargo space |
+| `max_by_cargo_space` | integer | Maximum quantity that fits in the specified ship's available cargo space |
 | `max_purchasable` | integer | Actual maximum purchasable (minimum of the two limits) |
 | `price_per_unit` | float | Current sell price at the hub |
 | `total_cost` | float | Total cost if purchasing `max_purchasable` units |
 
 #### Error Responses
 
-**400 Bad Request:** Validation failed.
+**422 Unprocessable Entity:** Validation failed.
 ```json
 {
   "success": false,
-  "message": "Validation failed",
-  "errors": {
-    "player_uuid": ["The player uuid field is required."]
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "The given data was invalid",
+    "errors": {
+      "ship_uuid": ["The ship uuid field is required."]
+    }
   }
 }
 ```
 
-**404 Not Found:** Player, hub, or mineral not found.
+**404 Not Found:** Player, hub, ship, or mineral not found.
 ```json
 {
   "success": false,
-  "message": "Player not found"
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Ship not found"
+  }
+}
+```
+
+**400 Bad Request:** Ship is not at the trading hub.
+```json
+{
+  "success": false,
+  "error": {
+    "code": "SHIP_NOT_AT_HUB",
+    "message": "Ship is not at this trading hub"
+  }
 }
 ```
 
@@ -868,16 +1009,21 @@ Calculate maximum affordable quantity of a mineral at a hub.
 ```json
 {
   "success": false,
-  "message": "Mineral not available"
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Mineral not available"
+  }
 }
 ```
 
 #### Warnings & Caveats
 
-- Does NOT check hub inventory stock; only player constraints
+- Ship must be at the hub (`SHIP_NOT_AT_HUB` error if not)
+- Cargo space is calculated from the specified ship (not the player's active ship)
+- Does NOT check hub inventory stock; only player/ship constraints
 - Frontend should compare `max_purchasable` with hub inventory `quantity`
 - Calculation: `max_affordable = floor(player.credits / price_per_unit)`
-- Calculation: `max_by_cargo_space = cargo_capacity - current_cargo`
+- Calculation: `max_by_cargo_space = ship.cargo_hold - ship.current_cargo`
 - Result: `max_purchasable = min(max_affordable, max_by_cargo_space)`
 - All values are integers (fractional units not supported)
 - Use this endpoint to populate "Buy Max" buttons in UIs
@@ -1271,5 +1417,5 @@ Rate limiting is handled by Laravel Sanctum middleware. Check your application's
 
 ---
 
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-21
 **Version:** 2026.02.10.001

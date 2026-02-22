@@ -50,7 +50,7 @@ class PlayerManagementTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    '*' => ['id', 'uuid', 'call_sign', 'credits', 'level'],
+                    '*' => ['uuid', 'call_sign', 'credits', 'level'],
                 ],
             ])
             ->assertJson([
@@ -95,7 +95,7 @@ class PlayerManagementTest extends TestCase
         $response->assertStatus(201)
             ->assertJsonStructure([
                 'success',
-                'data' => ['id', 'uuid', 'call_sign', 'credits', 'level'],
+                'data' => ['uuid', 'call_sign', 'credits', 'level'],
                 'message',
             ])
             ->assertJson([
@@ -162,7 +162,7 @@ class PlayerManagementTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonStructure([
                 'success',
-                'data' => ['id', 'uuid', 'call_sign', 'credits', 'level'],
+                'data' => ['uuid', 'call_sign', 'credits', 'level'],
             ])
             ->assertJson([
                 'success' => true,

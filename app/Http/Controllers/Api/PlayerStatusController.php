@@ -42,10 +42,8 @@ class PlayerStatusController extends BaseApiController
             'location' => $location ? [
                 'name' => $location->name,
                 'type' => $location->type,
-                'coordinates' => [
-                    'x' => (float) $location->x,
-                    'y' => (float) $location->y,
-                ],
+                'x' => (float) $location->x,
+                'y' => (float) $location->y,
             ] : null,
             'ship' => $ship ? [
                 'name' => $ship->name,

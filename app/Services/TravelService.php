@@ -119,8 +119,10 @@ class TravelService
         // Consume fuel
         $ship->consumeFuel($fuelCost);
 
-        // Update player location
+        // Update player and ship location
         $player->current_poi_id = $destination->id;
+        $ship->current_poi_id = $destination->id;
+        $ship->save();
 
         // Track last trading hub for respawn
         if ($destination->tradingHub && $destination->tradingHub->is_active) {
@@ -142,9 +144,10 @@ class TravelService
 
         $player->save();
 
-        // Discover the warp lane (fog of war - bidirectional discovery)
+        // Discover the warp lane traveled + all gates visible at destination
         $laneKnowledgeService = app(LaneKnowledgeService::class);
         $laneKnowledgeService->discoverLaneBidirectional($player, $gate, 'travel');
+        $laneKnowledgeService->discoverAllGatesAtLocation($player, $destination->id, 'travel');
 
         // Update player knowledge (fog-of-war system)
         $knowledgeService = app(PlayerKnowledgeService::class);
@@ -342,13 +345,19 @@ class TravelService
             $targetY
         );
 
-        // Update player location
+        // Update player and ship location
         $player->current_poi_id = $targetPoi->id;
+        $ship->current_poi_id = $targetPoi->id;
+        $ship->save();
         $player->save();
 
         // Update player knowledge (fog-of-war system)
         $knowledgeService = app(PlayerKnowledgeService::class);
         $knowledgeService->markVisited($player, $targetPoi);
+
+        // Discover all gates visible at the destination
+        $laneKnowledgeService = app(LaneKnowledgeService::class);
+        $laneKnowledgeService->discoverAllGatesAtLocation($player, $targetPoi->id, 'travel');
 
         // Check for magnetic mines at destination
         $mineResult = $this->checkMagneticMines($player, $targetPoi);

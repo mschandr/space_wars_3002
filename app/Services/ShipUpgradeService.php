@@ -94,10 +94,25 @@ class ShipUpgradeService
     }
 
     /**
+     * Check if a ship is a precursor vessel (cannot be upgraded).
+     */
+    public function isPrecursorShip(PlayerShip $ship): bool
+    {
+        $blueprint = $ship->ship;
+
+        return $blueprint?->class === 'precursor'
+            || ($blueprint?->attributes['is_precursor'] ?? false);
+    }
+
+    /**
      * Check if component can be upgraded
      */
     public function canUpgrade(PlayerShip $ship, string $component): bool
     {
+        if ($this->isPrecursorShip($ship)) {
+            return false;
+        }
+
         $currentLevel = $this->getComponentLevel($ship, $component);
         $maxLevel = $this->getMaxLevel($ship->player, $component);
 
@@ -113,6 +128,14 @@ class ShipUpgradeService
             return [
                 'success' => false,
                 'message' => "Invalid component: {$component}",
+            ];
+        }
+
+        // Precursor ships cannot be upgraded
+        if ($this->isPrecursorShip($ship)) {
+            return [
+                'success' => false,
+                'message' => 'Precursor vessels are beyond mortal engineering. Their technology cannot be modified.',
             ];
         }
 
@@ -161,6 +184,7 @@ class ShipUpgradeService
      */
     public function getUpgradeInfo(PlayerShip $ship): array
     {
+        $isPrecursor = $this->isPrecursorShip($ship);
         $info = [];
         $player = $ship->player;
 
@@ -168,7 +192,7 @@ class ShipUpgradeService
             $currentLevel = $this->getComponentLevel($ship, $component);
             $baseMaxLevel = self::MAX_LEVELS[$component];
             $maxLevel = $this->getMaxLevel($player, $component);
-            $canUpgrade = $currentLevel < $maxLevel;
+            $canUpgrade = ! $isPrecursor && $currentLevel < $maxLevel;
 
             $info[$component] = [
                 'current_value' => $ship->{$component},
@@ -179,6 +203,7 @@ class ShipUpgradeService
                 'can_upgrade' => $canUpgrade,
                 'upgrade_cost' => $canUpgrade ? $this->calculateUpgradeCost($component, $currentLevel) : null,
                 'next_value' => $canUpgrade ? $ship->{$component} + self::INCREMENTS[$component] : null,
+                'locked_reason' => $isPrecursor ? 'Precursor technology cannot be modified.' : null,
             ];
         }
 

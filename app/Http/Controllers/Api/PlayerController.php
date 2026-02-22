@@ -105,6 +105,7 @@ class PlayerController extends BaseApiController
                 PlayerShip::create([
                     'player_id' => $player->id,
                     'ship_id' => $scoutShip->id,
+                    'current_poi_id' => $player->current_poi_id,
                     'name' => "{$player->call_sign}'s Scout",
                     'current_fuel' => $scoutShip->base_max_fuel ?? 100,
                     'max_fuel' => $scoutShip->base_max_fuel ?? 100,

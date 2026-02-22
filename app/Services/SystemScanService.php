@@ -187,7 +187,8 @@ class SystemScanService
         ];
 
         // Always show basic coordinates
-        $data['coordinates'] = ['x' => $poi->x, 'y' => $poi->y];
+        $data['x'] = $poi->x;
+        $data['y'] = $poi->y;
 
         // Level 1: Geography
         if (in_array('geography', $revealedCategories)) {

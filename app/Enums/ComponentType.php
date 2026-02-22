@@ -10,16 +10,23 @@ enum ComponentType: string
     case ENGINE = 'engine';
     case SENSOR = 'sensor';
     case FUEL_SYSTEM = 'fuel_system';
+    case CARGO = 'cargo';
     case UTILITY = 'utility';
 
     /**
      * Which ship slot type this component occupies.
      */
-    public function slotType(): string
+    public function slotType(): SlotType
     {
         return match ($this) {
-            self::WEAPON => 'weapon_slot',
-            default => 'utility_slot',
+            self::WEAPON => SlotType::WEAPON,
+            self::SHIELD => SlotType::SHIELD_GENERATOR,
+            self::ARMOR => SlotType::HULL_PLATING,
+            self::ENGINE => SlotType::ENGINE,
+            self::SENSOR => SlotType::SENSOR_ARRAY,
+            self::FUEL_SYSTEM => SlotType::REACTOR,
+            self::CARGO => SlotType::CARGO_MODULE,
+            self::UTILITY => SlotType::UTILITY,
         };
     }
 
@@ -35,6 +42,7 @@ enum ComponentType: string
             self::ENGINE => 'Engine',
             self::SENSOR => 'Sensor',
             self::FUEL_SYSTEM => 'Fuel System',
+            self::CARGO => 'Cargo',
             self::UTILITY => 'Utility',
         };
     }

@@ -292,7 +292,7 @@ class PlansShopTest extends TestCase
                 'data' => [
                     'plans' => [
                         '*' => [
-                            'id',
+                            'uuid',
                             'name',
                             'full_name',
                             'component',

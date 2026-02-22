@@ -66,11 +66,16 @@ class MiningController extends BaseApiController
         $this->authorizePlayer($colony->player, $request->user());
 
         $validated = $request->validate([
-            'poi_uuid' => 'required|exists:points_of_interest,uuid',
+            'uuid' => 'sometimes|exists:points_of_interest,uuid',
+            'poi_uuid' => 'sometimes|exists:points_of_interest,uuid',
             'mineral_id' => 'required|exists:minerals,id',
         ]);
 
-        $poi = PointOfInterest::where('uuid', $validated['poi_uuid'])->firstOrFail();
+        $poiUuid = $validated['uuid'] ?? $validated['poi_uuid'] ?? null;
+        if (! $poiUuid) {
+            return $this->validationError(['uuid' => 'A system UUID is required']);
+        }
+        $poi = PointOfInterest::where('uuid', $poiUuid)->firstOrFail();
         $mineral = \App\Models\Mineral::findOrFail($validated['mineral_id']);
 
         // Check if colony has orbital mining
@@ -103,11 +108,16 @@ class MiningController extends BaseApiController
         $this->authorizePlayer($ship->player, $request->user());
 
         $validated = $request->validate([
-            'poi_uuid' => 'required|exists:points_of_interest,uuid',
+            'uuid' => 'sometimes|exists:points_of_interest,uuid',
+            'poi_uuid' => 'sometimes|exists:points_of_interest,uuid',
             'mineral_id' => 'required|exists:minerals,id',
         ]);
 
-        $poi = PointOfInterest::where('uuid', $validated['poi_uuid'])->firstOrFail();
+        $poiUuid = $validated['uuid'] ?? $validated['poi_uuid'] ?? null;
+        if (! $poiUuid) {
+            return $this->validationError(['uuid' => 'A system UUID is required']);
+        }
+        $poi = PointOfInterest::where('uuid', $poiUuid)->firstOrFail();
         $mineral = \App\Models\Mineral::findOrFail($validated['mineral_id']);
 
         // Check if ship is at this location

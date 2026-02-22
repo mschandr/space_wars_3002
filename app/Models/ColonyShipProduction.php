@@ -86,10 +86,14 @@ class ColonyShipProduction extends Model
         $this->save();
 
         // Create the player ship
+        // Ship is produced at the colony's location
+        $playerLocation = Player::find($this->player_id)?->current_poi_id;
+
         PlayerShip::create([
             'uuid' => Str::uuid(),
             'player_id' => $this->player_id,
             'ship_id' => $this->ship_id,
+            'current_poi_id' => $playerLocation,
             'name' => $this->ship->name.' '.rand(100, 999),
             'current_fuel' => $this->ship->attributes['max_fuel'] ?? 100,
             'max_fuel' => $this->ship->attributes['max_fuel'] ?? 100,

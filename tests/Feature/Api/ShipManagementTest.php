@@ -75,7 +75,7 @@ class ShipManagementTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonStructure([
                 'success',
-                'data' => ['id', 'uuid', 'name', 'current_fuel', 'max_fuel', 'hull'],
+                'data' => ['uuid', 'name', 'current_fuel', 'max_fuel', 'hull'],
             ])
             ->assertJson([
                 'success' => true,
@@ -245,31 +245,93 @@ class ShipManagementTest extends TestCase
     }
 
     /**
-     * Test user can rename their ship
+     * Test first naming is free (ship still has blueprint name)
      */
-    public function test_user_can_rename_ship(): void
+    public function test_first_naming_is_free(): void
     {
+        // Ensure ship name matches blueprint (default state after purchase)
+        $blueprintName = $this->ship->ship->name;
+        $this->ship->update(['name' => $blueprintName]);
+
+        $creditsBefore = $this->player->credits;
+
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
             ->patchJson("/api/ships/{$this->ship->uuid}/name", [
                 'name' => 'USS Enterprise',
             ]);
 
         $response->assertStatus(200)
-            ->assertJsonStructure([
-                'success',
-                'data' => ['id', 'uuid', 'name'],
-                'message',
-            ])
             ->assertJson([
                 'success' => true,
                 'data' => [
-                    'name' => 'USS Enterprise',
+                    'rename_fee' => 0,
+                    'credits_remaining' => $creditsBefore,
                 ],
             ]);
 
         $this->assertDatabaseHas('player_ships', [
             'id' => $this->ship->id,
             'name' => 'USS Enterprise',
+        ]);
+
+        // No credits deducted
+        $this->assertEquals($creditsBefore, $this->player->fresh()->credits);
+    }
+
+    /**
+     * Test subsequent rename costs credits
+     */
+    public function test_renaming_costs_credits(): void
+    {
+        // Give ship a custom name first (simulates already-named ship)
+        $this->ship->update(['name' => 'My Custom Ship']);
+
+        $creditsBefore = $this->player->credits;
+        $renameFee = config('game_config.ships.rename_fee', 1000);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->patchJson("/api/ships/{$this->ship->uuid}/name", [
+                'name' => 'USS Enterprise',
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'rename_fee' => $renameFee,
+                    'credits_remaining' => $creditsBefore - $renameFee,
+                ],
+            ]);
+
+        $this->assertEquals($creditsBefore - $renameFee, $this->player->fresh()->credits);
+    }
+
+    /**
+     * Test rename fails with insufficient credits (only on subsequent renames)
+     */
+    public function test_rename_fails_with_insufficient_credits(): void
+    {
+        // Give ship a custom name so this counts as a paid rename
+        $this->ship->update(['name' => 'Already Named']);
+        $this->player->update(['credits' => 0]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->patchJson("/api/ships/{$this->ship->uuid}/name", [
+                'name' => 'USS Broke',
+            ]);
+
+        $response->assertStatus(400)
+            ->assertJson([
+                'success' => false,
+                'error' => [
+                    'code' => 'INSUFFICIENT_CREDITS',
+                ],
+            ]);
+
+        // Name should not have changed
+        $this->assertDatabaseMissing('player_ships', [
+            'id' => $this->ship->id,
+            'name' => 'USS Broke',
         ]);
     }
 

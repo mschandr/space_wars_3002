@@ -7,7 +7,9 @@ use App\Models\Galaxy;
 use App\Models\Mineral;
 use App\Models\Player;
 use App\Models\PlayerCargo;
+use App\Models\PlayerPriceSighting;
 use App\Models\PlayerShip;
+use App\Models\PlayerTradeTransaction;
 use App\Models\PointOfInterest;
 use App\Models\Ship;
 use App\Models\TradingHub;
@@ -101,6 +103,7 @@ class TradingTest extends TestCase
             'warp_drive' => 1,
             'is_active' => true,
             'status' => 'operational',
+            'current_poi_id' => $this->hubLocation->id,
         ]);
 
         // Create mineral
@@ -135,7 +138,7 @@ class TradingTest extends TestCase
                 'success',
                 'data' => [
                     'hubs' => [
-                        '*' => ['id', 'uuid', 'name', 'type', 'tier'],
+                        '*' => ['uuid', 'name', 'type', 'tier'],
                     ],
                     'search_radius',
                 ],
@@ -183,7 +186,7 @@ class TradingTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    'id', 'uuid', 'name', 'type', 'tier', 'gate_count',
+                    'uuid', 'name', 'type', 'tier', 'gate_count',
                 ],
             ])
             ->assertJson([
@@ -223,7 +226,7 @@ class TradingTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    '*' => ['id', 'uuid', 'name', 'symbol', 'base_value', 'rarity'],
+                    '*' => ['uuid', 'name', 'symbol', 'base_value', 'rarity'],
                 ],
             ])
             ->assertJson([
@@ -236,7 +239,8 @@ class TradingTest extends TestCase
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
             ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/buy", [
                 'player_uuid' => $this->player->uuid,
-                'mineral_id' => $this->mineral->id,
+                'ship_uuid' => $this->ship->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
                 'quantity' => 10,
             ]);
 
@@ -283,7 +287,8 @@ class TradingTest extends TestCase
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
             ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/buy", [
                 'player_uuid' => $this->player->uuid,
-                'mineral_id' => $this->mineral->id,
+                'ship_uuid' => $this->ship->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
                 'quantity' => 10,
             ]);
 
@@ -300,7 +305,8 @@ class TradingTest extends TestCase
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
             ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/buy", [
                 'player_uuid' => $this->player->uuid,
-                'mineral_id' => $this->mineral->id,
+                'ship_uuid' => $this->ship->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
                 'quantity' => 10,
             ]);
 
@@ -323,7 +329,8 @@ class TradingTest extends TestCase
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
             ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/sell", [
                 'player_uuid' => $this->player->uuid,
-                'mineral_id' => $this->mineral->id,
+                'ship_uuid' => $this->ship->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
                 'quantity' => 10,
             ]);
 
@@ -367,7 +374,8 @@ class TradingTest extends TestCase
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
             ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/sell", [
                 'player_uuid' => $this->player->uuid,
-                'mineral_id' => $this->mineral->id,
+                'ship_uuid' => $this->ship->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
                 'quantity' => 10,
             ]);
 
@@ -416,7 +424,7 @@ class TradingTest extends TestCase
     public function test_user_can_calculate_affordability(): void
     {
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
-            ->getJson("/api/trading/affordability?player_uuid={$this->player->uuid}&hub_uuid={$this->hubLocation->uuid}&mineral_id={$this->mineral->id}");
+            ->getJson("/api/trading/affordability?player_uuid={$this->player->uuid}&hub_uuid={$this->hubLocation->uuid}&ship_uuid={$this->ship->uuid}&mineral_uuid={$this->mineral->uuid}");
 
         $response->assertStatus(200)
             ->assertJsonStructure([
@@ -442,7 +450,7 @@ class TradingTest extends TestCase
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
             ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/buy", [
                 'player_uuid' => $this->player->uuid,
-                // Missing mineral_id and quantity
+                // Missing ship_uuid, mineral_uuid, and quantity
             ]);
 
         $response->assertStatus(422)
@@ -461,7 +469,7 @@ class TradingTest extends TestCase
             ['POST', "/api/trading-hubs/{$this->hubLocation->uuid}/buy"],
             ['POST', "/api/trading-hubs/{$this->hubLocation->uuid}/sell"],
             ['GET', "/api/players/{$this->player->uuid}/cargo"],
-            ['GET', "/api/trading/affordability?player_uuid={$this->player->uuid}&hub_uuid={$this->hubLocation->uuid}&mineral_id=1"],
+            ['GET', "/api/trading/affordability?player_uuid={$this->player->uuid}&hub_uuid={$this->hubLocation->uuid}&ship_uuid={$this->ship->uuid}&mineral_uuid={$this->mineral->uuid}"],
         ];
 
         foreach ($endpoints as [$method, $url]) {
@@ -482,10 +490,325 @@ class TradingTest extends TestCase
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
             ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/buy", [
                 'player_uuid' => $otherPlayer->uuid,
-                'mineral_id' => $this->mineral->id,
+                'ship_uuid' => $this->ship->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
                 'quantity' => 10,
             ]);
 
         $response->assertStatus(404);
+    }
+
+    public function test_viewing_inventory_with_player_uuid_records_sightings(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->getJson("/api/trading-hubs/{$this->hubLocation->uuid}/inventory?player_uuid={$this->player->uuid}");
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('player_price_sightings', [
+            'player_id' => $this->player->id,
+            'trading_hub_id' => $this->tradingHub->id,
+            'mineral_id' => $this->mineral->id,
+        ]);
+    }
+
+    public function test_price_history_endpoint_returns_data(): void
+    {
+        // Create a sighting
+        PlayerPriceSighting::create([
+            'player_id' => $this->player->id,
+            'trading_hub_id' => $this->tradingHub->id,
+            'mineral_id' => $this->mineral->id,
+            'buy_price' => 80.00,
+            'sell_price' => 120.00,
+            'quantity' => 1000,
+            'recorded_at' => now(),
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->getJson("/api/players/{$this->player->uuid}/price-history");
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'sightings' => [
+                        '*' => [
+                            'mineral',
+                            'hub_uuid',
+                            'hub_name',
+                            'buy_price',
+                            'sell_price',
+                            'quantity',
+                            'recorded_at',
+                        ],
+                    ],
+                    'days',
+                ],
+            ])
+            ->assertJson(['success' => true]);
+
+        $this->assertCount(1, $response->json('data.sightings'));
+    }
+
+    public function test_price_history_filters_by_mineral(): void
+    {
+        $otherMineral = Mineral::create([
+            'uuid' => \Illuminate\Support\Str::uuid(),
+            'name' => 'Gold',
+            'symbol' => 'Au',
+            'description' => 'Rare mineral',
+            'base_value' => 500.00,
+            'rarity' => MineralRarity::RARE,
+            'attributes' => [],
+        ]);
+
+        PlayerPriceSighting::create([
+            'player_id' => $this->player->id,
+            'trading_hub_id' => $this->tradingHub->id,
+            'mineral_id' => $this->mineral->id,
+            'buy_price' => 80.00,
+            'sell_price' => 120.00,
+            'quantity' => 1000,
+            'recorded_at' => now(),
+        ]);
+
+        PlayerPriceSighting::create([
+            'player_id' => $this->player->id,
+            'trading_hub_id' => $this->tradingHub->id,
+            'mineral_id' => $otherMineral->id,
+            'buy_price' => 400.00,
+            'sell_price' => 600.00,
+            'quantity' => 100,
+            'recorded_at' => now(),
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->getJson("/api/players/{$this->player->uuid}/price-history?mineral_id={$this->mineral->id}");
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data.sightings'));
+    }
+
+    public function test_trade_log_endpoint_returns_data(): void
+    {
+        PlayerTradeTransaction::create([
+            'player_id' => $this->player->id,
+            'trading_hub_id' => $this->tradingHub->id,
+            'mineral_id' => $this->mineral->id,
+            'transaction_type' => 'buy',
+            'quantity' => 10,
+            'unit_price' => 120.00,
+            'total_amount' => 1200.00,
+            'credits_after' => 8800.00,
+            'transacted_at' => now(),
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->getJson("/api/players/{$this->player->uuid}/trade-log");
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'success',
+                'data' => [
+                    'transactions' => [
+                        '*' => [
+                            'uuid',
+                            'mineral',
+                            'hub_uuid',
+                            'hub_name',
+                            'transaction_type',
+                            'quantity',
+                            'unit_price',
+                            'total_amount',
+                            'credits_after',
+                            'transacted_at',
+                        ],
+                    ],
+                    'days',
+                ],
+            ])
+            ->assertJson(['success' => true]);
+
+        $this->assertCount(1, $response->json('data.transactions'));
+    }
+
+    public function test_trade_log_filters_by_type(): void
+    {
+        PlayerTradeTransaction::create([
+            'player_id' => $this->player->id,
+            'trading_hub_id' => $this->tradingHub->id,
+            'mineral_id' => $this->mineral->id,
+            'transaction_type' => 'buy',
+            'quantity' => 10,
+            'unit_price' => 120.00,
+            'total_amount' => 1200.00,
+            'credits_after' => 8800.00,
+            'transacted_at' => now(),
+        ]);
+
+        PlayerTradeTransaction::create([
+            'player_id' => $this->player->id,
+            'trading_hub_id' => $this->tradingHub->id,
+            'mineral_id' => $this->mineral->id,
+            'transaction_type' => 'sell',
+            'quantity' => 5,
+            'unit_price' => 80.00,
+            'total_amount' => 400.00,
+            'credits_after' => 9200.00,
+            'transacted_at' => now(),
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->getJson("/api/players/{$this->player->uuid}/trade-log?type=sell");
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data.transactions'));
+        $this->assertEquals('sell', $response->json('data.transactions.0.transaction_type'));
+    }
+
+    public function test_buying_minerals_creates_transaction_in_log(): void
+    {
+        $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/buy", [
+                'player_uuid' => $this->player->uuid,
+                'ship_uuid' => $this->ship->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
+                'quantity' => 10,
+            ])
+            ->assertStatus(200);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->getJson("/api/players/{$this->player->uuid}/trade-log");
+
+        $response->assertStatus(200);
+        $transactions = $response->json('data.transactions');
+        $this->assertCount(1, $transactions);
+        $this->assertEquals('buy', $transactions[0]['transaction_type']);
+        $this->assertEquals(10, $transactions[0]['quantity']);
+    }
+
+    public function test_price_history_requires_authentication(): void
+    {
+        $response = $this->getJson("/api/players/{$this->player->uuid}/price-history");
+        $response->assertStatus(401);
+    }
+
+    public function test_trade_log_requires_authentication(): void
+    {
+        $response = $this->getJson("/api/players/{$this->player->uuid}/trade-log");
+        $response->assertStatus(401);
+    }
+
+    public function test_buy_fails_when_ship_not_at_hub(): void
+    {
+        $otherLocation = PointOfInterest::factory()->create([
+            'galaxy_id' => $this->galaxy->id,
+            'x' => 500,
+            'y' => 500,
+        ]);
+
+        $this->ship->update(['current_poi_id' => $otherLocation->id]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/buy", [
+                'player_uuid' => $this->player->uuid,
+                'ship_uuid' => $this->ship->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
+                'quantity' => 10,
+            ]);
+
+        $response->assertStatus(400)
+            ->assertJson([
+                'success' => false,
+                'error' => [
+                    'code' => 'SHIP_NOT_AT_HUB',
+                ],
+            ]);
+    }
+
+    public function test_sell_fails_when_ship_not_at_hub(): void
+    {
+        $otherLocation = PointOfInterest::factory()->create([
+            'galaxy_id' => $this->galaxy->id,
+            'x' => 500,
+            'y' => 500,
+        ]);
+
+        PlayerCargo::create([
+            'player_ship_id' => $this->ship->id,
+            'mineral_id' => $this->mineral->id,
+            'quantity' => 20,
+        ]);
+        $this->ship->update([
+            'current_cargo' => 20,
+            'current_poi_id' => $otherLocation->id,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/sell", [
+                'player_uuid' => $this->player->uuid,
+                'ship_uuid' => $this->ship->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
+                'quantity' => 10,
+            ]);
+
+        $response->assertStatus(400)
+            ->assertJson([
+                'success' => false,
+                'error' => [
+                    'code' => 'SHIP_NOT_AT_HUB',
+                ],
+            ]);
+    }
+
+    public function test_buy_with_explicit_ship_uuid(): void
+    {
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/buy", [
+                'player_uuid' => $this->player->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
+                'quantity' => 5,
+                'ship_uuid' => $this->ship->uuid,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'transaction_type' => 'buy',
+                    'quantity' => 5,
+                ],
+            ]);
+    }
+
+    public function test_buy_fails_with_other_players_ship_uuid(): void
+    {
+        $otherUser = User::factory()->create();
+        $otherPlayer = Player::factory()->create([
+            'user_id' => $otherUser->id,
+            'galaxy_id' => $this->galaxy->id,
+            'current_poi_id' => $this->hubLocation->id,
+        ]);
+
+        $otherShip = PlayerShip::factory()->create([
+            'player_id' => $otherPlayer->id,
+            'ship_id' => $this->ship->ship_id,
+            'is_active' => true,
+            'current_poi_id' => $this->hubLocation->id,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->postJson("/api/trading-hubs/{$this->hubLocation->uuid}/buy", [
+                'player_uuid' => $this->player->uuid,
+                'mineral_uuid' => $this->mineral->uuid,
+                'quantity' => 5,
+                'ship_uuid' => $otherShip->uuid,
+            ]);
+
+        $response->assertStatus(404)
+            ->assertJson([
+                'success' => false,
+            ]);
     }
 }

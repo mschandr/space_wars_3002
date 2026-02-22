@@ -234,7 +234,8 @@ class SystemScanServiceTest extends TestCase
 
         $this->assertArrayHasKey('uuid', $data);
         $this->assertArrayHasKey('name', $data);
-        $this->assertArrayHasKey('coordinates', $data);
+        $this->assertArrayHasKey('x', $data);
+        $this->assertArrayHasKey('y', $data);
         $this->assertArrayHasKey('geography', $data);
         $this->assertArrayNotHasKey('gates', $data);
         $this->assertArrayNotHasKey('resources', $data);

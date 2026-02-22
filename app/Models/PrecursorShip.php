@@ -208,6 +208,7 @@ LORE;
             'uuid' => Str::uuid(),
             'player_id' => $player->id,
             'ship_id' => 1, // Use a special "Precursor" ship type (create separately)
+            'current_poi_id' => $player->current_poi_id,
             'hull' => $this->hull,
             'max_hull' => $this->max_hull,
             'weapons' => $this->weapons,

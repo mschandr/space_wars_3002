@@ -26,6 +26,7 @@ class PlayerShipFactory extends Factory
             'uuid' => Str::uuid(),
             'player_id' => Player::factory(),
             'ship_id' => Ship::factory(),
+            'current_poi_id' => null,
             'name' => null,
             'current_fuel' => 100,
             'max_fuel' => 100,

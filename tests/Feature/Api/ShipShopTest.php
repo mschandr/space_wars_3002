@@ -344,7 +344,7 @@ class ShipShopTest extends TestCase
             ->postJson("/api/players/{$this->player->uuid}/ships/purchase", []);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['ship_id', 'trading_hub_uuid']);
+            ->assertJsonValidationErrors(['trading_hub_uuid']);
     }
 
     public function test_inventory_quantity_decreases_after_purchase()

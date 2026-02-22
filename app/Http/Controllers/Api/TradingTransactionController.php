@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\MineralResource;
+use App\Models\Mineral;
 use App\Models\Player;
 use App\Models\PlayerCargo;
+use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
 use App\Models\TradingHubInventory;
 use App\Services\TradingService;
@@ -22,6 +24,43 @@ class TradingTransactionController extends BaseApiController
     ) {}
 
     /**
+     * Resolve the ship by UUID, verify ownership, and verify it's at the hub.
+     */
+    private function resolveShipAtHub(string $shipUuid, Player $player, PointOfInterest $hubPoi): PlayerShip|JsonResponse
+    {
+        $ship = PlayerShip::where('uuid', $shipUuid)
+            ->where('player_id', $player->id)
+            ->first();
+
+        if (! $ship) {
+            return $this->notFound('Ship not found');
+        }
+
+        if ($ship->current_poi_id !== $hubPoi->id) {
+            return $this->error('Ship is not at this trading hub', 'SHIP_NOT_AT_HUB');
+        }
+
+        return $ship;
+    }
+
+    /**
+     * Resolve a mineral by UUID (preferred) or name (fallback).
+     * At least one must be provided.
+     */
+    private function resolveMineral(array $validated): ?Mineral
+    {
+        if (! empty($validated['mineral_uuid'])) {
+            return Mineral::where('uuid', $validated['mineral_uuid'])->first();
+        }
+
+        if (! empty($validated['mineral_name'])) {
+            return Mineral::where('name', $validated['mineral_name'])->first();
+        }
+
+        return null;
+    }
+
+    /**
      * Buy minerals from hub
      *
      * POST /api/trading-hubs/{uuid}/buy
@@ -31,7 +70,9 @@ class TradingTransactionController extends BaseApiController
         try {
             $validated = $request->validate([
                 'player_uuid' => ['required', 'string'],
-                'mineral_id' => ['required', 'integer'],
+                'ship_uuid' => ['required', 'string'],
+                'mineral_uuid' => ['required_without:mineral_name', 'string'],
+                'mineral_name' => ['required_without:mineral_uuid', 'string'],
                 'quantity' => ['required', 'integer', 'min:1'],
             ]);
         } catch (ValidationException $e) {
@@ -40,25 +81,35 @@ class TradingTransactionController extends BaseApiController
 
         $player = Player::where('uuid', $validated['player_uuid'])
             ->where('user_id', $request->user()->id)
-            ->with('activeShip')
             ->first();
 
         if (! $player) {
             return $this->notFound('Player not found');
         }
 
-        if (! $player->activeShip) {
-            return $this->error('No active ship', 'NO_ACTIVE_SHIP');
-        }
+        $poi = TradingController::resolveTradingHub($uuid);
 
-        $poi = PointOfInterest::where('uuid', $uuid)->with('tradingHub')->first();
-
-        if (! $poi || ! $poi->tradingHub) {
+        if (! $poi) {
             return $this->notFound('Trading hub not found');
         }
 
+        $ship = $this->resolveShipAtHub($validated['ship_uuid'], $player, $poi);
+
+        if ($ship instanceof JsonResponse) {
+            return $ship;
+        }
+
+        $mineral = $this->resolveMineral($validated);
+
+        if (! $mineral) {
+            return $this->notFound('Mineral not found');
+        }
+
+        // Lazy population: stock the hub on first access
+        $this->tradingService->ensureInventoryPopulated($poi->tradingHub);
+
         $inventory = TradingHubInventory::where('trading_hub_id', $poi->tradingHub->id)
-            ->where('mineral_id', $validated['mineral_id'])
+            ->where('mineral_id', $mineral->id)
             ->first();
 
         if (! $inventory) {
@@ -67,7 +118,7 @@ class TradingTransactionController extends BaseApiController
 
         $result = $this->tradingService->buyMineral(
             $player,
-            $player->activeShip,
+            $ship,
             $inventory,
             $validated['quantity']
         );
@@ -83,7 +134,7 @@ class TradingTransactionController extends BaseApiController
             'price_per_unit' => (float) $inventory->sell_price,
             'total_cost' => $result['total_cost'],
             'credits_remaining' => (float) $player->fresh()->credits,
-            'cargo_remaining' => $player->activeShip->fresh()->current_cargo,
+            'cargo_remaining' => $ship->fresh()->current_cargo,
             'xp_earned' => $result['xp_earned'],
         ], $result['message']);
     }
@@ -98,7 +149,9 @@ class TradingTransactionController extends BaseApiController
         try {
             $validated = $request->validate([
                 'player_uuid' => ['required', 'string'],
-                'mineral_id' => ['required', 'integer'],
+                'ship_uuid' => ['required', 'string'],
+                'mineral_uuid' => ['required_without:mineral_name', 'string'],
+                'mineral_name' => ['required_without:mineral_uuid', 'string'],
                 'quantity' => ['required', 'integer', 'min:1'],
             ]);
         } catch (ValidationException $e) {
@@ -107,25 +160,35 @@ class TradingTransactionController extends BaseApiController
 
         $player = Player::where('uuid', $validated['player_uuid'])
             ->where('user_id', $request->user()->id)
-            ->with('activeShip')
             ->first();
 
         if (! $player) {
             return $this->notFound('Player not found');
         }
 
-        if (! $player->activeShip) {
-            return $this->error('No active ship', 'NO_ACTIVE_SHIP');
-        }
+        $poi = TradingController::resolveTradingHub($uuid);
 
-        $poi = PointOfInterest::where('uuid', $uuid)->with('tradingHub')->first();
-
-        if (! $poi || ! $poi->tradingHub) {
+        if (! $poi) {
             return $this->notFound('Trading hub not found');
         }
 
-        $cargo = PlayerCargo::where('player_ship_id', $player->activeShip->id)
-            ->where('mineral_id', $validated['mineral_id'])
+        $ship = $this->resolveShipAtHub($validated['ship_uuid'], $player, $poi);
+
+        if ($ship instanceof JsonResponse) {
+            return $ship;
+        }
+
+        $mineral = $this->resolveMineral($validated);
+
+        if (! $mineral) {
+            return $this->notFound('Mineral not found');
+        }
+
+        // Lazy population: stock the hub on first access
+        $this->tradingService->ensureInventoryPopulated($poi->tradingHub);
+
+        $cargo = PlayerCargo::where('player_ship_id', $ship->id)
+            ->where('mineral_id', $mineral->id)
             ->with('mineral')
             ->first();
 
@@ -134,7 +197,7 @@ class TradingTransactionController extends BaseApiController
         }
 
         $hubInventory = TradingHubInventory::where('trading_hub_id', $poi->tradingHub->id)
-            ->where('mineral_id', $validated['mineral_id'])
+            ->where('mineral_id', $mineral->id)
             ->first();
 
         if (! $hubInventory) {
@@ -143,7 +206,7 @@ class TradingTransactionController extends BaseApiController
 
         $result = $this->tradingService->sellMineral(
             $player,
-            $player->activeShip,
+            $ship,
             $cargo,
             $hubInventory,
             $validated['quantity']
@@ -160,7 +223,7 @@ class TradingTransactionController extends BaseApiController
             'price_per_unit' => (float) $hubInventory->buy_price,
             'total_revenue' => $result['total_revenue'],
             'credits_remaining' => (float) $player->fresh()->credits,
-            'cargo_remaining' => $player->activeShip->fresh()->current_cargo,
+            'cargo_remaining' => $ship->fresh()->current_cargo,
             'xp_earned' => $result['xp_earned'],
         ], $result['message']);
     }
@@ -213,7 +276,9 @@ class TradingTransactionController extends BaseApiController
             $validated = $request->validate([
                 'player_uuid' => ['required', 'string'],
                 'hub_uuid' => ['required', 'string'],
-                'mineral_id' => ['required', 'integer'],
+                'ship_uuid' => ['required', 'string'],
+                'mineral_uuid' => ['required_without:mineral_name', 'string'],
+                'mineral_name' => ['required_without:mineral_uuid', 'string'],
             ]);
         } catch (ValidationException $e) {
             return $this->validationError($e->errors());
@@ -221,21 +286,35 @@ class TradingTransactionController extends BaseApiController
 
         $player = Player::where('uuid', $validated['player_uuid'])
             ->where('user_id', $request->user()->id)
-            ->with('activeShip')
             ->first();
 
         if (! $player) {
             return $this->notFound('Player not found');
         }
 
-        $poi = PointOfInterest::where('uuid', $validated['hub_uuid'])->with('tradingHub')->first();
+        $poi = TradingController::resolveTradingHub($validated['hub_uuid']);
 
-        if (! $poi || ! $poi->tradingHub) {
+        if (! $poi) {
             return $this->notFound('Trading hub not found');
         }
 
+        $ship = $this->resolveShipAtHub($validated['ship_uuid'], $player, $poi);
+
+        if ($ship instanceof JsonResponse) {
+            return $ship;
+        }
+
+        $mineral = $this->resolveMineral($validated);
+
+        if (! $mineral) {
+            return $this->notFound('Mineral not found');
+        }
+
+        // Lazy population: stock the hub on first access
+        $this->tradingService->ensureInventoryPopulated($poi->tradingHub);
+
         $inventory = TradingHubInventory::where('trading_hub_id', $poi->tradingHub->id)
-            ->where('mineral_id', $validated['mineral_id'])
+            ->where('mineral_id', $mineral->id)
             ->first();
 
         if (! $inventory) {
@@ -243,7 +322,7 @@ class TradingTransactionController extends BaseApiController
         }
 
         $maxAffordable = $this->tradingService->getMaxAffordableQuantity($player, $inventory);
-        $maxBySpace = $player->activeShip->cargo_hold - $player->activeShip->current_cargo;
+        $maxBySpace = $ship->cargo_hold - $ship->current_cargo;
         $maxPurchasable = min($maxAffordable, $maxBySpace);
 
         return $this->success([

@@ -35,11 +35,14 @@ class SalvageYardController extends BaseApiController
             return $this->error('You are not at a trading hub with a salvage yard.', 'NO_SALVAGE_YARD');
         }
 
-        $inventory = $this->salvageYardService->getInventoryByType($hub);
+        // Lazy-generate salvage inventory if hub has salvage yard but no stock
+        $this->salvageYardService->ensureHubSalvageInventory($hub);
+
+        $inventory = $this->salvageYardService->getInventoryByType($hub, $player);
 
         return $this->success([
             'hub' => [
-                'id' => $hub->id,
+                'uuid' => $hub->uuid,
                 'name' => $hub->name,
                 'tier' => $hub->getTier(),
             ],
@@ -65,7 +68,7 @@ class SalvageYardController extends BaseApiController
 
         return $this->success([
             'ship' => [
-                'id' => $ship->id,
+                'uuid' => $ship->uuid,
                 'name' => $ship->name,
                 'class' => $ship->ship->name ?? 'Unknown',
             ],
@@ -125,7 +128,7 @@ class SalvageYardController extends BaseApiController
         }
 
         return $this->success([
-            'component_id' => $result['component']->id,
+            'component_uuid' => $result['component']->uuid ?? null,
             'credits_remaining' => $result['credits_remaining'],
         ], $result['message'] ?? 'Component purchased.');
     }

@@ -131,6 +131,7 @@ class InitializePlayerCommand extends Command
             $playerShip = PlayerShip::create([
                 'player_id' => $player->id,
                 'ship_id' => $sourceShip->ship_id,
+                'current_poi_id' => $player->current_poi_id,
                 'name' => "{$callSign}'s {$sourceShip->ship->class}",
                 'current_fuel' => $sourceShip->max_fuel, // Start with full fuel
                 'max_fuel' => $sourceShip->max_fuel,
@@ -151,6 +152,7 @@ class InitializePlayerCommand extends Command
             $playerShip = PlayerShip::create([
                 'player_id' => $player->id,
                 'ship_id' => $starterShipBlueprint->id,
+                'current_poi_id' => $player->current_poi_id,
                 'name' => "{$callSign}'s {$starterShipBlueprint->class}",
                 'current_fuel' => $starterShipBlueprint->attributes['max_fuel'],
                 'max_fuel' => $starterShipBlueprint->attributes['max_fuel'],

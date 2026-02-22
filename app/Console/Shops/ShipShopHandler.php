@@ -6,11 +6,19 @@ use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\TradingHub;
 use App\Models\TradingHubShip;
+use App\Services\MerchantCommentaryService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ShipShopHandler extends BaseShopHandler
 {
+    private MerchantCommentaryService $commentaryService;
+
+    public function __construct()
+    {
+        $this->commentaryService = app(MerchantCommentaryService::class);
+    }
+
     /**
      * Display the ship shop interface
      */
@@ -117,6 +125,18 @@ class ShipShopHandler extends BaseShopHandler
                 if (! empty($ship->requirements)) {
                     $reqText = $this->formatRequirements($ship->requirements, $player);
                     $this->line('      '.$reqText);
+                }
+
+                // Shipyard owner commentary: hand-written overrides dynamic
+                $pitch = ! empty($ship->sales_pitches)
+                    ? $ship->getSalesPitch($currentShip !== null)
+                    : $this->commentaryService->generateShipCommentary(
+                        $ship,
+                        (float) $inventory->current_price,
+                        $player
+                    );
+                if ($pitch) {
+                    $this->line('      '.$this->colorize('"'.$this->wrapText($pitch, $this->termWidth - 8).'"', 'dim'));
                 }
 
                 $this->newLine();
@@ -280,6 +300,7 @@ class ShipShopHandler extends BaseShopHandler
                 'uuid' => Str::uuid(),
                 'player_id' => $player->id,
                 'ship_id' => $ship->id,
+                'current_poi_id' => $player->current_poi_id,
                 'name' => $ship->name, // Player can rename later
                 'current_fuel' => $ship->attributes['max_fuel'] ?? 100,
                 'max_fuel' => $ship->attributes['max_fuel'] ?? 100,

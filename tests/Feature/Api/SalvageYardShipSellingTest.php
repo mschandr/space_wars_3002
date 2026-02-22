@@ -104,7 +104,7 @@ class SalvageYardShipSellingTest extends TestCase
         PlayerShipComponent::create([
             'player_ship_id' => $shipToSell->id,
             'ship_component_id' => $component->id,
-            'slot_type' => 'weapon_slot',
+            'slot_type' => 'weapon',
             'slot_index' => 1,
             'condition' => 85,
             'is_active' => true,

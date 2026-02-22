@@ -57,6 +57,7 @@ class SalvageYardServiceTest extends TestCase
         $shipBlueprint = Ship::factory()->create([
             'weapon_slots' => 3,
             'utility_slots' => 3,
+            'shield_slots' => 2,
         ]);
 
         $playerShip = PlayerShip::factory()->create([
@@ -64,6 +65,7 @@ class SalvageYardServiceTest extends TestCase
             'ship_id' => $shipBlueprint->id,
             'weapon_slots' => 3,
             'utility_slots' => 3,
+            'shield_slots' => 2,
             'is_active' => true,
         ]);
 
@@ -71,7 +73,7 @@ class SalvageYardServiceTest extends TestCase
         $this->weapon = ShipComponent::create([
             'name' => 'Test Laser',
             'type' => 'weapon',
-            'slot_type' => 'weapon_slot',
+            'slot_type' => 'weapon',
             'description' => 'A test laser weapon',
             'slots_required' => 1,
             'base_price' => 5000,
@@ -83,7 +85,7 @@ class SalvageYardServiceTest extends TestCase
         $this->shield = ShipComponent::create([
             'name' => 'Test Shield Regenerator',
             'type' => 'shield',
-            'slot_type' => 'utility_slot',
+            'slot_type' => 'shield_generator',
             'description' => 'A test shield regenerator',
             'slots_required' => 1,
             'base_price' => 8000,
@@ -121,7 +123,7 @@ class SalvageYardServiceTest extends TestCase
         $this->assertEquals(3, $inventory[0]['quantity']);
     }
 
-    public function test_get_inventory_by_type_separates_weapons_and_utilities(): void
+    public function test_get_inventory_by_type_separates_by_slot_type(): void
     {
         SalvageYardInventory::create([
             'trading_hub_id' => $this->hub->id,
@@ -143,10 +145,12 @@ class SalvageYardServiceTest extends TestCase
 
         $grouped = $this->service->getInventoryByType($this->hub);
 
-        $this->assertCount(1, $grouped['weapons']);
-        $this->assertCount(1, $grouped['utilities']);
-        $this->assertEquals('weapon_slot', $grouped['weapons'][0]['component']['slot_type']);
-        $this->assertEquals('utility_slot', $grouped['utilities'][0]['component']['slot_type']);
+        $this->assertArrayHasKey('weapon', $grouped);
+        $this->assertArrayHasKey('shield_generator', $grouped);
+        $this->assertCount(1, $grouped['weapon']);
+        $this->assertCount(1, $grouped['shield_generator']);
+        $this->assertEquals('weapon', $grouped['weapon'][0]['component']['slot_type']);
+        $this->assertEquals('shield_generator', $grouped['shield_generator'][0]['component']['slot_type']);
     }
 
     public function test_purchase_component_requires_player_at_hub(): void
@@ -385,12 +389,12 @@ class SalvageYardServiceTest extends TestCase
 
         $components = $this->service->getInstalledComponents($this->player->activeShip);
 
-        $this->assertArrayHasKey('weapon_slots', $components);
-        $this->assertArrayHasKey('utility_slots', $components);
-        $this->assertArrayHasKey(1, $components['weapon_slots']);
-        $this->assertArrayHasKey(1, $components['utility_slots']);
-        $this->assertEquals('Test Laser', $components['weapon_slots'][1]['component']['name']);
-        $this->assertEquals('Test Shield Regenerator', $components['utility_slots'][1]['component']['name']);
+        $this->assertArrayHasKey('weapon', $components);
+        $this->assertArrayHasKey('shield_generator', $components);
+        $this->assertArrayHasKey(1, $components['weapon']['installed']);
+        $this->assertArrayHasKey(1, $components['shield_generator']['installed']);
+        $this->assertEquals('Test Laser', $components['weapon']['installed'][1]['component']['name']);
+        $this->assertEquals('Test Shield Regenerator', $components['shield_generator']['installed'][1]['component']['name']);
     }
 
     public function test_populate_salvage_yard(): void

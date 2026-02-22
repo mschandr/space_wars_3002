@@ -170,10 +170,8 @@ class StarSystemController extends BaseApiController
             return [
                 'uuid' => $system->uuid,
                 'name' => $hasChart || $system->is_inhabited ? $system->name : 'Unknown System',
-                'coordinates' => $hasChart || $system->is_inhabited ? [
-                    'x' => (float) $system->x,
-                    'y' => (float) $system->y,
-                ] : null,
+                'x' => $hasChart || $system->is_inhabited ? (float) $system->x : null,
+                'y' => $hasChart || $system->is_inhabited ? (float) $system->y : null,
                 'is_inhabited' => $system->is_inhabited,
                 'has_chart' => $hasChart,
                 'scan_level' => $scanLevel,

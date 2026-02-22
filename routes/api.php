@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ColonyBuildingController;
 use App\Http\Controllers\Api\ColonyCombatController;
 use App\Http\Controllers\Api\ColonyController;
 use App\Http\Controllers\Api\CombatController;
+use App\Http\Controllers\Api\ComponentUpgradeController;
 use App\Http\Controllers\Api\FacilitiesController;
 use App\Http\Controllers\Api\GalaxyController;
 use App\Http\Controllers\Api\GalaxyCreationController;
@@ -254,13 +255,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('players/{uuid}/cargo', [TradingTransactionController::class, 'getCargo']);
     Route::get('trading/affordability', [TradingTransactionController::class, 'calculateAffordability']);
 
-    // Upgrade routes
+    // Trading history routes
+    Route::get('players/{playerUuid}/price-history', [TradingController::class, 'getPriceHistory']);
+    Route::get('players/{playerUuid}/trade-log', [TradingController::class, 'getTradeLog']);
+
+    // Upgrade routes (legacy stat-bump system — deprecated)
     Route::get('ships/{uuid}/upgrade-options', [UpgradeController::class, 'listUpgradeOptions']);
     Route::get('ships/{uuid}/upgrade/{component}', [UpgradeController::class, 'getComponentUpgradeDetails']);
     Route::post('ships/{uuid}/upgrade/{component}', [UpgradeController::class, 'executeUpgrade']);
     Route::get('players/{uuid}/plans', [UpgradeController::class, 'getOwnedPlans']);
     Route::get('upgrade-costs', [UpgradeController::class, 'getUpgradeCostFormulas']);
     Route::get('upgrade-limits', [UpgradeController::class, 'getUpgradeLimits']);
+
+    // Component upgrade routes (new per-component system)
+    Route::get('players/{uuid}/components/{componentId}/upgrade-info', [ComponentUpgradeController::class, 'upgradeInfo']);
+    Route::post('players/{uuid}/components/{componentId}/upgrade', [ComponentUpgradeController::class, 'upgrade']);
 
     // Combat routes
     Route::get('warp-gates/{warpGateUuid}/pirates', [CombatController::class, 'checkPiratePresence']);

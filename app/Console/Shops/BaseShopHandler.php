@@ -144,4 +144,14 @@ abstract class BaseShopHandler
     {
         return $char === 'q' || $char === "\033";
     }
+
+    /**
+     * Word-wrap text to fit within a given width, indenting continuation lines.
+     */
+    protected function wrapText(string $text, int $maxWidth, string $indent = '      '): string
+    {
+        $wrapped = wordwrap($text, $maxWidth, "\n", true);
+
+        return str_replace("\n", "\n{$indent}", $wrapped);
+    }
 }
