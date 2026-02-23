@@ -5,6 +5,9 @@ namespace App\Services;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
 use App\Models\PointOfInterest;
+use App\Models\Ship;
+use App\Models\TradingHub;
+use App\Models\TradingHubShip;
 
 class PlayerSpawnService
 {
@@ -151,6 +154,57 @@ class PlayerSpawnService
             'spawn_score' => $score,
             'rating' => $this->getRating($score),
         ];
+    }
+
+    /**
+     * Ensure a free Sparrow-class starter ship is available at the spawn location's trading hub.
+     * Creates the trading hub and/or inventory entry if needed.
+     */
+    public function ensureStarterShipAvailable(PointOfInterest $spawnLocation, Galaxy $galaxy): void
+    {
+        $starterShip = Ship::where('class', 'starter')
+            ->orWhere('attributes->is_starter', true)
+            ->first();
+
+        if (! $starterShip) {
+            return;
+        }
+
+        // Ensure trading hub exists at spawn location
+        $tradingHub = $spawnLocation->tradingHub;
+        if (! $tradingHub) {
+            $tradingHub = TradingHub::create([
+                'poi_id' => $spawnLocation->id,
+                'name' => $spawnLocation->name.' Trading Post',
+                'type' => 'standard',
+                'gate_count' => $spawnLocation->outgoingGates()->count(),
+                'tax_rate' => 8.00,
+                'is_active' => true,
+            ]);
+        }
+
+        // Ensure starter ship is in stock with price 0
+        $existingEntry = TradingHubShip::where('trading_hub_id', $tradingHub->id)
+            ->where('ship_id', $starterShip->id)
+            ->first();
+
+        if ($existingEntry) {
+            if ($existingEntry->quantity < 1) {
+                $existingEntry->update(['quantity' => 1, 'current_price' => 0]);
+            } elseif ($existingEntry->current_price > 0) {
+                $existingEntry->update(['current_price' => 0]);
+            }
+        } else {
+            TradingHubShip::create([
+                'trading_hub_id' => $tradingHub->id,
+                'ship_id' => $starterShip->id,
+                'galaxy_id' => $galaxy->id,
+                'quantity' => 1,
+                'current_price' => 0,
+                'demand_level' => 50,
+                'supply_level' => 50,
+            ]);
+        }
     }
 
     /**

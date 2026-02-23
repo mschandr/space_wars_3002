@@ -6,9 +6,8 @@ use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Http\Resources\PlayerResource;
 use App\Models\Galaxy;
 use App\Models\Player;
-use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
-use App\Models\Ship;
+use App\Services\PlayerSpawnService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -68,12 +67,36 @@ class PlayerController extends BaseApiController
 
         DB::beginTransaction();
         try {
-            // Find a random inhabited starting location
+            // Find an inhabited star with a trading hub that has ship inventory (shipyard)
             $startingLocation = PointOfInterest::where('galaxy_id', $galaxy->id)
                 ->where('type', PointOfInterestType::STAR)
                 ->where('is_inhabited', true)
+                ->whereHas('tradingHub', function ($query) {
+                    $query->whereHas('ships', function ($q) {
+                        $q->where('quantity', '>', 0);
+                    });
+                })
                 ->inRandomOrder()
                 ->first();
+
+            // Fallback: any inhabited star with a trading hub
+            if (! $startingLocation) {
+                $startingLocation = PointOfInterest::where('galaxy_id', $galaxy->id)
+                    ->where('type', PointOfInterestType::STAR)
+                    ->where('is_inhabited', true)
+                    ->whereHas('tradingHub')
+                    ->inRandomOrder()
+                    ->first();
+            }
+
+            // Last resort: any inhabited star
+            if (! $startingLocation) {
+                $startingLocation = PointOfInterest::where('galaxy_id', $galaxy->id)
+                    ->where('type', PointOfInterestType::STAR)
+                    ->where('is_inhabited', true)
+                    ->inRandomOrder()
+                    ->first();
+            }
 
             if (! $startingLocation) {
                 DB::rollBack();
@@ -87,7 +110,7 @@ class PlayerController extends BaseApiController
             // Get starting credits from config
             $startingCredits = config('game_config.ships.starting_credits', 10000);
 
-            // Create player
+            // Create player (no starter ship — player must buy their first ship at a shipyard)
             $player = Player::create([
                 'user_id' => $request->user()->id,
                 'galaxy_id' => $galaxy->id,
@@ -99,26 +122,8 @@ class PlayerController extends BaseApiController
                 'status' => 'active',
             ]);
 
-            // Give player a starting ship (Scout class)
-            $scoutShip = Ship::where('class', 'scout')->first();
-            if ($scoutShip) {
-                PlayerShip::create([
-                    'player_id' => $player->id,
-                    'ship_id' => $scoutShip->id,
-                    'current_poi_id' => $player->current_poi_id,
-                    'name' => "{$player->call_sign}'s Scout",
-                    'current_fuel' => $scoutShip->base_max_fuel ?? 100,
-                    'max_fuel' => $scoutShip->base_max_fuel ?? 100,
-                    'hull' => $scoutShip->base_hull ?? 100,
-                    'max_hull' => $scoutShip->base_hull ?? 100,
-                    'weapons' => $scoutShip->base_weapons ?? 10,
-                    'cargo_hold' => $scoutShip->base_cargo ?? 100,
-                    'sensors' => $scoutShip->base_sensors ?? 1,
-                    'warp_drive' => $scoutShip->base_warp_drive ?? 1,
-                    'is_active' => true,
-                    'status' => 'operational',
-                ]);
-            }
+            // Ensure a free Sparrow is available at the spawn location's shipyard
+            app(PlayerSpawnService::class)->ensureStarterShipAvailable($startingLocation, $galaxy);
 
             // TODO: Give player starter star charts (3 nearest systems)
 

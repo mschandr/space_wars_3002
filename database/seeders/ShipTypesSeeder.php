@@ -29,7 +29,7 @@ class ShipTypesSeeder extends Seeder
                 'name' => 'Sparrow-class Light Freighter',
                 'class' => 'starter',
                 'description' => 'A reliable entry-level vessel that every pilot begins their journey with. Not exceptional at anything, but capable enough to get started in the galaxy. Its simplicity makes it easy to maintain and forgiving of rookie mistakes.',
-                'base_price' => 5000.00, // Nominal price; free only as initial starter ship
+                'base_price' => 5000.00, // Nominal price; free only as initial starter ship at spawn
                 'cargo_capacity' => 50,
                 'speed' => 100,
                 'hull_strength' => 80,

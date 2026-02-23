@@ -119,6 +119,26 @@ return [
 
     /**
      * |--------------------------------------------------------------------------
+     * | Trading Economy
+     * |--------------------------------------------------------------------------
+     * | Controls hub pricing, spread, and market event spikes.
+     * | Spread = hub's cut on each transaction (±spread around mid-price).
+     * | Demand/supply range drives price variance between hubs.
+     * | Spikes = Drug Wars-style random surges/crashes per hub/mineral.
+     */
+    'trading_economy' => [
+        'spread' => 0.08,                    // ±8% hub margin (16% round-trip at same hub)
+        'demand_range' => [20, 80],          // rand(20,80) → multiplier 0.70x to 1.30x
+        'supply_range' => [20, 80],          // rand(20,80) → multiplier 0.70x to 1.30x
+
+        // Market spike events (Drug Wars-style)
+        'spike_chance' => 0.08,              // 8% of hub/mineral combos get a spike
+        'spike_crash_multiplier' => [0.30, 0.50],  // Surplus: price drops to 30-50% of normal
+        'spike_surge_multiplier' => [2.00, 4.00],  // Shortage: price jumps to 200-400% of normal
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
      * | Colonies
      * |--------------------------------------------------------------------------
      */
@@ -133,7 +153,7 @@ return [
      * |--------------------------------------------------------------------------
      */
     'ships' => [
-        'starting_credits' => 100_000,
+        'starting_credits' => 10_000,
         'rename_fee' => 1_000,
         'fuel_regen_seconds_per_unit' => 1, // TESTING: normal value is 30. Seconds between each 1-fuel regeneration tick.
         'classes' => [

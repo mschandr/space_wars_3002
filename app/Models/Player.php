@@ -347,6 +347,32 @@ class Player extends Model
     }
 
     /**
+     * Check if a tutorial step has been completed.
+     */
+    public function hasCompletedTutorial(string $step): bool
+    {
+        $settings = $this->settings ?? [];
+
+        return in_array($step, $settings['completed_tutorials'] ?? [], true);
+    }
+
+    /**
+     * Mark a tutorial step as completed.
+     */
+    public function completeTutorial(string $step): void
+    {
+        $settings = $this->settings ?? [];
+        $completed = $settings['completed_tutorials'] ?? [];
+
+        if (! in_array($step, $completed, true)) {
+            $completed[] = $step;
+            $settings['completed_tutorials'] = $completed;
+            $this->settings = $settings;
+            $this->save();
+        }
+    }
+
+    /**
      * Check if player is currently in the mirror universe
      */
     public function isInMirrorUniverse(): bool

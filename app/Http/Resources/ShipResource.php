@@ -81,12 +81,12 @@ class ShipResource extends JsonResource
                 }
             ),
             'hull' => $this->hull,
-            'max_hull' => $this->max_hull,
+            'max_hull' => $this->getEffectiveMaxHull(),
             'shields' => $this->shields ?? 0,
-            'max_shields' => $this->max_shields ?? 0,
+            'max_shields' => $this->getEffectiveShieldStrength(),
             'weapons' => $this->weapons,
-            'cargo_hold' => $this->cargo_hold,
-            'sensors' => $this->sensors,
+            'cargo_hold' => $this->getEffectiveCargoHold(),
+            'sensors' => $this->getEffectiveSensors(),
             'warp_drive' => $this->warp_drive,
             'current_cargo' => $this->when(
                 $this->relationLoaded('cargos'),

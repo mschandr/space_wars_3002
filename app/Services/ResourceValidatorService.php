@@ -94,7 +94,7 @@ class ResourceValidatorService
             ];
         }
 
-        $availableSpace = $ship->cargo_hold - $ship->current_cargo;
+        $availableSpace = $ship->getEffectiveCargoHold() - $ship->current_cargo;
 
         if ($availableSpace < $amount) {
             return [

@@ -76,7 +76,7 @@ class SalvageService
         ];
 
         $cargoSpaceUsed = 0;
-        $availableSpace = $playerShip->cargo_hold - $playerShip->current_cargo;
+        $availableSpace = $playerShip->getEffectiveCargoHold() - $playerShip->current_cargo;
 
         // TODO: (Missing Validation) Validate $selectedMinerals entries before use.
         // Each entry should have 'mineral_id' (positive int) and 'quantity' (positive int).
@@ -158,7 +158,7 @@ class SalvageService
     public function validateSelection(PlayerShip $playerShip, array $selectedMinerals): array
     {
         $spaceNeeded = $this->calculateSpaceNeeded($selectedMinerals);
-        $spaceAvailable = $playerShip->cargo_hold - $playerShip->current_cargo;
+        $spaceAvailable = $playerShip->getEffectiveCargoHold() - $playerShip->current_cargo;
 
         return [
             'valid' => $spaceNeeded <= $spaceAvailable,

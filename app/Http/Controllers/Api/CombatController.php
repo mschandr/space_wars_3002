@@ -286,7 +286,7 @@ class CombatController extends BaseApiController
             'minerals_collected' => $result['minerals_added'],
             'plans_collected' => $result['plans_added'],
             'cargo_used' => $ship->current_cargo,
-            'cargo_remaining' => $ship->cargo_hold - $ship->current_cargo,
+            'cargo_remaining' => $ship->getEffectiveCargoHold() - $ship->current_cargo,
         ], 'Salvage collected successfully');
     }
 }

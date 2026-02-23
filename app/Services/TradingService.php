@@ -32,7 +32,8 @@ class TradingService
     public function buyMineral(Player $player, PlayerShip $ship, TradingHubInventory $inventory, int $quantity): array
     {
         $mineral = $inventory->mineral;
-        $totalCost = $inventory->sell_price * $quantity;
+        $isTutorial = ! $player->hasCompletedTutorial('first_mineral_buy');
+        $totalCost = $isTutorial ? 0 : $inventory->sell_price * $quantity;
 
         // Validations
         if (! $inventory->hasStock($quantity)) {
@@ -43,7 +44,7 @@ class TradingService
             ];
         }
 
-        if ($player->credits < $totalCost) {
+        if (! $isTutorial && $player->credits < $totalCost) {
             return [
                 'success' => false,
                 'message' => 'Insufficient credits',
@@ -51,7 +52,7 @@ class TradingService
             ];
         }
 
-        $availableSpace = $ship->cargo_hold - $ship->current_cargo;
+        $availableSpace = $ship->getEffectiveCargoHold() - $ship->current_cargo;
         if ($availableSpace < $quantity) {
             return [
                 'success' => false,
@@ -64,8 +65,10 @@ class TradingService
         $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
         $unitPrice = $inventory->sell_price; // Capture before removeStock recalculates prices
 
-        return DB::transaction(function () use ($player, $ship, $inventory, $mineral, $quantity, $totalCost, $xpEarned, $unitPrice) {
-            $player->deductCredits($totalCost);
+        return DB::transaction(function () use ($player, $ship, $inventory, $mineral, $quantity, $totalCost, $xpEarned, $unitPrice, $isTutorial) {
+            if (! $isTutorial) {
+                $player->deductCredits($totalCost);
+            }
             $inventory->removeStock($quantity);
 
             // Add to player cargo
@@ -96,11 +99,16 @@ class TradingService
                 'transacted_at' => now(),
             ]);
 
+            if ($isTutorial) {
+                $player->completeTutorial('first_mineral_buy');
+            }
+
             return [
                 'success' => true,
                 'message' => "Successfully purchased {$quantity} units of {$mineral->name}",
                 'total_cost' => $totalCost,
                 'xp_earned' => $xpEarned,
+                'tutorial' => $isTutorial,
             ];
         });
     }
@@ -113,6 +121,7 @@ class TradingService
     public function sellMineral(Player $player, PlayerShip $ship, PlayerCargo $cargo, TradingHubInventory $hubInventory, int $quantity): array
     {
         $mineral = $cargo->mineral;
+        $isTutorial = ! $player->hasCompletedTutorial('first_mineral_sell');
 
         // Validations
         if ($cargo->quantity < $quantity) {
@@ -124,13 +133,15 @@ class TradingService
         }
 
         $unitPrice = $hubInventory->buy_price; // Capture before addStock recalculates prices
-        $totalRevenue = $unitPrice * $quantity;
+        $totalRevenue = $isTutorial ? 0 : $unitPrice * $quantity;
 
         // Execute transaction atomically
         $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits, min 10
 
-        return DB::transaction(function () use ($player, $ship, $cargo, $hubInventory, $mineral, $quantity, $totalRevenue, $xpEarned, $unitPrice) {
-            $player->addCredits($totalRevenue);
+        return DB::transaction(function () use ($player, $ship, $cargo, $hubInventory, $mineral, $quantity, $totalRevenue, $xpEarned, $unitPrice, $isTutorial) {
+            if (! $isTutorial) {
+                $player->addCredits($totalRevenue);
+            }
             $hubInventory->addStock($quantity);
 
             // Remove from player cargo
@@ -161,11 +172,16 @@ class TradingService
                 'transacted_at' => now(),
             ]);
 
+            if ($isTutorial) {
+                $player->completeTutorial('first_mineral_sell');
+            }
+
             return [
                 'success' => true,
                 'message' => "Successfully sold {$quantity} units of {$mineral->name}",
                 'total_revenue' => $totalRevenue,
                 'xp_earned' => $xpEarned,
+                'tutorial' => $isTutorial,
             ];
         });
     }
@@ -223,15 +239,33 @@ class TradingService
                 default => rand(1000, 5000),
             };
 
-            $demandLevel = rand(30, 70);
-            $supplyLevel = rand(30, 70);
+            $tradingConfig = config('game_config.trading_economy');
+            $demandRange = $tradingConfig['demand_range'] ?? [20, 80];
+            $supplyRange = $tradingConfig['supply_range'] ?? [20, 80];
+
+            $demandLevel = rand($demandRange[0], $demandRange[1]);
+            $supplyLevel = rand($supplyRange[0], $supplyRange[1]);
 
             $baseValue = $mineral->base_value ?? 100;
             $demandMultiplier = 1 + (($demandLevel - 50) / 100);
             $supplyMultiplier = 1 - (($supplyLevel - 50) / 100);
             $currentPrice = $baseValue * $demandMultiplier * $supplyMultiplier;
 
-            $spread = 0.15;
+            // Drug Wars-style spike events: random surges/crashes
+            $spikeChance = $tradingConfig['spike_chance'] ?? 0.08;
+            if (mt_rand(1, 10000) <= (int) ($spikeChance * 10000)) {
+                if (rand(0, 1) === 0) {
+                    // Surplus/crash: cheap buying opportunity
+                    [$crashMin, $crashMax] = $tradingConfig['spike_crash_multiplier'] ?? [0.30, 0.50];
+                    $currentPrice *= $crashMin + (mt_rand(0, 1000) / 1000) * ($crashMax - $crashMin);
+                } else {
+                    // Shortage/surge: sell high opportunity
+                    [$surgeMin, $surgeMax] = $tradingConfig['spike_surge_multiplier'] ?? [2.00, 4.00];
+                    $currentPrice *= $surgeMin + (mt_rand(0, 1000) / 1000) * ($surgeMax - $surgeMin);
+                }
+            }
+
+            $spread = $tradingConfig['spread'] ?? 0.08;
             $buyPrice = $currentPrice * (1 - $spread);
             $sellPrice = $currentPrice * (1 + $spread);
 

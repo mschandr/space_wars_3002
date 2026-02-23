@@ -32,6 +32,9 @@ class PlayerFactory extends Factory
             'level' => 1,
             'current_poi_id' => null,
             'status' => 'active',
+            'settings' => [
+                'completed_tutorials' => ['first_mineral_buy', 'first_mineral_sell'],
+            ],
         ];
     }
 

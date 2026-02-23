@@ -7,6 +7,7 @@ use App\Models\Galaxy;
 use App\Models\Player;
 use App\Models\PointOfInterest;
 use App\Models\Ship;
+use App\Models\TradingHub;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -74,23 +75,11 @@ class PlayerManagementTest extends TestCase
             'is_inhabited' => true,
         ]);
 
-        // Create a scout ship blueprint
-        Ship::factory()->create([
-            'class' => 'scout',
-            'name' => 'Scout',
-        ]);
-
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
             ->postJson('/api/players', [
                 'galaxy_id' => $galaxy->id,
                 'call_sign' => 'Captain Nova',
             ]);
-
-        if ($response->status() !== 201) {
-            // Debug: check what POIs exist
-            dump(PointOfInterest::where('galaxy_id', $galaxy->id)->get()->toArray());
-            dump($response->json());
-        }
 
         $response->assertStatus(201)
             ->assertJsonStructure([
@@ -102,6 +91,7 @@ class PlayerManagementTest extends TestCase
                 'success' => true,
                 'data' => [
                     'call_sign' => 'Captain Nova',
+                    'credits' => 10000,
                     'level' => 1,
                 ],
             ]);
@@ -111,6 +101,11 @@ class PlayerManagementTest extends TestCase
             'call_sign' => 'Captain Nova',
             'galaxy_id' => $galaxy->id,
         ]);
+
+        // Verify no ship was auto-assigned
+        $player = Player::where('call_sign', 'Captain Nova')->first();
+        $this->assertNull($player->activeShip);
+        $this->assertEquals(0, $player->ships()->count());
     }
 
     /**
@@ -294,5 +289,89 @@ class PlayerManagementTest extends TestCase
                     'mirror_universe',
                 ],
             ]);
+    }
+
+    /**
+     * Test new player has no active ship
+     */
+    public function test_new_player_has_no_active_ship(): void
+    {
+        $galaxy = Galaxy::factory()->create();
+
+        PointOfInterest::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'is_inhabited' => true,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->postJson('/api/players', [
+                'galaxy_id' => $galaxy->id,
+                'call_sign' => 'Shipless Wonder',
+            ]);
+
+        $response->assertStatus(201);
+
+        $playerUuid = $response->json('data.uuid');
+
+        // Verify status endpoint returns null ship
+        $statusResponse = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->getJson("/api/players/{$playerUuid}/status");
+
+        $statusResponse->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'ship' => null,
+                ],
+            ]);
+    }
+
+    /**
+     * Test new player prefers spawning at a hub with shipyard
+     */
+    public function test_new_player_spawns_at_hub_with_shipyard(): void
+    {
+        $galaxy = Galaxy::factory()->create();
+
+        // Create an inhabited star WITHOUT a shipyard
+        $plainStar = PointOfInterest::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'is_inhabited' => true,
+        ]);
+
+        // Create an inhabited star WITH a trading hub and ship inventory
+        $shipyardStar = PointOfInterest::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'is_inhabited' => true,
+        ]);
+
+        $tradingHub = TradingHub::factory()->create([
+            'poi_id' => $shipyardStar->id,
+        ]);
+
+        $ship = Ship::factory()->create();
+        \App\Models\TradingHubShip::create([
+            'trading_hub_id' => $tradingHub->id,
+            'ship_id' => $ship->id,
+            'galaxy_id' => $galaxy->id,
+            'quantity' => 3,
+            'current_price' => 5000,
+            'demand_level' => 50,
+            'supply_level' => 50,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->postJson('/api/players', [
+                'galaxy_id' => $galaxy->id,
+                'call_sign' => 'Shipyard Seeker',
+            ]);
+
+        $response->assertStatus(201);
+
+        $player = Player::where('call_sign', 'Shipyard Seeker')->first();
+        $this->assertEquals($shipyardStar->id, $player->current_poi_id);
     }
 }

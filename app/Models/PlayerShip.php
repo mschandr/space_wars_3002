@@ -200,6 +200,74 @@ class PlayerShip extends Model
         return $this->getAvailableSlots(SlotType::UTILITY);
     }
 
+    // =========================================================================
+    // EFFECTIVE STATS (base column + component effects)
+    // =========================================================================
+
+    /**
+     * Sum a specific effect key across all installed components.
+     */
+    public function getComponentEffectTotal(string $effectKey): float
+    {
+        if (! $this->relationLoaded('components')) {
+            $this->load('components.component');
+        }
+
+        return $this->components->sum(function ($playerComponent) use ($effectKey) {
+            $effects = $playerComponent->component->effects ?? [];
+
+            return (float) ($effects[$effectKey] ?? 0);
+        });
+    }
+
+    /**
+     * Effective cargo hold: base cargo_hold + cargo_boost from components.
+     */
+    public function getEffectiveCargoHold(): int
+    {
+        return $this->cargo_hold + (int) $this->getComponentEffectTotal('cargo_boost');
+    }
+
+    /**
+     * Effective max hull: base max_hull + hull_boost from components.
+     */
+    public function getEffectiveMaxHull(): int
+    {
+        return $this->max_hull + (int) $this->getComponentEffectTotal('hull_boost');
+    }
+
+    /**
+     * Effective shield strength: base shield_strength + shield_boost from components.
+     */
+    public function getEffectiveShieldStrength(): int
+    {
+        return ($this->shield_strength ?? 0) + (int) $this->getComponentEffectTotal('shield_boost');
+    }
+
+    /**
+     * Effective max fuel: base max_fuel + fuel_capacity from components.
+     */
+    public function getEffectiveMaxFuel(): int
+    {
+        return $this->max_fuel + (int) $this->getComponentEffectTotal('fuel_capacity');
+    }
+
+    /**
+     * Effective sensor level: base sensors + sensor_boost from components.
+     */
+    public function getEffectiveSensors(): int
+    {
+        return $this->sensors + (int) $this->getComponentEffectTotal('sensor_boost');
+    }
+
+    /**
+     * Available cargo space using effective stats.
+     */
+    public function getAvailableCargoSpace(): int
+    {
+        return $this->getEffectiveCargoHold() - $this->current_cargo;
+    }
+
     /**
      * Check if this ship is a carrier
      */
@@ -241,7 +309,9 @@ class PlayerShip extends Model
      */
     public function regenerateFuel(): void
     {
-        if ($this->current_fuel >= $this->max_fuel) {
+        $effectiveMaxFuel = $this->getEffectiveMaxFuel();
+
+        if ($this->current_fuel >= $effectiveMaxFuel) {
             return;
         }
 
@@ -251,13 +321,14 @@ class PlayerShip extends Model
 
         // Apply fuel regen modifier and warp drive bonus (higher = faster regen = lower seconds per fuel)
         $regenModifier = $this->fuel_regen_modifier ?? 1.0;
+        $componentRegenBonus = $this->getComponentEffectTotal('fuel_regen');
         $warpDriveBonus = 1 + ($this->warp_drive - 1) * 0.3;
-        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / ($regenModifier * $warpDriveBonus)));
+        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / ($regenModifier * $warpDriveBonus * (1 + $componentRegenBonus))));
 
         $fuelToRegenerate = (int) floor($secondsElapsed / $effectiveRegenRate);
 
         if ($fuelToRegenerate > 0) {
-            $this->current_fuel = min($this->max_fuel, $this->current_fuel + $fuelToRegenerate);
+            $this->current_fuel = min($effectiveMaxFuel, $this->current_fuel + $fuelToRegenerate);
             $this->fuel_last_updated_at = $now->subSeconds($secondsElapsed % $effectiveRegenRate);
             $this->save();
         }
@@ -317,14 +388,17 @@ class PlayerShip extends Model
     {
         $this->regenerateFuel();
 
-        if ($this->current_fuel >= $this->max_fuel) {
+        $effectiveMaxFuel = $this->getEffectiveMaxFuel();
+
+        if ($this->current_fuel >= $effectiveMaxFuel) {
             return 0;
         }
 
-        $fuelNeeded = $this->max_fuel - $this->current_fuel;
+        $fuelNeeded = $effectiveMaxFuel - $this->current_fuel;
         $regenModifier = $this->fuel_regen_modifier ?? 1.0;
+        $componentRegenBonus = $this->getComponentEffectTotal('fuel_regen');
         $warpDriveBonus = 1 + ($this->warp_drive - 1) * 0.3;
-        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / ($regenModifier * $warpDriveBonus)));
+        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / ($regenModifier * $warpDriveBonus * (1 + $componentRegenBonus))));
 
         return $fuelNeeded * $effectiveRegenRate;
     }
@@ -335,10 +409,11 @@ class PlayerShip extends Model
     public function takeDamage(int $damage): void
     {
         $this->hull = max(0, $this->hull - $damage);
+        $effectiveMaxHull = $this->getEffectiveMaxHull();
 
         if ($this->hull <= 0) {
             $this->status = 'destroyed';
-        } elseif ($this->hull < $this->max_hull * 0.3) {
+        } elseif ($this->hull < $effectiveMaxHull * 0.3) {
             $this->status = 'damaged';
         }
 
@@ -350,9 +425,10 @@ class PlayerShip extends Model
      */
     public function repair(int $amount): void
     {
-        $this->hull = min($this->max_hull, $this->hull + $amount);
+        $effectiveMaxHull = $this->getEffectiveMaxHull();
+        $this->hull = min($effectiveMaxHull, $this->hull + $amount);
 
-        if ($this->hull > $this->max_hull * 0.3) {
+        if ($this->hull > $effectiveMaxHull * 0.3) {
             $this->status = 'operational';
         }
 
@@ -364,7 +440,7 @@ class PlayerShip extends Model
      */
     public function canAddCargo(int $amount): bool
     {
-        return ($this->current_cargo + $amount) <= $this->cargo_hold;
+        return ($this->current_cargo + $amount) <= $this->getEffectiveCargoHold();
     }
 
     /**
@@ -452,11 +528,11 @@ class PlayerShip extends Model
     }
 
     /**
-     * Get total cargo capacity (regular + hidden)
+     * Get total cargo capacity (effective + hidden)
      */
     public function getTotalCargoCapacity(): int
     {
-        return $this->cargo_hold + ($this->hidden_hold_capacity ?? 0);
+        return $this->getEffectiveCargoHold() + ($this->hidden_hold_capacity ?? 0);
     }
 
     /**

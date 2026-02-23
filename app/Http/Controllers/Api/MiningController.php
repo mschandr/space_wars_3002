@@ -146,7 +146,7 @@ class MiningController extends BaseApiController
         $extractedAmount = (int) ($depositSize * min($efficiency, 1.0)); // Cap at 100% for manual extraction
 
         // Check cargo space
-        $availableSpace = $ship->cargo_hold - $ship->current_cargo;
+        $availableSpace = $ship->getEffectiveCargoHold() - $ship->current_cargo;
         if ($extractedAmount > $availableSpace) {
             $extractedAmount = $availableSpace;
             if ($extractedAmount === 0) {
@@ -188,7 +188,7 @@ class MiningController extends BaseApiController
             'efficiency_percent' => round($efficiency * 100, 1),
             'sensor_level' => $ship->sensors,
             'cargo_used' => $ship->current_cargo,
-            'cargo_remaining' => $ship->cargo_hold - $ship->current_cargo,
+            'cargo_remaining' => $ship->getEffectiveCargoHold() - $ship->current_cargo,
             'deposit_remaining' => $poi->mineral_deposits[$mineral->name]['size'] ?? 0,
         ], 'Resources extracted successfully');
     }

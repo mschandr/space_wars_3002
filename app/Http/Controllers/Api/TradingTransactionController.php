@@ -256,8 +256,8 @@ class TradingTransactionController extends BaseApiController
             'ship_uuid' => $player->activeShip->uuid,
             'ship_name' => $player->activeShip->name,
             'current_cargo' => $player->activeShip->current_cargo,
-            'cargo_capacity' => $player->activeShip->cargo_hold,
-            'available_space' => $player->activeShip->cargo_hold - $player->activeShip->current_cargo,
+            'cargo_capacity' => $player->activeShip->getEffectiveCargoHold(),
+            'available_space' => $player->activeShip->getAvailableCargoSpace(),
             'cargo' => $cargo->map(fn ($item) => [
                 'mineral' => new MineralResource($item->mineral),
                 'quantity' => $item->quantity,
@@ -322,7 +322,7 @@ class TradingTransactionController extends BaseApiController
         }
 
         $maxAffordable = $this->tradingService->getMaxAffordableQuantity($player, $inventory);
-        $maxBySpace = $ship->cargo_hold - $ship->current_cargo;
+        $maxBySpace = $ship->getAvailableCargoSpace();
         $maxPurchasable = min($maxAffordable, $maxBySpace);
 
         return $this->success([
