@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Http\Resources\PlayerResource;
 use App\Models\Galaxy;
 use App\Models\Player;
-use App\Models\PointOfInterest;
 use App\Services\PlayerSpawnService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -67,36 +65,8 @@ class PlayerController extends BaseApiController
 
         DB::beginTransaction();
         try {
-            // Find an inhabited star with a trading hub that has ship inventory (shipyard)
-            $startingLocation = PointOfInterest::where('galaxy_id', $galaxy->id)
-                ->where('type', PointOfInterestType::STAR)
-                ->where('is_inhabited', true)
-                ->whereHas('tradingHub', function ($query) {
-                    $query->whereHas('ships', function ($q) {
-                        $q->where('quantity', '>', 0);
-                    });
-                })
-                ->inRandomOrder()
-                ->first();
-
-            // Fallback: any inhabited star with a trading hub
-            if (! $startingLocation) {
-                $startingLocation = PointOfInterest::where('galaxy_id', $galaxy->id)
-                    ->where('type', PointOfInterestType::STAR)
-                    ->where('is_inhabited', true)
-                    ->whereHas('tradingHub')
-                    ->inRandomOrder()
-                    ->first();
-            }
-
-            // Last resort: any inhabited star
-            if (! $startingLocation) {
-                $startingLocation = PointOfInterest::where('galaxy_id', $galaxy->id)
-                    ->where('type', PointOfInterestType::STAR)
-                    ->where('is_inhabited', true)
-                    ->inRandomOrder()
-                    ->first();
-            }
+            $spawnService = app(PlayerSpawnService::class);
+            $startingLocation = $spawnService->findOptimalSpawnLocation($galaxy);
 
             if (! $startingLocation) {
                 DB::rollBack();
@@ -123,7 +93,7 @@ class PlayerController extends BaseApiController
             ]);
 
             // Ensure a free Sparrow is available at the spawn location's shipyard
-            app(PlayerSpawnService::class)->ensureStarterShipAvailable($startingLocation, $galaxy);
+            $spawnService->ensureStarterShipAvailable($startingLocation, $galaxy);
 
             // TODO: Give player starter star charts (3 nearest systems)
 

@@ -7,8 +7,11 @@ use App\Models\Galaxy;
 use App\Models\Player;
 use App\Models\PointOfInterest;
 use App\Models\Ship;
+use App\Models\StellarCartographer;
 use App\Models\TradingHub;
+use App\Models\TradingHubShip;
 use App\Models\User;
+use App\Models\WarpGate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -328,32 +331,41 @@ class PlayerManagementTest extends TestCase
     }
 
     /**
-     * Test new player prefers spawning at a hub with shipyard
+     * Test new player prefers spawning at a super hub with all services
      */
-    public function test_new_player_spawns_at_hub_with_shipyard(): void
+    public function test_new_player_spawns_at_super_hub(): void
     {
         $galaxy = Galaxy::factory()->create();
 
-        // Create an inhabited star WITHOUT a shipyard
+        // Create an inhabited star WITHOUT full services (just a trading hub)
         $plainStar = PointOfInterest::factory()->create([
             'galaxy_id' => $galaxy->id,
             'type' => PointOfInterestType::STAR,
             'is_inhabited' => true,
         ]);
 
-        // Create an inhabited star WITH a trading hub and ship inventory
-        $shipyardStar = PointOfInterest::factory()->create([
+        TradingHub::factory()->create([
+            'poi_id' => $plainStar->id,
+            'is_active' => true,
+            'has_salvage_yard' => false,
+        ]);
+
+        // Create a super hub: inhabited star with all services
+        $superHubStar = PointOfInterest::factory()->create([
             'galaxy_id' => $galaxy->id,
             'type' => PointOfInterestType::STAR,
             'is_inhabited' => true,
         ]);
 
         $tradingHub = TradingHub::factory()->create([
-            'poi_id' => $shipyardStar->id,
+            'poi_id' => $superHubStar->id,
+            'is_active' => true,
+            'has_salvage_yard' => true,
+            'services' => ['shipyard', 'salvage', 'upgrades', 'plans', 'cartography'],
         ]);
 
         $ship = Ship::factory()->create();
-        \App\Models\TradingHubShip::create([
+        TradingHubShip::create([
             'trading_hub_id' => $tradingHub->id,
             'ship_id' => $ship->id,
             'galaxy_id' => $galaxy->id,
@@ -363,15 +375,187 @@ class PlayerManagementTest extends TestCase
             'supply_level' => 50,
         ]);
 
+        StellarCartographer::create([
+            'poi_id' => $superHubStar->id,
+            'name' => 'Super Hub Charts',
+            'is_active' => true,
+            'chart_base_price' => 1000,
+            'markup_multiplier' => 1.50,
+        ]);
+
+        // Create a second POI for the warp gate destination
+        $destStar = PointOfInterest::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'is_inhabited' => true,
+        ]);
+
+        WarpGate::factory()->visible()->create([
+            'galaxy_id' => $galaxy->id,
+            'source_poi_id' => $superHubStar->id,
+            'destination_poi_id' => $destStar->id,
+        ]);
+
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
             ->postJson('/api/players', [
                 'galaxy_id' => $galaxy->id,
-                'call_sign' => 'Shipyard Seeker',
+                'call_sign' => 'Super Hub Seeker',
             ]);
 
         $response->assertStatus(201);
 
-        $player = Player::where('call_sign', 'Shipyard Seeker')->first();
-        $this->assertEquals($shipyardStar->id, $player->current_poi_id);
+        $player = Player::where('call_sign', 'Super Hub Seeker')->first();
+        $this->assertEquals($superHubStar->id, $player->current_poi_id);
+
+        // Verify the spawn system has a rich planetary system
+        $planetCount = PointOfInterest::where('parent_poi_id', $superHubStar->id)
+            ->whereIn('type', [
+                PointOfInterestType::TERRESTRIAL,
+                PointOfInterestType::SUPER_EARTH,
+                PointOfInterestType::OCEAN,
+                PointOfInterestType::LAVA,
+                PointOfInterestType::GAS_GIANT,
+                PointOfInterestType::ICE_GIANT,
+                PointOfInterestType::HOT_JUPITER,
+                PointOfInterestType::CHTHONIC,
+                PointOfInterestType::DWARF_PLANET,
+                PointOfInterestType::PLANET,
+            ])
+            ->count();
+        $this->assertEquals(12, $planetCount, 'Spawn system should have exactly 12 planets');
+    }
+
+    /**
+     * Test spawn upgrades best candidate to super hub when none exist naturally
+     */
+    public function test_spawn_upgrades_best_candidate_to_super_hub(): void
+    {
+        $galaxy = Galaxy::factory()->create();
+
+        // Create an inhabited star with a trading hub but missing some services
+        $candidateStar = PointOfInterest::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'is_inhabited' => true,
+        ]);
+
+        TradingHub::factory()->create([
+            'poi_id' => $candidateStar->id,
+            'is_active' => true,
+            'has_salvage_yard' => false,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->postJson('/api/players', [
+                'galaxy_id' => $galaxy->id,
+                'call_sign' => 'Upgrade Test',
+            ]);
+
+        $response->assertStatus(201);
+
+        $player = Player::where('call_sign', 'Upgrade Test')->first();
+        $spawnPoi = PointOfInterest::find($player->current_poi_id);
+
+        // Verify the spawn location was upgraded to have salvage yard
+        $this->assertTrue($spawnPoi->tradingHub->fresh()->has_salvage_yard);
+        // Verify a stellar cartographer was created
+        $this->assertNotNull($spawnPoi->stellarCartographer);
+
+        // Verify the spawn system has a rich planetary system
+        $planetCount = PointOfInterest::where('parent_poi_id', $spawnPoi->id)
+            ->whereIn('type', [
+                PointOfInterestType::TERRESTRIAL,
+                PointOfInterestType::SUPER_EARTH,
+                PointOfInterestType::OCEAN,
+                PointOfInterestType::LAVA,
+                PointOfInterestType::GAS_GIANT,
+                PointOfInterestType::ICE_GIANT,
+                PointOfInterestType::HOT_JUPITER,
+                PointOfInterestType::CHTHONIC,
+                PointOfInterestType::DWARF_PLANET,
+                PointOfInterestType::PLANET,
+            ])
+            ->count();
+        $this->assertEquals(12, $planetCount, 'Spawn system should have exactly 12 planets');
+    }
+
+    /**
+     * Test spawn system has a gas giant with at least 4 moons
+     */
+    public function test_spawn_system_has_gas_giant_with_moons(): void
+    {
+        $galaxy = Galaxy::factory()->create();
+
+        $star = PointOfInterest::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'is_inhabited' => true,
+        ]);
+
+        TradingHub::factory()->create([
+            'poi_id' => $star->id,
+            'is_active' => true,
+            'has_salvage_yard' => false,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->postJson('/api/players', [
+                'galaxy_id' => $galaxy->id,
+                'call_sign' => 'Moon Watcher',
+            ]);
+
+        $response->assertStatus(201);
+
+        $player = Player::where('call_sign', 'Moon Watcher')->first();
+        $spawnPoi = PointOfInterest::find($player->current_poi_id);
+
+        // Verify at least one gas giant exists
+        $gasGiant = PointOfInterest::where('parent_poi_id', $spawnPoi->id)
+            ->where('type', PointOfInterestType::GAS_GIANT)
+            ->first();
+        $this->assertNotNull($gasGiant, 'Spawn system should have at least one gas giant');
+
+        // Verify the gas giant has at least 4 moons
+        $moonCount = PointOfInterest::where('parent_poi_id', $gasGiant->id)
+            ->where('type', PointOfInterestType::MOON)
+            ->count();
+        $this->assertGreaterThanOrEqual(4, $moonCount, 'Gas giant should have at least 4 moons');
+    }
+
+    /**
+     * Test spawn system has an asteroid belt
+     */
+    public function test_spawn_system_has_asteroid_belt(): void
+    {
+        $galaxy = Galaxy::factory()->create();
+
+        $star = PointOfInterest::factory()->create([
+            'galaxy_id' => $galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'is_inhabited' => true,
+        ]);
+
+        TradingHub::factory()->create([
+            'poi_id' => $star->id,
+            'is_active' => true,
+            'has_salvage_yard' => false,
+        ]);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->token}")
+            ->postJson('/api/players', [
+                'galaxy_id' => $galaxy->id,
+                'call_sign' => 'Belt Hunter',
+            ]);
+
+        $response->assertStatus(201);
+
+        $player = Player::where('call_sign', 'Belt Hunter')->first();
+        $spawnPoi = PointOfInterest::find($player->current_poi_id);
+
+        // Verify asteroid belt exists
+        $beltExists = PointOfInterest::where('parent_poi_id', $spawnPoi->id)
+            ->where('type', PointOfInterestType::ASTEROID_BELT)
+            ->exists();
+        $this->assertTrue($beltExists, 'Spawn system should have an asteroid belt');
     }
 }
