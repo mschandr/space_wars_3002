@@ -205,8 +205,7 @@ class ColonyController extends BaseApiController
         }
 
         // Deduct costs
-        $player->credits -= $creditCost;
-        $player->save();
+        $player->deductCredits($creditCost);
 
         $colony->mineral_storage -= $mineralCost;
         $colony->development_level++;

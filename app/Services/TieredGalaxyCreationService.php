@@ -14,7 +14,6 @@ use App\Services\WarpGate\IncrementalWarpGateGenerator;
 use Database\Seeders\PirateFactionSeeder;
 use Database\Seeders\PrecursorShipSeeder;
 use Database\Seeders\ShipTypesSeeder;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -117,7 +116,8 @@ class TieredGalaxyCreationService
             $mirrorGalaxy = null;
             if (! ($options['skip_mirror'] ?? false) && config('game_config.mirror_universe.enabled', true)) {
                 $this->updateProgress($galaxy, 13, 'Generating mirror universe', 95);
-                Artisan::call('galaxy:create-mirror', ['galaxy' => $galaxy->id]);
+                $mirrorGenerator = new \App\Services\GalaxyGeneration\Generators\MirrorUniverseGenerator;
+                $mirrorGenerator->generate($galaxy);
                 $mirrorGalaxy = $galaxy->fresh()->getPairedGalaxy();
 
                 if ($mirrorGalaxy && ! ($options['skip_precursors'] ?? false)) {
@@ -338,7 +338,7 @@ class TieredGalaxyCreationService
     private function seedPrerequisites(Galaxy $galaxy): void
     {
         if (\App\Models\Mineral::count() === 0) {
-            Artisan::call('db:seed', ['--class' => 'MineralSeeder']);
+            (new \Database\Seeders\MineralSeeder)->run();
         }
 
         if (\App\Models\Ship::count() === 0) {
@@ -348,7 +348,7 @@ class TieredGalaxyCreationService
         }
 
         if (\App\Models\Plan::count() === 0) {
-            Artisan::call('db:seed', ['--class' => 'PlansSeeder']);
+            (new \Database\Seeders\PlansSeeder)->run();
         }
 
         if (\App\Models\PirateFaction::count() === 0) {
@@ -358,7 +358,7 @@ class TieredGalaxyCreationService
         }
 
         if (\App\Models\PirateCaptain::count() === 0) {
-            Artisan::call('db:seed', ['--class' => 'PirateCaptainSeeder']);
+            (new \Database\Seeders\PirateCaptainSeeder)->run();
         }
     }
 

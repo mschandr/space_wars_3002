@@ -25,7 +25,6 @@ use Database\Seeders\PirateCaptainSeeder;
 use Database\Seeders\PirateFactionSeeder;
 use Database\Seeders\PlansSeeder;
 use Database\Seeders\ShipTypesSeeder;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -197,7 +196,7 @@ final class GalaxyGenerationOrchestrator
     private function seedPrerequisites(): void
     {
         if (\App\Models\Mineral::count() === 0) {
-            Artisan::call('db:seed', ['--class' => MineralSeeder::class]);
+            (new MineralSeeder)->run();
         }
 
         if (\App\Models\Ship::count() === 0) {
@@ -206,7 +205,7 @@ final class GalaxyGenerationOrchestrator
         }
 
         if (\App\Models\Plan::count() === 0) {
-            Artisan::call('db:seed', ['--class' => PlansSeeder::class]);
+            (new PlansSeeder)->run();
         }
 
         if (\App\Models\PirateFaction::count() === 0) {
@@ -215,7 +214,7 @@ final class GalaxyGenerationOrchestrator
         }
 
         if (\App\Models\PirateCaptain::count() === 0) {
-            Artisan::call('db:seed', ['--class' => PirateCaptainSeeder::class]);
+            (new PirateCaptainSeeder)->run();
         }
     }
 

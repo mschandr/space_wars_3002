@@ -207,10 +207,7 @@ class Colony extends Model
             return false;
         }
 
-        // TODO: (Inconsistent Pattern) Use $player->deductCredits($creditCost) instead of direct
-        // credit manipulation. Also wrap in DB::transaction() with the development upgrade.
-        $player->credits -= $creditCost;
-        $player->save();
+        $player->deductCredits($creditCost);
 
         // Upgrade
         $this->development_level++;

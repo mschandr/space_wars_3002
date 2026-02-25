@@ -6,7 +6,6 @@ use App\Models\Galaxy;
 use App\Models\Player;
 use App\Models\User;
 use App\Services\PlayerSpawnService;
-use App\Services\StarChartService;
 use Illuminate\Console\Command;
 
 class InitializePlayerCommand extends Command
@@ -68,40 +67,21 @@ class InitializePlayerCommand extends Command
             return 1;
         }
 
-        // Find an optimal starting location using PlayerSpawnService
         $spawnService = app(PlayerSpawnService::class);
-        $startingLocation = $spawnService->findOptimalSpawnLocation($galaxy);
 
-        if (! $startingLocation) {
-            $this->error("Could not find a suitable starting location in galaxy '{$galaxy->name}'.");
+        try {
+            $player = $spawnService->initializePlayer($galaxy, $user, $callSign);
+        } catch (\RuntimeException $e) {
+            $this->error($e->getMessage());
 
             return 1;
         }
 
+        $startingLocation = $player->currentLocation;
+        $spawnService->discoverSpawn($player, $startingLocation);
+
         // Get spawn location quality report
         $spawnReport = $spawnService->getSpawnLocationReport($startingLocation, $galaxy);
-
-        // Get starting credits from config
-        $startingCredits = config('game_config.ships.starting_credits', 10000);
-
-        // Create the player (no starter ship — player must buy their first ship at a shipyard)
-        $player = Player::create([
-            'user_id' => $userId,
-            'galaxy_id' => $galaxyId,
-            'call_sign' => $callSign,
-            'credits' => $startingCredits,
-            'experience' => 0,
-            'level' => 1,
-            'current_poi_id' => $startingLocation?->id,
-            'status' => 'active',
-        ]);
-
-        // Ensure a free Sparrow is available at the spawn location's shipyard
-        $spawnService->ensureStarterShipAvailable($startingLocation, $galaxy);
-
-        // Grant starting star charts
-        $chartService = app(StarChartService::class);
-        $chartsGranted = $chartService->grantStartingCharts($player);
 
         $this->info("Player '{$callSign}' initialized successfully!");
         $this->info("Galaxy: {$galaxy->name}");
@@ -121,11 +101,6 @@ class InitializePlayerCommand extends Command
         }
         $this->info("  Warp Gates: {$spawnReport['warp_gates']}");
         $this->info("  Nearby Trading Hubs (within 200 units): {$spawnReport['nearby_hubs']}");
-
-        if ($chartsGranted > 0) {
-            $this->newLine();
-            $this->info("Star charts granted: {$chartsGranted} nearby system(s)");
-        }
 
         return 0;
     }

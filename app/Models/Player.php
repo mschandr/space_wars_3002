@@ -178,17 +178,6 @@ class Player extends Model
     }
 
     /**
-     * Get scanned systems with their scan data.
-     */
-    public function getScannedSystems(): \Illuminate\Support\Collection
-    {
-        return $this->systemScans()
-            ->with('pointOfInterest')
-            ->orderBy('scanned_at', 'desc')
-            ->get();
-    }
-
-    /**
      * Get scan level for a specific POI.
      *
      * @param  PointOfInterest  $poi  The POI to check

@@ -65,8 +65,7 @@ class ColonyBuildingController extends BaseApiController
         }
 
         // Deduct costs
-        $player->credits -= $buildingConfig['cost']['credits'];
-        $player->save();
+        $player->deductCredits($buildingConfig['cost']['credits']);
 
         $colony->mineral_storage -= $buildingConfig['cost']['minerals'];
         $colony->save();
@@ -164,8 +163,7 @@ class ColonyBuildingController extends BaseApiController
         }
 
         // Deduct costs
-        $player->credits -= $creditCost;
-        $player->save();
+        $player->deductCredits($creditCost);
 
         $colony->mineral_storage -= $mineralCost;
         $colony->save();
@@ -212,8 +210,7 @@ class ColonyBuildingController extends BaseApiController
         }
 
         // Deduct costs
-        $player->credits -= $creditCost;
-        $player->save();
+        $player->deductCredits($creditCost);
 
         $colony->mineral_storage -= $mineralCost;
         $colony->save();

@@ -66,36 +66,10 @@ class PlayerController extends BaseApiController
         DB::beginTransaction();
         try {
             $spawnService = app(PlayerSpawnService::class);
-            $startingLocation = $spawnService->findOptimalSpawnLocation($galaxy);
 
-            if (! $startingLocation) {
-                DB::rollBack();
+            $player = $spawnService->initializePlayer($galaxy, $request->user(), $validated['call_sign']);
 
-                return $this->error(
-                    'No suitable starting location found in galaxy',
-                    'NO_STARTING_LOCATION'
-                );
-            }
-
-            // Get starting credits from config
-            $startingCredits = config('game_config.ships.starting_credits', 10000);
-
-            // Create player (no starter ship — player must buy their first ship at a shipyard)
-            $player = Player::create([
-                'user_id' => $request->user()->id,
-                'galaxy_id' => $galaxy->id,
-                'call_sign' => $validated['call_sign'],
-                'credits' => $startingCredits,
-                'experience' => 0,
-                'level' => 1,
-                'current_poi_id' => $startingLocation->id,
-                'status' => 'active',
-            ]);
-
-            // Ensure a free Sparrow is available at the spawn location's shipyard
-            $spawnService->ensureStarterShipAvailable($startingLocation, $galaxy);
-
-            // TODO: Give player starter star charts (3 nearest systems)
+            $spawnService->discoverSpawn($player, $player->currentLocation);
 
             DB::commit();
 

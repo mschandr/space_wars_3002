@@ -230,8 +230,7 @@ class ShipShopController extends BaseApiController
         }
 
         // Deduct credits
-        $player->credits -= $cost;
-        $player->save();
+        $player->deductCredits($cost);
 
         // Delete trade-in ship if applicable
         if ($tradedInShip) {

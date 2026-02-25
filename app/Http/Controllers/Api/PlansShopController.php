@@ -143,8 +143,7 @@ class PlansShopController extends BaseApiController
         }
 
         // Deduct credits
-        $player->credits -= $plan->price;
-        $player->save();
+        $player->deductCredits($plan->price);
 
         // Grant plan to player (attach with timestamp)
         $player->plans()->attach($plan->id, [

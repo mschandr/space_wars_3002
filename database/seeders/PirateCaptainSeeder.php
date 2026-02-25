@@ -55,6 +55,6 @@ class PirateCaptainSeeder extends Seeder
             }
         }
 
-        $this->command->info("Created {$totalCaptains} pirate captains across {$factions->count()} factions");
+        $this->command?->info("Created {$totalCaptains} pirate captains across {$factions->count()} factions");
     }
 }

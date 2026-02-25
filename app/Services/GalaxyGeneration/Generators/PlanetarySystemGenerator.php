@@ -479,10 +479,14 @@ final class PlanetarySystemGenerator implements GeneratorInterface
     private function getMoonCount(int $typeValue): int
     {
         return match ($typeValue) {
-            PointOfInterestType::GAS_GIANT->value => random_int(2, 6),
-            PointOfInterestType::ICE_GIANT->value => random_int(1, 4),
-            PointOfInterestType::SUPER_EARTH->value => random_int(0, 2),
-            PointOfInterestType::TERRESTRIAL->value => random_int(0, 1),
+            PointOfInterestType::GAS_GIANT->value => random_int(3, 8),
+            PointOfInterestType::ICE_GIANT->value => random_int(2, 6),
+            PointOfInterestType::SUPER_EARTH->value => random_int(0, 3),
+            PointOfInterestType::TERRESTRIAL->value => random_int(0, 2),
+            PointOfInterestType::OCEAN->value => random_int(0, 2),
+            PointOfInterestType::LAVA->value => random_int(0, 1),
+            PointOfInterestType::CHTHONIC->value => random_int(0, 2),
+            PointOfInterestType::DWARF_PLANET->value => random_int(0, 1),
             default => 0,
         };
     }
@@ -501,129 +505,6 @@ final class PlanetarySystemGenerator implements GeneratorInterface
     }
 
     /**
-     * Generate planetary system for a star.
-     */
-    private function generatePlanetarySystem(PointOfInterest $star, int $planetCount, $now): array
-    {
-        $bodies = [];
-
-        for ($i = 1; $i <= $planetCount; $i++) {
-            $type = $this->determinePlanetType($i, $planetCount);
-            $moonCount = $this->determineMoonCount($type);
-
-            $bodies[] = [
-                'row' => [
-                    'uuid' => (string) Str::uuid(),
-                    'galaxy_id' => $star->galaxy_id,
-                    'parent_poi_id' => $star->id,
-                    'orbital_index' => $i,
-                    'type' => $type->value,
-                    'status' => PointOfInterestStatus::ACTIVE->value,
-                    'x' => $star->x,
-                    'y' => $star->y,
-                    'name' => "{$star->name} ".(self::ROMAN_NUMERALS[$i] ?? $i),
-                    'attributes' => json_encode([
-                        'orbital_distance' => $i * 10 + random_int(0, 5),
-                        'size' => $this->getPlanetSize($type),
-                    ]),
-                    'is_hidden' => false,
-                    'is_inhabited' => false,
-                    'region' => RegionType::OUTER->value,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ],
-                'moon_count' => $moonCount,
-            ];
-        }
-
-        // Add asteroid belt (70% chance)
-        if (random_int(0, 100) < 70 && $planetCount >= 5) {
-            $beltIndex = random_int(3, $planetCount - 2);
-            $bodies[] = [
-                'row' => [
-                    'uuid' => (string) Str::uuid(),
-                    'galaxy_id' => $star->galaxy_id,
-                    'parent_poi_id' => $star->id,
-                    'orbital_index' => $beltIndex,
-                    'type' => PointOfInterestType::ASTEROID_BELT->value,
-                    'status' => PointOfInterestStatus::ACTIVE->value,
-                    'x' => $star->x,
-                    'y' => $star->y,
-                    'name' => "{$star->name} Asteroid Belt",
-                    'attributes' => json_encode([
-                        'orbital_distance' => $beltIndex * 10 + random_int(0, 5),
-                        'density' => ['sparse', 'moderate', 'dense'][random_int(0, 2)],
-                    ]),
-                    'is_hidden' => false,
-                    'is_inhabited' => false,
-                    'region' => RegionType::OUTER->value,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ],
-                'moon_count' => 0,
-            ];
-        }
-
-        return $bodies;
-    }
-
-    /**
-     * Determine planet type based on orbital position.
-     */
-    private function determinePlanetType(int $orbitalIndex, int $totalPlanets): PointOfInterestType
-    {
-        // Inner planets (1-2): Rocky
-        if ($orbitalIndex <= 2) {
-            return random_int(0, 100) < 70
-                ? PointOfInterestType::TERRESTRIAL
-                : PointOfInterestType::LAVA;
-        }
-
-        // Outer planets (last 2): Gas/Ice giants
-        if ($orbitalIndex >= $totalPlanets - 1) {
-            return random_int(0, 100) < 60
-                ? PointOfInterestType::ICE_GIANT
-                : PointOfInterestType::GAS_GIANT;
-        }
-
-        // Middle planets: Mixed
-        $types = [
-            PointOfInterestType::TERRESTRIAL,
-            PointOfInterestType::GAS_GIANT,
-            PointOfInterestType::ICE_GIANT,
-            PointOfInterestType::SUPER_EARTH,
-            PointOfInterestType::OCEAN,
-        ];
-
-        return $types[array_rand($types)];
-    }
-
-    /**
-     * Determine moon count based on planet type.
-     */
-    private function determineMoonCount(PointOfInterestType $type): int
-    {
-        return match ($type) {
-            PointOfInterestType::GAS_GIANT, PointOfInterestType::ICE_GIANT => random_int(2, 6),
-            PointOfInterestType::TERRESTRIAL, PointOfInterestType::SUPER_EARTH => random_int(0, 100) < 30 ? random_int(1, 2) : 0,
-            default => 0,
-        };
-    }
-
-    /**
-     * Get planet size based on type.
-     */
-    private function getPlanetSize(PointOfInterestType $type): string
-    {
-        return match ($type) {
-            PointOfInterestType::GAS_GIANT, PointOfInterestType::HOT_JUPITER => 'massive',
-            PointOfInterestType::ICE_GIANT, PointOfInterestType::SUPER_EARTH => 'large',
-            PointOfInterestType::TERRESTRIAL, PointOfInterestType::OCEAN, PointOfInterestType::LAVA => 'medium',
-            default => 'small',
-        };
-    }
-
-    /**
      * Get moon size weighted by parent planet type.
      */
     private function getMoonSize(int $parentType): string
@@ -635,8 +516,11 @@ final class PlanetarySystemGenerator implements GeneratorInterface
             PointOfInterestType::ICE_GIANT->value => [
                 'tiny' => 20, 'small' => 40, 'medium' => 30, 'large' => 10,
             ],
-            PointOfInterestType::SUPER_EARTH->value => [
+            PointOfInterestType::SUPER_EARTH->value, PointOfInterestType::OCEAN->value => [
                 'tiny' => 40, 'small' => 45, 'medium' => 15,
+            ],
+            PointOfInterestType::CHTHONIC->value, PointOfInterestType::LAVA->value => [
+                'tiny' => 50, 'small' => 40, 'medium' => 10,
             ],
             default => [
                 'tiny' => 60, 'small' => 35, 'medium' => 5,
@@ -674,7 +558,19 @@ final class PlanetarySystemGenerator implements GeneratorInterface
             ]);
         }
 
-        // Terrestrial, Super Earth, and others
+        if ($parentType === PointOfInterestType::OCEAN->value) {
+            return $this->weightedPickString([
+                'icy' => 50, 'rocky' => 35, 'habitable' => 10, 'forest' => 5,
+            ]);
+        }
+
+        if ($parentType === PointOfInterestType::LAVA->value || $parentType === PointOfInterestType::CHTHONIC->value) {
+            return $this->weightedPickString([
+                'rocky' => 55, 'volcanic' => 40, 'icy' => 5,
+            ]);
+        }
+
+        // Terrestrial, Super Earth, Dwarf Planet, and others
         return $this->weightedPickString([
             'rocky' => 70, 'icy' => 29, 'habitable' => 1,
         ]);

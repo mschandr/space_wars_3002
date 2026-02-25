@@ -4,16 +4,78 @@ namespace App\Services;
 
 use App\Enums\PointsOfInterest\PointOfInterestStatus;
 use App\Enums\PointsOfInterest\PointOfInterestType;
+use App\Http\Controllers\Api\Builders\SystemNameGenerator;
 use App\Models\Galaxy;
+use App\Models\Player;
 use App\Models\PointOfInterest;
 use App\Models\Ship;
 use App\Models\StellarCartographer;
 use App\Models\TradingHub;
 use App\Models\TradingHubShip;
+use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class PlayerSpawnService
 {
+    /**
+     * Create and fully initialize a new player in a galaxy.
+     *
+     * Finds an optimal spawn location, ensures services are available,
+     * and creates the Player record. Call discoverSpawn() after this
+     * to set up star charts, scans, and lane knowledge.
+     */
+    public function initializePlayer(Galaxy $galaxy, User $user, string $callSign): Player
+    {
+        $startingLocation = $this->findOptimalSpawnLocation($galaxy);
+
+        if (! $startingLocation) {
+            throw new \RuntimeException('No suitable starting location found in galaxy');
+        }
+
+        $this->ensureSuperHub($startingLocation, $galaxy);
+
+        $startingCredits = config('game_config.ships.starting_credits', 10000);
+
+        return Player::create([
+            'user_id' => $user->id,
+            'galaxy_id' => $galaxy->id,
+            'call_sign' => $callSign,
+            'credits' => $startingCredits,
+            'experience' => 0,
+            'level' => 1,
+            'current_poi_id' => $startingLocation->id,
+            'status' => 'active',
+        ]);
+    }
+
+    /**
+     * Set up spawn discovery for a newly created player.
+     *
+     * Ensures the spawn system is named, scanned, and charted,
+     * and grants starting star charts for nearby systems.
+     */
+    public function discoverSpawn(Player $player, PointOfInterest $spawnLocation): void
+    {
+        SystemNameGenerator::ensureName($spawnLocation);
+
+        app(SystemScanService::class)->ensureMinimumScan($player, $spawnLocation, 1);
+
+        app(LaneKnowledgeService::class)->discoverOutgoingGates($player, $spawnLocation->id, 'spawn');
+
+        DB::table('player_star_charts')->insert([
+            'player_id' => $player->id,
+            'revealed_poi_id' => $spawnLocation->id,
+            'purchased_from_poi_id' => $spawnLocation->id,
+            'price_paid' => 0.00,
+            'purchased_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        app(StarChartService::class)->grantStartingCharts($player);
+    }
+
     /**
      * Find an optimal spawn location for a new player
      *

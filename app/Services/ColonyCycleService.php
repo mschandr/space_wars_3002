@@ -102,11 +102,8 @@ class ColonyCycleService
             }
 
             // 3. Apply credits generated to player
-            // TODO: (Inconsistent Pattern) Use a consistent method for adding credits (e.g., $player->addCredits())
-            // instead of direct manipulation. This bypasses any credit-related business logic.
             if ($creditsGenerated > 0) {
-                $colony->player->credits += $creditsGenerated;
-                $colony->player->save();
+                $colony->player->addCredits($creditsGenerated);
                 $log[] = "Credits generated: +{$creditsGenerated}";
             }
 

@@ -371,8 +371,7 @@ class ColonyBuilding extends Model
         }
 
         // Deduct costs
-        $player->credits -= $costs['credits'];
-        $player->save();
+        $player->deductCredits($costs['credits']);
 
         // Upgrade
         $this->level = $newLevel;

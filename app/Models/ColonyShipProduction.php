@@ -127,8 +127,7 @@ class ColonyShipProduction extends Model
         $refundAmount = (int) ($this->production_cost_credits * ($this->production_progress / 100) * 0.5);
 
         $player = $this->player;
-        $player->credits += $refundAmount;
-        $player->save();
+        $player->addCredits($refundAmount);
 
         // Advance queue
         $this->colony->shipProduction()

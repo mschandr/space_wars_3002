@@ -140,8 +140,7 @@ class ColonyCombatController extends BaseApiController
         }
 
         // Deduct credits
-        $player->credits -= $credits;
-        $player->save();
+        $player->deductCredits($credits);
 
         // Increase defenses based on investment
         $defenseIncrease = (int) ($credits / 100);

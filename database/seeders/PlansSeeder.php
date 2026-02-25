@@ -192,6 +192,6 @@ class PlansSeeder extends Seeder
             Plan::create($planData);
         }
 
-        $this->command->info('Successfully created '.count($plans).' upgrade plans.');
+        $this->command?->info('Successfully created '.count($plans).' upgrade plans.');
     }
 }

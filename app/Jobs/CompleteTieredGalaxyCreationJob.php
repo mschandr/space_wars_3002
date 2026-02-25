@@ -134,7 +134,8 @@ class CompleteTieredGalaxyCreationJob implements ShouldQueue
             $mirrorGalaxy = null;
             if (! ($this->options['skip_mirror'] ?? false) && config('game_config.mirror_universe.enabled', true)) {
                 $this->updateProgress($galaxy, 15, 'Generating mirror universe', 95);
-                Artisan::call('galaxy:create-mirror', ['galaxy' => $galaxy->id]);
+                $mirrorGenerator = new \App\Services\GalaxyGeneration\Generators\MirrorUniverseGenerator;
+                $mirrorGenerator->generate($galaxy);
                 $mirrorGalaxy = $galaxy->fresh()->getPairedGalaxy();
 
                 if ($mirrorGalaxy && ! ($this->options['skip_precursors'] ?? false)) {

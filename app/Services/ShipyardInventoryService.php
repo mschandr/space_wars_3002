@@ -10,6 +10,7 @@ use App\Models\Ship;
 use App\Models\ShipyardInventory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class ShipyardInventoryService
@@ -35,6 +36,8 @@ class ShipyardInventoryService
     /**
      * Generate shipyard inventory for a POI.
      *
+     * Always includes a free Sparrow-class starter ship, plus random rarity-rolled ships.
+     *
      * @return int Number of ships generated
      */
     public function generateInventory(PointOfInterest $shipyardPoi): int
@@ -47,8 +50,13 @@ class ShipyardInventoryService
             return 0;
         }
 
-        $count = $this->determineInventoryCount($shipyardPoi);
         $created = 0;
+
+        // Always generate a free Sparrow-class starter ship
+        $created += $this->generateFreeStarterShip($shipyardPoi);
+
+        // Generate random rarity-rolled ships
+        $count = $this->determineInventoryCount($shipyardPoi);
 
         for ($i = 0; $i < $count; $i++) {
             $blueprint = $blueprints->random();
@@ -91,6 +99,52 @@ class ShipyardInventoryService
     }
 
     /**
+     * Generate a free Sparrow-class starter ship in the shipyard inventory.
+     *
+     * @return int 1 if created, 0 if starter blueprint not found
+     */
+    private function generateFreeStarterShip(PointOfInterest $shipyardPoi): int
+    {
+        $starterBlueprint = Ship::where('class', 'starter')
+            ->orWhere('attributes->is_starter', true)
+            ->first();
+
+        if (! $starterBlueprint) {
+            Log::warning('No starter ship blueprint found for shipyard inventory generation', [
+                'poi_id' => $shipyardPoi->id,
+            ]);
+
+            return 0;
+        }
+
+        $stats = $this->rarityService->applyRarityToShipStats($starterBlueprint, RarityTier::COMMON);
+        $variation = $this->variationService->generateVariation($starterBlueprint, 'standard');
+
+        ShipyardInventory::create([
+            'uuid' => (string) Str::uuid(),
+            'poi_id' => $shipyardPoi->id,
+            'ship_id' => $starterBlueprint->id,
+            'name' => $starterBlueprint->name,
+            'rarity' => RarityTier::COMMON->value,
+            'price' => 0,
+            'hull_strength' => $stats['hull_strength'],
+            'shield_strength' => $stats['shield_strength'],
+            'cargo_capacity' => $stats['cargo_capacity'],
+            'speed' => $stats['speed'],
+            'weapon_slots' => $stats['weapon_slots'],
+            'utility_slots' => $stats['utility_slots'],
+            'max_fuel' => $stats['max_fuel'],
+            'sensors' => $stats['sensors'],
+            'warp_drive' => $stats['warp_drive'],
+            'weapons' => $stats['weapons'],
+            'variation_traits' => $variation['traits'],
+            'attributes' => $starterBlueprint->attributes,
+        ]);
+
+        return 1;
+    }
+
+    /**
      * Get available (unsold) ships at a shipyard.
      */
     public function getAvailableShips(PointOfInterest $shipyardPoi): Collection
@@ -126,8 +180,7 @@ class ShipyardInventoryService
         }
 
         return DB::transaction(function () use ($player, $item, $name) {
-            $player->credits -= (float) $item->price;
-            $player->save();
+            $player->deductCredits((float) $item->price);
 
             $playerShip = $this->purchaseService->createShipFromInventory($player, $item, $name);
 

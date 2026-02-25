@@ -241,8 +241,7 @@ class PrecursorRumorService
         //       Priority: Low (pre-release)
 
         // Process the bribe
-        $player->credits -= $hub->precursor_bribe_cost;
-        $player->save();
+        $player->deductCredits($hub->precursor_bribe_cost);
 
         // Record the rumor
         PlayerPrecursorRumor::create([
