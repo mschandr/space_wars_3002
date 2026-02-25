@@ -323,7 +323,8 @@ class PlayerShip extends Model
         $regenModifier = $this->fuel_regen_modifier ?? 1.0;
         $componentRegenBonus = $this->getComponentEffectTotal('fuel_regen');
         $warpDriveBonus = 1 + ($this->warp_drive - 1) * 0.3;
-        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / ($regenModifier * $warpDriveBonus * (1 + $componentRegenBonus))));
+        $denominator = $regenModifier * $warpDriveBonus * (1 + $componentRegenBonus);
+        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / max(0.01, $denominator)));
 
         $fuelToRegenerate = (int) floor($secondsElapsed / $effectiveRegenRate);
 
@@ -398,7 +399,8 @@ class PlayerShip extends Model
         $regenModifier = $this->fuel_regen_modifier ?? 1.0;
         $componentRegenBonus = $this->getComponentEffectTotal('fuel_regen');
         $warpDriveBonus = 1 + ($this->warp_drive - 1) * 0.3;
-        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / ($regenModifier * $warpDriveBonus * (1 + $componentRegenBonus))));
+        $denominator = $regenModifier * $warpDriveBonus * (1 + $componentRegenBonus);
+        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / max(0.01, $denominator)));
 
         return $fuelNeeded * $effectiveRegenRate;
     }

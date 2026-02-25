@@ -50,7 +50,12 @@ class ShipPurchaseService
         }
 
         return DB::transaction(function () use ($player, $blueprint, $name, $quality) {
-            $player->deductCredits($blueprint->base_price);
+            if (! $player->deductCredits($blueprint->base_price)) {
+                return [
+                    'success' => false,
+                    'error' => 'Insufficient credits. Need '.number_format($blueprint->base_price).' credits.',
+                ];
+            }
 
             // Create the ship instance
             $playerShip = $this->createShipInstance($player, $blueprint, $name, $quality);

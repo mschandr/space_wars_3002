@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Mineral;
 use App\Models\Plan;
 use App\Models\Ship;
 use App\Models\TradingHub;
@@ -183,10 +184,10 @@ class TradingHubPopulateInventory extends Command
 
             // Each shipyard gets 2-6 ship types based on tier
             $shipCount = match ($hub->getTier()) {
-                'premium' => rand(5, $ships->count()),
-                'major' => rand(3, 6),
-                'standard' => rand(2, 4),
-                default => 2,
+                'premium' => rand(min(5, $ships->count()), $ships->count()),
+                'major' => rand(3, min(6, $ships->count())),
+                'standard' => rand(2, min(4, $ships->count())),
+                default => min(2, $ships->count()),
             };
 
             $availableShips = $ships->random(min($shipCount, $ships->count()));

@@ -109,7 +109,13 @@ class ComponentUpgradeService
         }
 
         return DB::transaction(function () use ($player, $installed, $cost) {
-            $player->deductCredits($cost);
+            if (! $player->deductCredits($cost)) {
+                return [
+                    'success' => false,
+                    'message' => 'Insufficient credits for upgrade.',
+                    'cost' => $cost,
+                ];
+            }
 
             $installed->upgrade_level = ($installed->upgrade_level ?? 0) + 1;
             $installed->save();

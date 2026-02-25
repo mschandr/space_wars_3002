@@ -163,15 +163,8 @@ class ShipyardInventoryService
      */
     public function purchaseShip(Player $player, ShipyardInventory $item, ?string $name = null): array
     {
-        if ($item->is_sold) {
-            return ['success' => false, 'error' => 'This ship has already been sold.'];
-        }
-
-        if ($player->credits < $item->price) {
-            return [
-                'success' => false,
-                'error' => 'Insufficient credits. Need '.number_format((float) $item->price).' credits.',
-            ];
+        if ($item->poi_id && $item->poi_id !== $player->current_poi_id) {
+            return ['success' => false, 'error' => 'You must be at this shipyard to purchase a ship.'];
         }
 
         $blueprint = $item->ship;
@@ -180,12 +173,25 @@ class ShipyardInventoryService
         }
 
         return DB::transaction(function () use ($player, $item, $name) {
-            $player->deductCredits((float) $item->price);
+            $lockedItem = ShipyardInventory::where('id', $item->id)->lockForUpdate()->first();
 
-            $playerShip = $this->purchaseService->createShipFromInventory($player, $item, $name);
+            if (! $lockedItem || $lockedItem->is_sold) {
+                return ['success' => false, 'error' => 'This ship has already been sold.'];
+            }
 
-            $item->is_sold = true;
-            $item->save();
+            if ($player->credits < $lockedItem->price) {
+                return [
+                    'success' => false,
+                    'error' => 'Insufficient credits. Need '.number_format((float) $lockedItem->price).' credits.',
+                ];
+            }
+
+            $player->deductCredits((float) $lockedItem->price);
+
+            $playerShip = $this->purchaseService->createShipFromInventory($player, $lockedItem, $name);
+
+            $lockedItem->is_sold = true;
+            $lockedItem->save();
 
             return ['success' => true, 'ship' => $playerShip];
         });

@@ -120,7 +120,13 @@ class ShipRepairService
         }
 
         return DB::transaction(function () use ($player, $ship, $cost, $hullDamage) {
-            $player->deductCredits($cost);
+            if (! $player->deductCredits($cost)) {
+                return [
+                    'success' => false,
+                    'message' => 'Insufficient credits for hull repair',
+                    'cost' => $cost,
+                ];
+            }
 
             // Repair hull
             $ship->hull = $ship->max_hull;
@@ -161,7 +167,13 @@ class ShipRepairService
         }
 
         return DB::transaction(function () use ($player, $ship, $downgraded, $totalCost) {
-            $player->deductCredits($totalCost);
+            if (! $player->deductCredits($totalCost)) {
+                return [
+                    'success' => false,
+                    'message' => 'Insufficient credits for component repair',
+                    'cost' => $totalCost,
+                ];
+            }
 
             // Repair each component
             $repaired = [];

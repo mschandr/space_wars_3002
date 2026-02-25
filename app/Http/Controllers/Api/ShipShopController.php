@@ -96,10 +96,10 @@ class ShipShopController extends BaseApiController
 
         $tier = $tradingHub->getTier();
         $shipCount = match ($tier) {
-            'premium' => rand(5, $ships->count()),
-            'major' => rand(3, 6),
-            'standard' => rand(2, 4),
-            default => 2,
+            'premium' => rand(min(5, $ships->count()), $ships->count()),
+            'major' => rand(3, min(6, $ships->count())),
+            'standard' => rand(2, min(4, $ships->count())),
+            default => min(2, $ships->count()),
         };
 
         $availableShips = $ships->random(min($shipCount, $ships->count()));
