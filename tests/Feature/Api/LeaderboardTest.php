@@ -3,7 +3,6 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Colony;
-use App\Models\CombatSession;
 use App\Models\Galaxy;
 use App\Models\Player;
 use App\Models\PlayerShip;
@@ -18,8 +17,18 @@ class LeaderboardTest extends TestCase
     use RefreshDatabase;
 
     private Galaxy $galaxy;
-    private User $user1, $user2, $user3;
-    private Player $player1, $player2, $player3;
+
+    private User $user1;
+
+    private User $user2;
+
+    private User $user3;
+
+    private Player $player1;
+
+    private Player $player2;
+
+    private Player $player3;
 
     protected function setUp(): void
     {

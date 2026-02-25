@@ -4,7 +4,6 @@ namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 use Assert\AssertionFailedException;
 
 /**
@@ -110,12 +109,7 @@ final class PoissonDisk extends AbstractPointGenerator implements PointGenerator
         foreach ($snapped as $p) {
             $uniq[$p[0].','.$p[1]] = $p;
         }
-        if (config('game_config.feature.persist_data')) {
-            PointOfInterest::createPointsForGalaxy($galaxy, array_values($uniq));
-
-            // Generate star systems (planets, moons, asteroids)
-            $this->generateStarSystems($galaxy);
-        }
+        $this->persistIfEnabled($galaxy, array_values($uniq));
 
         return array_values($uniq);
     }

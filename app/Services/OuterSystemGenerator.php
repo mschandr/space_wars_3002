@@ -17,9 +17,9 @@ use Illuminate\Support\Str;
 /**
  * Generates outer (frontier) region systems for tiered galaxies.
  *
- * Outer systems are:
- * - 0% inhabited (wilderness)
- * - No defenses
+ * Outer systems are probabilistically:
+ * - 20% charted, 2% inhabited
+ * - Inhabited systems get defenses and trading posts
  * - Large stars with many planets, moons, and ice giants
  * - Rich mineral deposits (2x richness)
  * - Dormant warp gates requiring activation
@@ -47,9 +47,16 @@ class OuterSystemGenerator
             ? trim(file_get_contents(base_path('VERSION')))
             : null;
 
+        $chartedPct = RegionType::OUTER->getChartedPercentage();
+        $inhabitedPct = RegionType::OUTER->getInhabitedPercentage();
+
         // Batch insert for performance
         $batchData = [];
         foreach ($points as $point) {
+            $isCharted = (random_int(1, 10000) / 10000) <= $chartedPct;
+            $isInhabited = $isCharted && $chartedPct > 0
+                && (random_int(1, 10000) / 10000) <= ($inhabitedPct / $chartedPct);
+
             $batchData[] = [
                 'uuid' => (string) Str::uuid(),
                 'galaxy_id' => $galaxy->id,
@@ -63,7 +70,8 @@ class OuterSystemGenerator
                     'stellar_size' => $this->randomStellarSize(),
                 ]),
                 'is_hidden' => false,
-                'is_inhabited' => false,
+                'is_inhabited' => $isInhabited,
+                'is_charted' => $isCharted,
                 'region' => RegionType::OUTER->value,
                 'is_fortified' => false,
                 'version' => $version,

@@ -43,14 +43,19 @@ class ColonyController extends BaseApiController
         $this->authorizePlayer($player, $request->user());
 
         $validated = $request->validate([
-            'poi_uuid' => 'required|exists:points_of_interest,uuid',
+            'uuid' => 'sometimes|exists:points_of_interest,uuid',
+            'poi_uuid' => 'sometimes|exists:points_of_interest,uuid',
             'name' => 'required|string|max:100',
         ]);
 
-        $poi = PointOfInterest::where('uuid', $validated['poi_uuid'])->firstOrFail();
+        $poiUuid = $validated['uuid'] ?? $validated['poi_uuid'] ?? null;
+        if (! $poiUuid) {
+            return $this->validationError(['uuid' => 'A system UUID is required']);
+        }
+        $poi = PointOfInterest::where('uuid', $poiUuid)->firstOrFail();
 
         // Validate POI is suitable for colonization
-        if (!in_array($poi->type, [PointOfInterestType::PLANET, PointOfInterestType::MOON])) {
+        if (! in_array($poi->type, [PointOfInterestType::PLANET, PointOfInterestType::MOON])) {
             return $this->error('Only planets and moons can be colonized', 'INVALID_POI', null, 400);
         }
 
@@ -200,8 +205,7 @@ class ColonyController extends BaseApiController
         }
 
         // Deduct costs
-        $player->credits -= $creditCost;
-        $player->save();
+        $player->deductCredits($creditCost);
 
         $colony->mineral_storage -= $mineralCost;
         $colony->development_level++;
@@ -228,7 +232,7 @@ class ColonyController extends BaseApiController
     {
         $colony = Colony::where('uuid', $uuid)->firstOrFail();
 
-        if (!$colony->hasShipyard()) {
+        if (! $colony->hasShipyard()) {
             return $this->success([
                 'has_shipyard' => false,
                 'queue' => [],

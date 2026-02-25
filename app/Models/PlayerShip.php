@@ -2,23 +2,33 @@
 
 namespace App\Models;
 
+use App\Enums\SlotType;
+use App\Models\Traits\HasUuid;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class PlayerShip extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
-    const FUEL_REGEN_RATE = 30; // seconds per fuel point
+    const FUEL_REGEN_RATE_DEFAULT = 30; // fallback if config missing
+
+    /**
+     * Get base fuel regen rate (seconds per fuel unit) from config.
+     */
+    public static function fuelRegenRate(): int
+    {
+        return (int) config('game_config.ships.fuel_regen_seconds_per_unit', self::FUEL_REGEN_RATE_DEFAULT);
+    }
 
     protected $fillable = [
         'uuid',
         'player_id',
         'ship_id',
+        'current_poi_id',
         'name',
         'current_fuel',
         'max_fuel',
@@ -31,6 +41,13 @@ class PlayerShip extends Model
         'warp_drive',
         'weapon_slots',
         'utility_slots',
+        'engine_slots',
+        'reactor_slots',
+        'hull_plating_slots',
+        'shield_slots',
+        'sensor_slots',
+        'cargo_module_slots',
+        'size_class',
         'shield_strength',
         'fuel_regen_modifier',
         'fuel_consumption_modifier',
@@ -57,6 +74,12 @@ class PlayerShip extends Model
         'warp_drive' => 'integer',
         'weapon_slots' => 'integer',
         'utility_slots' => 'integer',
+        'engine_slots' => 'integer',
+        'reactor_slots' => 'integer',
+        'hull_plating_slots' => 'integer',
+        'shield_slots' => 'integer',
+        'sensor_slots' => 'integer',
+        'cargo_module_slots' => 'integer',
         'shield_strength' => 'integer',
         'fuel_regen_modifier' => 'float',
         'fuel_consumption_modifier' => 'float',
@@ -74,9 +97,9 @@ class PlayerShip extends Model
     {
         parent::boot();
 
-        static::creating(function ($playerShip) {
-            if (empty($playerShip->uuid)) {
-                $playerShip->uuid = Str::uuid();
+        static::retrieved(function ($playerShip) {
+            if ($playerShip->is_active) {
+                $playerShip->regenerateFuel();
             }
         });
     }
@@ -89,6 +112,11 @@ class PlayerShip extends Model
     public function ship(): BelongsTo
     {
         return $this->belongsTo(Ship::class);
+    }
+
+    public function currentLocation(): BelongsTo
+    {
+        return $this->belongsTo(PointOfInterest::class, 'current_poi_id');
     }
 
     public function cargo(): HasMany
@@ -113,13 +141,21 @@ class PlayerShip extends Model
     }
 
     /**
+     * Get installed components of a specific slot type.
+     */
+    public function componentsOfType(SlotType $type): HasMany
+    {
+        return $this->hasMany(PlayerShipComponent::class)->where('slot_type', $type->value);
+    }
+
+    /**
      * Get installed weapon components.
      *
      * Note: Named weaponComponents() to avoid shadowing the 'weapons' integer attribute.
      */
     public function weaponComponents(): HasMany
     {
-        return $this->hasMany(PlayerShipComponent::class)->where('slot_type', 'weapon_slot');
+        return $this->componentsOfType(SlotType::WEAPON);
     }
 
     /**
@@ -129,7 +165,23 @@ class PlayerShip extends Model
      */
     public function utilityComponents(): HasMany
     {
-        return $this->hasMany(PlayerShipComponent::class)->where('slot_type', 'utility_slot');
+        return $this->componentsOfType(SlotType::UTILITY);
+    }
+
+    /**
+     * Get number of available slots for a given slot type.
+     */
+    public function getAvailableSlots(SlotType $type): int
+    {
+        $usedSlots = $this->components()
+            ->where('slot_type', $type->value)
+            ->with('component')
+            ->get()
+            ->sum(fn ($c) => $c->component->slots_required ?? 1);
+
+        $totalSlots = (int) ($this->{$type->slotColumn()} ?? 0);
+
+        return max(0, $totalSlots - $usedSlots);
     }
 
     /**
@@ -137,13 +189,7 @@ class PlayerShip extends Model
      */
     public function getAvailableWeaponSlots(): int
     {
-        $usedSlots = $this->components()
-            ->where('slot_type', 'weapon_slot')
-            ->with('component')
-            ->get()
-            ->sum(fn ($c) => $c->component->slots_required ?? 1);
-
-        return max(0, ($this->weapon_slots ?? 0) - $usedSlots);
+        return $this->getAvailableSlots(SlotType::WEAPON);
     }
 
     /**
@@ -151,13 +197,75 @@ class PlayerShip extends Model
      */
     public function getAvailableUtilitySlots(): int
     {
-        $usedSlots = $this->components()
-            ->where('slot_type', 'utility_slot')
-            ->with('component')
-            ->get()
-            ->sum(fn ($c) => $c->component->slots_required ?? 1);
+        return $this->getAvailableSlots(SlotType::UTILITY);
+    }
 
-        return max(0, ($this->utility_slots ?? 0) - $usedSlots);
+    // =========================================================================
+    // EFFECTIVE STATS (base column + component effects)
+    // =========================================================================
+
+    /**
+     * Sum a specific effect key across all installed components.
+     */
+    public function getComponentEffectTotal(string $effectKey): float
+    {
+        if (! $this->relationLoaded('components')) {
+            $this->load('components.component');
+        }
+
+        return $this->components->sum(function ($playerComponent) use ($effectKey) {
+            $effects = $playerComponent->component->effects ?? [];
+
+            return (float) ($effects[$effectKey] ?? 0);
+        });
+    }
+
+    /**
+     * Effective cargo hold: base cargo_hold + cargo_boost from components.
+     */
+    public function getEffectiveCargoHold(): int
+    {
+        return $this->cargo_hold + (int) $this->getComponentEffectTotal('cargo_boost');
+    }
+
+    /**
+     * Effective max hull: base max_hull + hull_boost from components.
+     */
+    public function getEffectiveMaxHull(): int
+    {
+        return $this->max_hull + (int) $this->getComponentEffectTotal('hull_boost');
+    }
+
+    /**
+     * Effective shield strength: base shield_strength + shield_boost from components.
+     */
+    public function getEffectiveShieldStrength(): int
+    {
+        return ($this->shield_strength ?? 0) + (int) $this->getComponentEffectTotal('shield_boost');
+    }
+
+    /**
+     * Effective max fuel: base max_fuel + fuel_capacity from components.
+     */
+    public function getEffectiveMaxFuel(): int
+    {
+        return $this->max_fuel + (int) $this->getComponentEffectTotal('fuel_capacity');
+    }
+
+    /**
+     * Effective sensor level: base sensors + sensor_boost from components.
+     */
+    public function getEffectiveSensors(): int
+    {
+        return $this->sensors + (int) $this->getComponentEffectTotal('sensor_boost');
+    }
+
+    /**
+     * Available cargo space using effective stats.
+     */
+    public function getAvailableCargoSpace(): int
+    {
+        return $this->getEffectiveCargoHold() - $this->current_cargo;
     }
 
     /**
@@ -195,10 +303,15 @@ class PlayerShip extends Model
     /**
      * Calculate and update fuel based on time elapsed.
      * Applies fuel_regen_modifier for ship variations (e.g., 1.2 = 20% faster, 0.8 = 20% slower)
+     *
+     * Auto-triggered via the Eloquent 'retrieved' event in boot(), so fuel is always
+     * up-to-date whenever a PlayerShip is loaded from the database.
      */
     public function regenerateFuel(): void
     {
-        if ($this->current_fuel >= $this->max_fuel) {
+        $effectiveMaxFuel = $this->getEffectiveMaxFuel();
+
+        if ($this->current_fuel >= $effectiveMaxFuel) {
             return;
         }
 
@@ -206,14 +319,17 @@ class PlayerShip extends Model
         $lastUpdate = Carbon::parse($this->fuel_last_updated_at);
         $secondsElapsed = (int) abs($now->diffInSeconds($lastUpdate));
 
-        // Apply fuel regen modifier (higher modifier = faster regen = lower seconds per fuel)
+        // Apply fuel regen modifier and warp drive bonus (higher = faster regen = lower seconds per fuel)
         $regenModifier = $this->fuel_regen_modifier ?? 1.0;
-        $effectiveRegenRate = max(5, (int) (self::FUEL_REGEN_RATE / $regenModifier));
+        $componentRegenBonus = $this->getComponentEffectTotal('fuel_regen');
+        $warpDriveBonus = 1 + ($this->warp_drive - 1) * 0.3;
+        $denominator = $regenModifier * $warpDriveBonus * (1 + $componentRegenBonus);
+        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / max(0.01, $denominator)));
 
         $fuelToRegenerate = (int) floor($secondsElapsed / $effectiveRegenRate);
 
         if ($fuelToRegenerate > 0) {
-            $this->current_fuel = min($this->max_fuel, $this->current_fuel + $fuelToRegenerate);
+            $this->current_fuel = min($effectiveMaxFuel, $this->current_fuel + $fuelToRegenerate);
             $this->fuel_last_updated_at = $now->subSeconds($secondsElapsed % $effectiveRegenRate);
             $this->save();
         }
@@ -273,13 +389,20 @@ class PlayerShip extends Model
     {
         $this->regenerateFuel();
 
-        if ($this->current_fuel >= $this->max_fuel) {
+        $effectiveMaxFuel = $this->getEffectiveMaxFuel();
+
+        if ($this->current_fuel >= $effectiveMaxFuel) {
             return 0;
         }
 
-        $fuelNeeded = $this->max_fuel - $this->current_fuel;
+        $fuelNeeded = $effectiveMaxFuel - $this->current_fuel;
+        $regenModifier = $this->fuel_regen_modifier ?? 1.0;
+        $componentRegenBonus = $this->getComponentEffectTotal('fuel_regen');
+        $warpDriveBonus = 1 + ($this->warp_drive - 1) * 0.3;
+        $denominator = $regenModifier * $warpDriveBonus * (1 + $componentRegenBonus);
+        $effectiveRegenRate = max(1, (int) round(self::fuelRegenRate() / max(0.01, $denominator)));
 
-        return $fuelNeeded * self::FUEL_REGEN_RATE;
+        return $fuelNeeded * $effectiveRegenRate;
     }
 
     /**
@@ -288,10 +411,11 @@ class PlayerShip extends Model
     public function takeDamage(int $damage): void
     {
         $this->hull = max(0, $this->hull - $damage);
+        $effectiveMaxHull = $this->getEffectiveMaxHull();
 
         if ($this->hull <= 0) {
             $this->status = 'destroyed';
-        } elseif ($this->hull < $this->max_hull * 0.3) {
+        } elseif ($this->hull < $effectiveMaxHull * 0.3) {
             $this->status = 'damaged';
         }
 
@@ -303,9 +427,10 @@ class PlayerShip extends Model
      */
     public function repair(int $amount): void
     {
-        $this->hull = min($this->max_hull, $this->hull + $amount);
+        $effectiveMaxHull = $this->getEffectiveMaxHull();
+        $this->hull = min($effectiveMaxHull, $this->hull + $amount);
 
-        if ($this->hull > $this->max_hull * 0.3) {
+        if ($this->hull > $effectiveMaxHull * 0.3) {
             $this->status = 'operational';
         }
 
@@ -317,7 +442,7 @@ class PlayerShip extends Model
      */
     public function canAddCargo(int $amount): bool
     {
-        return ($this->current_cargo + $amount) <= $this->cargo_hold;
+        return ($this->current_cargo + $amount) <= $this->getEffectiveCargoHold();
     }
 
     /**
@@ -405,11 +530,11 @@ class PlayerShip extends Model
     }
 
     /**
-     * Get total cargo capacity (regular + hidden)
+     * Get total cargo capacity (effective + hidden)
      */
     public function getTotalCargoCapacity(): int
     {
-        return $this->cargo_hold + ($this->hidden_hold_capacity ?? 0);
+        return $this->getEffectiveCargoHold() + ($this->hidden_hold_capacity ?? 0);
     }
 
     /**

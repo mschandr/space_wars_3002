@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\PirateBand;
 use App\Models\Player;
 use App\Models\PlayerShip;
+use App\Models\PointOfInterest;
 use App\Models\WarpGate;
 use App\Models\WarpLanePirate;
 use Illuminate\Support\Collection;
@@ -20,7 +22,7 @@ class PirateEncounterService
     ) {}
 
     /**
-     * Check if a warp gate has active pirate presence
+     * Check if a warp gate has active pirate presence (legacy lane-based)
      */
     public function hasPiratePresence(WarpGate $gate): bool
     {
@@ -28,7 +30,75 @@ class PirateEncounterService
     }
 
     /**
-     * Get the pirate encounter for a warp gate
+     * Check if a pirate band in this sector might intercept travel.
+     *
+     * Probability based on: number of active bands, distance from pirate position,
+     * sector danger level, and player sensor level (better sensors = better avoidance).
+     */
+    public function checkSectorPirateEncounter(
+        Player $player,
+        PointOfInterest $destination,
+        ?WarpGate $gate = null,
+    ): ?PirateBand {
+        $sectorId = $destination->sector_id;
+        if (! $sectorId) {
+            return null;
+        }
+
+        $bands = PirateBand::active()
+            ->inSector($sectorId)
+            ->with(['captain.faction', 'currentLocation'])
+            ->get();
+
+        if ($bands->isEmpty()) {
+            return null;
+        }
+
+        $sensorLevel = $player->activeShip?->sensors ?? 1;
+        $sectorDanger = $destination->sector?->danger_level ?? 1;
+
+        foreach ($bands as $band) {
+            $pirateLocation = $band->currentLocation;
+            if (! $pirateLocation) {
+                continue;
+            }
+
+            // Calculate distance from pirate to destination
+            $distance = sqrt(
+                pow($pirateLocation->x - $destination->x, 2) +
+                pow($pirateLocation->y - $destination->y, 2)
+            );
+
+            $roamingRadius = $band->roaming_radius_ly ?? 50;
+
+            // Skip if destination is outside pirate's patrol range
+            if ($distance > $roamingRadius) {
+                continue;
+            }
+
+            // Base encounter chance: 30% if right on top of pirate, drops with distance
+            $proximityFactor = max(0, 1.0 - ($distance / $roamingRadius));
+            $baseChance = 0.30 * $proximityFactor;
+
+            // Danger level modifier: higher danger = more pirates
+            $dangerModifier = 1.0 + ($sectorDanger * 0.1);
+
+            // Sensor avoidance: better sensors = slightly better chance to avoid
+            $sensorAvoidance = 1.0 - (($sensorLevel - 1) * 0.05);
+            $sensorAvoidance = max(0.5, $sensorAvoidance); // Floor at 50%
+
+            $finalChance = $baseChance * $dangerModifier * $sensorAvoidance;
+
+            if ((mt_rand(1, 1000) / 1000) <= $finalChance) {
+                return $band;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the pirate encounter for a warp gate (legacy lane-based)
      */
     public function getEncounter(WarpGate $gate): ?WarpLanePirate
     {

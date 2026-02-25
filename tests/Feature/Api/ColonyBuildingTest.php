@@ -17,7 +17,9 @@ class ColonyBuildingTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Player $player;
+
     private Colony $colony;
 
     protected function setUp(): void

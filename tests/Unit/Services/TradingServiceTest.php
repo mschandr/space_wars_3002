@@ -569,6 +569,143 @@ class TradingServiceTest extends TestCase
     }
 
     /** @test */
+    public function test_first_buy_is_free()
+    {
+        $player = Player::factory()->create(['credits' => 500.00, 'settings' => []]);
+        $ship = Ship::factory()->create();
+        $playerShip = PlayerShip::factory()->create([
+            'player_id' => $player->id,
+            'ship_id' => $ship->id,
+            'cargo_hold' => 100,
+            'current_cargo' => 0,
+        ]);
+
+        $mineral = Mineral::factory()->create();
+        $tradingHub = TradingHub::factory()->create();
+        $inventory = TradingHubInventory::factory()->create([
+            'trading_hub_id' => $tradingHub->id,
+            'mineral_id' => $mineral->id,
+            'quantity' => 1000,
+            'sell_price' => 50.00,
+        ]);
+
+        // First buy should be free even though 10 * 50 = 500 would normally cost credits
+        $result = $this->tradingService->buyMineral($player, $playerShip, $inventory, 10);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['tutorial']);
+        $this->assertEquals(0, $result['total_cost']);
+        $this->assertEquals(500.00, $player->fresh()->credits); // Credits unchanged
+        $this->assertEquals(10, $playerShip->fresh()->current_cargo); // Cargo updated
+        $this->assertTrue($player->fresh()->hasCompletedTutorial('first_mineral_buy'));
+    }
+
+    /** @test */
+    public function test_second_buy_costs_credits()
+    {
+        $player = Player::factory()->create([
+            'credits' => 10000.00,
+            'settings' => ['completed_tutorials' => ['first_mineral_buy']],
+        ]);
+        $ship = Ship::factory()->create();
+        $playerShip = PlayerShip::factory()->create([
+            'player_id' => $player->id,
+            'ship_id' => $ship->id,
+            'cargo_hold' => 100,
+            'current_cargo' => 0,
+        ]);
+
+        $mineral = Mineral::factory()->create();
+        $tradingHub = TradingHub::factory()->create();
+        $inventory = TradingHubInventory::factory()->create([
+            'trading_hub_id' => $tradingHub->id,
+            'mineral_id' => $mineral->id,
+            'quantity' => 1000,
+            'sell_price' => 50.00,
+        ]);
+
+        $result = $this->tradingService->buyMineral($player, $playerShip, $inventory, 10);
+
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['tutorial']);
+        $this->assertEquals(500.00, $result['total_cost']); // 10 * 50
+        $this->assertEquals(9500.00, $player->fresh()->credits); // 10000 - 500
+    }
+
+    /** @test */
+    public function test_first_sell_earns_nothing()
+    {
+        $player = Player::factory()->create(['credits' => 1000.00, 'settings' => []]);
+        $ship = Ship::factory()->create();
+        $playerShip = PlayerShip::factory()->create([
+            'player_id' => $player->id,
+            'ship_id' => $ship->id,
+            'cargo_hold' => 100,
+            'current_cargo' => 50,
+        ]);
+
+        $mineral = Mineral::factory()->create();
+        $cargo = PlayerCargo::factory()->create([
+            'player_ship_id' => $playerShip->id,
+            'mineral_id' => $mineral->id,
+            'quantity' => 50,
+        ]);
+
+        $tradingHub = TradingHub::factory()->create();
+        $hubInventory = TradingHubInventory::factory()->create([
+            'trading_hub_id' => $tradingHub->id,
+            'mineral_id' => $mineral->id,
+            'buy_price' => 30.00,
+        ]);
+
+        $result = $this->tradingService->sellMineral($player, $playerShip, $cargo, $hubInventory, 10);
+
+        $this->assertTrue($result['success']);
+        $this->assertTrue($result['tutorial']);
+        $this->assertEquals(0, $result['total_revenue']);
+        $this->assertEquals(1000.00, $player->fresh()->credits); // Credits unchanged
+        $this->assertEquals(40, $cargo->fresh()->quantity); // Cargo removed
+        $this->assertTrue($player->fresh()->hasCompletedTutorial('first_mineral_sell'));
+    }
+
+    /** @test */
+    public function test_second_sell_earns_credits()
+    {
+        $player = Player::factory()->create([
+            'credits' => 1000.00,
+            'settings' => ['completed_tutorials' => ['first_mineral_sell']],
+        ]);
+        $ship = Ship::factory()->create();
+        $playerShip = PlayerShip::factory()->create([
+            'player_id' => $player->id,
+            'ship_id' => $ship->id,
+            'cargo_hold' => 100,
+            'current_cargo' => 50,
+        ]);
+
+        $mineral = Mineral::factory()->create();
+        $cargo = PlayerCargo::factory()->create([
+            'player_ship_id' => $playerShip->id,
+            'mineral_id' => $mineral->id,
+            'quantity' => 50,
+        ]);
+
+        $tradingHub = TradingHub::factory()->create();
+        $hubInventory = TradingHubInventory::factory()->create([
+            'trading_hub_id' => $tradingHub->id,
+            'mineral_id' => $mineral->id,
+            'buy_price' => 30.00,
+        ]);
+
+        $result = $this->tradingService->sellMineral($player, $playerShip, $cargo, $hubInventory, 10);
+
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['tutorial']);
+        $this->assertEquals(300.00, $result['total_revenue']); // 10 * 30
+        $this->assertEquals(1300.00, $player->fresh()->credits); // 1000 + 300
+    }
+
+    /** @test */
     public function get_max_affordable_quantity_calculates_correctly()
     {
         $player = Player::factory()->create(['credits' => 1000.00]);

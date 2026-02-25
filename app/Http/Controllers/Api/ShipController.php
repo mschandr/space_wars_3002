@@ -36,7 +36,7 @@ class ShipController extends BaseApiController
             return $this->error('You are not in this galaxy', 'NOT_IN_GALAXY', null, 404);
         }
 
-        $ship = $player->activeShip()->with('ship')->first();
+        $ship = $player->activeShip()->with(['ship', 'currentLocation'])->first();
 
         if (! $ship) {
             return $this->error('No active ship found', 'NO_SHIP', null, 404);
@@ -61,7 +61,7 @@ class ShipController extends BaseApiController
             return $this->notFound('Player not found');
         }
 
-        $ship = $player->activeShip()->with('ship')->first();
+        $ship = $player->activeShip()->with(['ship', 'currentLocation'])->first();
 
         if (! $ship) {
             return $this->notFound('No active ship found');
@@ -114,6 +114,7 @@ class ShipController extends BaseApiController
             ->whereHas('player', function ($query) use ($request) {
                 $query->where('user_id', $request->user()->id);
             })
+            ->with('player')
             ->first();
 
         if (! $ship) {
@@ -128,12 +129,30 @@ class ShipController extends BaseApiController
             return $this->validationError($e->errors());
         }
 
+        $player = $ship->player;
+
+        // First naming is free (ship still has its blueprint name)
+        $isFirstNaming = $ship->name === $ship->ship->name;
+        $renameFee = $isFirstNaming ? 0 : (int) config('game_config.ships.rename_fee', 1000);
+
+        if ($renameFee > 0 && $player->credits < $renameFee) {
+            return $this->error(
+                sprintf('Insufficient credits. Renaming costs %s credits.', number_format($renameFee)),
+                'INSUFFICIENT_CREDITS'
+            );
+        }
+
+        if ($renameFee > 0) {
+            $player->deductCredits($renameFee);
+        }
+
         $ship->name = $validated['name'];
         $ship->save();
 
-        return $this->success(
-            new ShipResource($ship->load('ship')),
-            'Ship renamed successfully'
-        );
+        return $this->success([
+            'ship' => new ShipResource($ship->load('ship')),
+            'rename_fee' => $renameFee,
+            'credits_remaining' => $player->credits,
+        ], 'Ship renamed successfully');
     }
 }

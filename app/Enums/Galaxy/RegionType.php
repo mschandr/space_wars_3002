@@ -5,8 +5,8 @@ namespace App\Enums\Galaxy;
 /**
  * Region types for Points of Interest within a tiered galaxy.
  *
- * Core: Civilized center with trading posts, defenses, and 100% inhabited systems.
- * Outer: Frontier wilderness with rich minerals, 0% inhabited, and dormant gates.
+ * Core: Civilized center — 81% inhabited, 90% charted, active warp gates.
+ * Outer: Frontier wilderness — 2% inhabited, 20% charted, rich minerals, dormant gates.
  */
 enum RegionType: string
 {
@@ -19,8 +19,19 @@ enum RegionType: string
     public function getInhabitedPercentage(): float
     {
         return match ($this) {
-            self::CORE => 1.0,   // 100% inhabited
-            self::OUTER => 0.0,  // 0% inhabited (frontier)
+            self::CORE => config('game_config.tiered_galaxy.core_inhabited_percentage', 0.81),
+            self::OUTER => config('game_config.tiered_galaxy.outer_inhabited_percentage', 0.02),
+        };
+    }
+
+    /**
+     * Get the charted percentage for this region.
+     */
+    public function getChartedPercentage(): float
+    {
+        return match ($this) {
+            self::CORE => config('game_config.tiered_galaxy.core_charted_percentage', 0.90),
+            self::OUTER => config('game_config.tiered_galaxy.outer_charted_percentage', 0.20),
         };
     }
 
@@ -36,25 +47,21 @@ enum RegionType: string
     }
 
     /**
-     * Check if trading posts should spawn in this region.
+     * Check if trading posts can spawn in this region.
+     * Now driven by is_inhabited flag on individual stars.
      */
     public function hasTradingPosts(): bool
     {
-        return match ($this) {
-            self::CORE => true,
-            self::OUTER => false,
-        };
+        return true;
     }
 
     /**
-     * Check if defenses should be deployed in this region.
+     * Check if defenses can be deployed in this region.
+     * Now driven by is_inhabited flag on individual stars.
      */
     public function hasDefenses(): bool
     {
-        return match ($this) {
-            self::CORE => true,
-            self::OUTER => false,
-        };
+        return true;
     }
 
     /**
@@ -86,7 +93,7 @@ enum RegionType: string
     {
         return match ($this) {
             self::CORE => 'Civilized systems with trading posts, defenses, and active warp gates.',
-            self::OUTER => 'Untamed frontier with rich minerals, dormant gates, and no civilization.',
+            self::OUTER => 'Frontier with rich minerals, dormant gates, and sparse civilization.',
         };
     }
 }

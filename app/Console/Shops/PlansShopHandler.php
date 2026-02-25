@@ -2,36 +2,18 @@
 
 namespace App\Console\Shops;
 
-use App\Console\Traits\ConsoleBoxRenderer;
-use App\Console\Traits\ConsoleColorizer;
-use App\Console\Traits\TerminalInputHandler;
 use App\Models\Plan;
 use App\Models\Player;
 use App\Models\TradingHub;
-use Illuminate\Console\Command;
 
-class PlansShopHandler
+class PlansShopHandler extends BaseShopHandler
 {
-    use ConsoleBoxRenderer;
-    use ConsoleColorizer;
-    use TerminalInputHandler;
-
-    private Command $command;
-
-    private int $termWidth;
-
-    public function __construct(Command $command, int $termWidth = 120)
-    {
-        $this->command = $command;
-        $this->termWidth = $termWidth;
-    }
-
     /**
      * Display the plans shop interface
      */
     public function show(Player $player, TradingHub $tradingHub): void
     {
-        system('stty sane');
+        $this->resetTerminal();
 
         // Load available plans for this hub
         $plans = $tradingHub->plans;
@@ -40,9 +22,7 @@ class PlansShopHandler
             $this->clearScreen();
             $this->error('No plans available at this trading hub.');
             $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
+            $this->waitForAnyKey();
 
             return;
         }
@@ -56,10 +36,7 @@ class PlansShopHandler
             $this->clearScreen();
 
             // Header
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->line($this->colorize('  UPGRADE PLANS SHOP', 'header'));
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->newLine();
+            $this->renderShopHeader('UPGRADE PLANS SHOP');
 
             $this->line('  Trading Hub: '.$this->colorize($tradingHub->name, 'trade'));
             $this->line('  Credits Available: '.$this->colorize(number_format($player->credits, 2), 'highlight'));
@@ -94,15 +71,14 @@ class PlansShopHandler
                 $this->newLine();
             }
 
-            $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+            $this->renderSeparator();
             $this->line('  '.$this->colorize('[1-9]', 'label').' Select plan  |  '.$this->colorize('[q]', 'label').' Return to interface');
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+            $this->renderBorder();
 
             // Get input
-            system('stty -icanon -echo');
-            $char = fgetc(STDIN);
+            $char = $this->readChar();
 
-            if ($char === 'q' || $char === "\033") {
+            if ($this->isQuitKey($char)) {
                 $running = false;
             } elseif (is_numeric($char) && $char >= '1' && $char <= '9') {
                 $selectedIndex = (int) $char - 1;
@@ -127,10 +103,7 @@ class PlansShopHandler
         $this->clearScreen();
 
         // Display plan details
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  PURCHASE PLAN - CONFIRMATION', 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('PURCHASE PLAN - CONFIRMATION');
 
         $this->line('  Plan: '.$this->colorize($plan->getFullName(), 'trade'));
         $this->line('  Component: '.$this->colorize($plan->getComponentDisplayName(), 'highlight'));
@@ -151,9 +124,9 @@ class PlansShopHandler
         }
         $this->newLine();
 
-        $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+        $this->renderSeparator();
         $this->line('  Confirm purchase? '.$this->colorize('[y/n]', 'label'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->renderBorder();
 
         // Get confirmation
         $char = fgetc(STDIN);
@@ -163,7 +136,7 @@ class PlansShopHandler
             $result = $player->purchasePlan($plan);
 
             $this->clearScreen();
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+            $this->renderBorder();
 
             if ($result['success']) {
                 $this->line($this->colorize('  ✓ SUCCESS', 'trade'));
@@ -186,34 +159,9 @@ class PlansShopHandler
             }
 
             $this->newLine();
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+            $this->renderBorder();
             $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            fgetc(STDIN);
+            $this->waitForAnyKey();
         }
-    }
-
-    /**
-     * Proxy method to output a line
-     */
-    private function line(string $text): void
-    {
-        $this->command->line($text);
-    }
-
-    /**
-     * Proxy method to output a newline
-     */
-    private function newLine(int $count = 1): void
-    {
-        $this->command->newLine($count);
-    }
-
-    /**
-     * Proxy method to output an error
-     */
-    private function error(string $text): void
-    {
-        $this->command->error($text);
     }
 }

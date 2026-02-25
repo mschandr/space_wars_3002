@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\Exploration\ScanLevel;
-use App\Enums\Galaxy\RegionType;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Player;
 use App\Models\PointOfInterest;
@@ -188,7 +187,8 @@ class SystemScanService
         ];
 
         // Always show basic coordinates
-        $data['coordinates'] = ['x' => $poi->x, 'y' => $poi->y];
+        $data['x'] = $poi->x;
+        $data['y'] = $poi->y;
 
         // Level 1: Geography
         if (in_array('geography', $revealedCategories)) {
@@ -337,25 +337,25 @@ class SystemScanService
     }
 
     /**
-     * Get the baseline scan level for a POI based on region.
+     * Get the baseline scan level for a POI based on charted/inhabited status.
      *
      * @param  PointOfInterest  $poi  The POI
      * @return int Baseline scan level
      */
     public function getBaselineScanLevel(PointOfInterest $poi): int
     {
-        // Inhabited systems have shared intel
+        // Inhabited systems are well-documented
         if ($poi->is_inhabited) {
-            return config('game_config.scanning.inhabited_baseline_level', 2);
+            return config('game_config.scanning.inhabited_baseline_level', 3);
         }
 
-        // Core region is well-documented
-        if ($poi->region === RegionType::CORE) {
-            return config('game_config.scanning.core_baseline_level', 3);
+        // Charted uninhabited systems have shared intel
+        if ($poi->is_charted) {
+            return config('game_config.scanning.charted_baseline_level', 2);
         }
 
-        // Outer region is fog
-        return config('game_config.scanning.outer_baseline_level', 0);
+        // Uncharted systems are complete fog
+        return config('game_config.scanning.uncharted_baseline_level', 0);
     }
 
     /**

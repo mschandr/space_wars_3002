@@ -70,13 +70,13 @@ class ColonyCombatController extends BaseApiController
         ]);
 
         $allies = [];
-        if (!empty($validated['ally_uuids'])) {
+        if (! empty($validated['ally_uuids'])) {
             $allies = Player::whereIn('uuid', $validated['ally_uuids'])->get()->all();
         }
 
         $result = $this->colonyCombatService->initiateColonyAttack($colony, $player, $allies);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'ATTACK_FAILED', null, 400);
         }
 
@@ -140,8 +140,7 @@ class ColonyCombatController extends BaseApiController
         }
 
         // Deduct credits
-        $player->credits -= $credits;
-        $player->save();
+        $player->deductCredits($credits);
 
         // Increase defenses based on investment
         $defenseIncrease = (int) ($credits / 100);

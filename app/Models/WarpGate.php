@@ -3,16 +3,16 @@
 namespace App\Models;
 
 use App\Enums\WarpGate\GateType;
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Str;
 
 class WarpGate extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -46,10 +46,6 @@ class WarpGate extends Model
         parent::boot();
 
         static::creating(function ($gate) {
-            if (empty($gate->uuid)) {
-                $gate->uuid = Str::uuid();
-            }
-
             // Auto-populate canonical coordinates if POIs are set
             if ($gate->source_poi_id && $gate->destination_poi_id && empty($gate->source_x)) {
                 $gate->populateCanonicalCoordinates();

@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class ColonyShipProduction extends Model
 {
+    use HasUuid;
+
     protected $table = 'colony_ship_production';
 
     protected $fillable = [
@@ -34,20 +37,6 @@ class ColonyShipProduction extends Model
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
     ];
-
-    /**
-     * Boot the model
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($production) {
-            if (empty($production->uuid)) {
-                $production->uuid = Str::uuid();
-            }
-        });
-    }
 
     /**
      * Get the colony this production belongs to
@@ -97,10 +86,14 @@ class ColonyShipProduction extends Model
         $this->save();
 
         // Create the player ship
+        // Ship is produced at the colony's location
+        $playerLocation = Player::find($this->player_id)?->current_poi_id;
+
         PlayerShip::create([
             'uuid' => Str::uuid(),
             'player_id' => $this->player_id,
             'ship_id' => $this->ship_id,
+            'current_poi_id' => $playerLocation,
             'name' => $this->ship->name.' '.rand(100, 999),
             'current_fuel' => $this->ship->attributes['max_fuel'] ?? 100,
             'max_fuel' => $this->ship->attributes['max_fuel'] ?? 100,
@@ -134,8 +127,7 @@ class ColonyShipProduction extends Model
         $refundAmount = (int) ($this->production_cost_credits * ($this->production_progress / 100) * 0.5);
 
         $player = $this->player;
-        $player->credits += $refundAmount;
-        $player->save();
+        $player->addCredits($refundAmount);
 
         // Advance queue
         $this->colony->shipProduction()

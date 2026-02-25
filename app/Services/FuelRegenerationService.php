@@ -13,10 +13,15 @@ use Carbon\Carbon;
 class FuelRegenerationService
 {
     /**
-     * Base fuel regeneration rate (units per hour)
-     * Better warp drives increase efficiency
+     * Get base fuel regeneration rate (units per hour), derived from the
+     * canonical config value (seconds per unit) so there's one place to change it.
      */
-    private const BASE_REGEN_RATE_PER_HOUR = 10;
+    private static function baseRegenRatePerHour(): float
+    {
+        $secondsPerUnit = (int) config('game_config.ships.fuel_regen_seconds_per_unit', 30);
+
+        return 3600 / max(1, $secondsPerUnit);
+    }
 
     /**
      * Regenerate fuel for a player ship based on time elapsed
@@ -38,7 +43,7 @@ class FuelRegenerationService
         // Warp drive 5 = 2.2x base rate
         // Warp drive 10 = 3.7x base rate
         $efficiency = 1 + ($ship->warp_drive - 1) * 0.3;
-        $regenRate = self::BASE_REGEN_RATE_PER_HOUR * $efficiency;
+        $regenRate = self::baseRegenRatePerHour() * $efficiency;
 
         // Calculate total fuel to regenerate
         $fuelToRegen = $regenRate * $hoursElapsed;
@@ -72,7 +77,7 @@ class FuelRegenerationService
         }
 
         $efficiency = 1 + ($ship->warp_drive - 1) * 0.3;
-        $regenRate = self::BASE_REGEN_RATE_PER_HOUR * $efficiency;
+        $regenRate = self::baseRegenRatePerHour() * $efficiency;
 
         $fuelNeeded = $ship->max_fuel - $ship->current_fuel;
 
@@ -85,7 +90,7 @@ class FuelRegenerationService
     public function getRegenerationInfo(PlayerShip $ship): array
     {
         $efficiency = 1 + ($ship->warp_drive - 1) * 0.3;
-        $regenRate = self::BASE_REGEN_RATE_PER_HOUR * $efficiency;
+        $regenRate = self::baseRegenRatePerHour() * $efficiency;
 
         return [
             'regen_rate_per_hour' => $regenRate,

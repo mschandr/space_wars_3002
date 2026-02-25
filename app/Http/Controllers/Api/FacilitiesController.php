@@ -10,6 +10,7 @@ use App\Models\PointOfInterest;
 use App\Services\BarRumorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 /**
  * Facilities Controller
@@ -63,7 +64,7 @@ class FacilitiesController extends BaseApiController
 
         // Load system with relationships
         $system = PointOfInterest::where('id', $system->id)
-            ->with(['tradingHub', 'children'])
+            ->with(['tradingHub', 'children', 'stellarCartographer'])
             ->first();
 
         // Build facilities response
@@ -125,6 +126,7 @@ class FacilitiesController extends BaseApiController
     {
         $facilities = [
             'trading_hubs' => [],
+            'ship_shops' => [],
             'shipyards' => [],
             'salvage_yards' => [],
             'cartographers' => [],
@@ -136,42 +138,63 @@ class FacilitiesController extends BaseApiController
         // Main trading hub (attached to the star)
         if ($system->tradingHub) {
             $hub = $system->tradingHub;
+            $hasCartographer = $system->stellarCartographer !== null
+                || in_array('cartography', $hub->services ?? []);
             $facilities['trading_hubs'][] = [
                 'uuid' => $hub->uuid,
                 'name' => $hub->name,
                 'type' => $hub->type ?? 'trading_post',
                 'location' => 'Main System Hub',
                 'services' => $hub->services ?? [],
-                'has_cartographer' => $hub->has_cartographer ?? false,
+                'has_cartographer' => $hasCartographer,
                 'has_salvage_yard' => $hub->has_salvage_yard ?? false,
                 'actions' => [
-                    'trade' => "/api/players/{$player->uuid}/trading",
-                    'inventory' => "/api/players/{$player->uuid}/trading/inventory",
+                    'inventory' => "/api/trading-hubs/{$hub->uuid}/inventory",
+                    'buy' => "/api/trading-hubs/{$hub->uuid}/buy",
+                    'sell' => "/api/trading-hubs/{$hub->uuid}/sell",
                 ],
             ];
 
-            // If the main hub has a cartographer, add it
-            if ($hub->has_cartographer ?? false) {
+            // Derive available services from both the services array and model relationships
+            $hubServices = $hub->services ?? [];
+
+            // Cartographer: check services array OR stellarCartographer record
+            if ($hasCartographer || in_array('cartography', $hubServices)) {
+                $cartographer = $system->stellarCartographer;
                 $facilities['cartographers'][] = [
-                    'uuid' => $hub->uuid,
-                    'name' => 'Stellar Cartographer',
+                    'uuid' => $system->uuid,
+                    'name' => $cartographer?->name ?? "{$system->name} Star Charts",
                     'location' => $hub->name,
                     'actions' => [
-                        'browse' => "/api/players/{$player->uuid}/cartography/available",
-                        'purchase' => "/api/players/{$player->uuid}/cartography/purchase",
+                        'browse' => "/api/trading-hubs/{$hub->uuid}/cartographer",
+                        'purchase' => "/api/players/{$player->uuid}/star-charts/purchase",
                     ],
                 ];
             }
 
-            // If main hub has salvage yard service
-            if ($hub->has_salvage_yard ?? false) {
+            // Salvage yard: check services array OR has_salvage_yard flag
+            if (($hub->has_salvage_yard ?? false) || in_array('salvage', $hubServices)) {
                 $facilities['salvage_yards'][] = [
                     'uuid' => $hub->uuid,
                     'name' => "{$system->name} Salvage",
                     'location' => $hub->name,
                     'actions' => [
                         'browse' => "/api/players/{$player->uuid}/salvage-yard",
-                        'sell' => "/api/players/{$player->uuid}/salvage-yard/sell",
+                        'purchase' => "/api/players/{$player->uuid}/salvage-yard/purchase",
+                        'sell_ship' => "/api/players/{$player->uuid}/salvage-yard/sell-ship",
+                    ],
+                ];
+            }
+
+            // Ship shop: check services array OR actual ship inventory
+            if ($hub->hasShipyard() || in_array('shipyard', $hubServices) || in_array('ship_sales', $hubServices)) {
+                $facilities['ship_shops'][] = [
+                    'uuid' => $hub->uuid,
+                    'name' => "{$hub->name} Ship Shop",
+                    'location' => $hub->name,
+                    'actions' => [
+                        'browse' => "/api/trading-hubs/{$hub->uuid}/ship-shop",
+                        'purchase' => "/api/players/{$player->uuid}/ships/purchase",
                     ],
                 ];
             }
@@ -215,13 +238,14 @@ class FacilitiesController extends BaseApiController
         $facilities['summary'] = [
             'total_trading_hubs' => count($facilities['trading_hubs']),
             'total_trading_stations' => count($facilities['trading_stations']),
+            'total_ship_shops' => count($facilities['ship_shops']),
             'total_shipyards' => count($facilities['shipyards']),
             'total_salvage_yards' => count($facilities['salvage_yards']),
             'total_cartographers' => count($facilities['cartographers']),
             'total_bars' => count($facilities['bars']),
             'total_defense_platforms' => count($facilities['defense_platforms']),
             'has_trading' => count($facilities['trading_hubs']) > 0 || count($facilities['trading_stations']) > 0,
-            'has_ship_services' => count($facilities['shipyards']) > 0,
+            'has_ship_services' => count($facilities['shipyards']) > 0 || count($facilities['ship_shops']) > 0,
             'has_salvage' => count($facilities['salvage_yards']) > 0,
             'has_cartography' => count($facilities['cartographers']) > 0,
             'has_bar' => count($facilities['bars']) > 0,
@@ -261,17 +285,16 @@ class FacilitiesController extends BaseApiController
 
             case PointOfInterestType::SHIPYARD:
                 $data['actions'] = [
-                    'browse_ships' => "/api/players/{$player->uuid}/ship-shop",
-                    'buy_ship' => "/api/players/{$player->uuid}/ship-shop/purchase",
-                    'repairs' => "/api/players/{$player->uuid}/ship-services/repair",
-                    'upgrades' => "/api/players/{$player->uuid}/upgrades",
+                    'browse_ships' => "/api/systems/{$facility->uuid}/shipyard",
+                    'buy_ship' => "/api/players/{$player->uuid}/shipyard/purchase",
                 ];
                 break;
 
             case PointOfInterestType::SALVAGE_YARD:
                 $data['actions'] = [
-                    'browse' => "/api/players/{$player->uuid}/salvage-yard",
-                    'sell_salvage' => "/api/players/{$player->uuid}/salvage-yard/sell",
+                    'browse' => "/api/systems/{$facility->uuid}/salvage-yard",
+                    'purchase' => "/api/players/{$player->uuid}/salvage-yard/purchase",
+                    'sell_ship' => "/api/players/{$player->uuid}/salvage-yard/sell-ship",
                 ];
                 break;
 
@@ -295,7 +318,7 @@ class FacilitiesController extends BaseApiController
         $bars = [];
         foreach ($barNames as $index => $name) {
             $bars[] = [
-                'id' => $index + 1,
+                'slug' => Str::slug($name),
                 'name' => $name,
                 'location' => $index === 0 ? 'Main Trading Hub' : 'Orbital Station '.($index),
                 'atmosphere' => BarNameGenerator::randomAtmosphere(),
@@ -339,23 +362,37 @@ class FacilitiesController extends BaseApiController
         $actions = [];
 
         if ($facilities['summary']['has_trading']) {
+            $hubUuid = $facilities['trading_hubs'][0]['uuid'] ?? null;
             $actions[] = [
                 'id' => 'trading',
                 'label' => 'Trading Hub',
                 'description' => 'Buy and sell commodities',
-                'endpoint' => "/api/players/{$player->uuid}/trading",
+                'endpoint' => $hubUuid ? "/api/trading-hubs/{$hubUuid}/inventory" : null,
                 'icon' => 'trading',
             ];
         }
 
         if ($facilities['summary']['has_ship_services']) {
-            $actions[] = [
-                'id' => 'shipyard',
-                'label' => 'Shipyard',
-                'description' => 'Buy ships, repairs, and upgrades',
-                'endpoint' => "/api/players/{$player->uuid}/ship-shop",
-                'icon' => 'shipyard',
-            ];
+            if (count($facilities['ship_shops']) > 0) {
+                $shopUuid = $facilities['ship_shops'][0]['uuid'];
+                $actions[] = [
+                    'id' => 'ship_shop',
+                    'label' => 'Ship Shop',
+                    'description' => 'Buy blueprint ships',
+                    'endpoint' => "/api/trading-hubs/{$shopUuid}/ship-shop",
+                    'icon' => 'shipyard',
+                ];
+            }
+            if (count($facilities['shipyards']) > 0) {
+                $yardUuid = $facilities['shipyards'][0]['uuid'];
+                $actions[] = [
+                    'id' => 'shipyard',
+                    'label' => 'Shipyard',
+                    'description' => 'Browse unique ships',
+                    'endpoint' => "/api/systems/{$yardUuid}/shipyard",
+                    'icon' => 'shipyard',
+                ];
+            }
         }
 
         if ($facilities['summary']['has_salvage']) {
@@ -369,11 +406,12 @@ class FacilitiesController extends BaseApiController
         }
 
         if ($facilities['summary']['has_cartography']) {
+            $hubUuid = $facilities['trading_hubs'][0]['uuid'] ?? null;
             $actions[] = [
                 'id' => 'cartography',
                 'label' => 'Stellar Cartographer',
                 'description' => 'Purchase star charts',
-                'endpoint' => "/api/players/{$player->uuid}/cartography/available",
+                'endpoint' => $hubUuid ? "/api/trading-hubs/{$hubUuid}/cartographer" : null,
                 'icon' => 'map',
             ];
         }

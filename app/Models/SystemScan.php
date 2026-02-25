@@ -3,10 +3,10 @@
 namespace App\Models;
 
 use App\Enums\Exploration\ScanLevel;
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
 
 /**
  * System Scan Model
@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
  */
 class SystemScan extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -38,9 +38,6 @@ class SystemScan extends Model
         parent::boot();
 
         static::creating(function ($scan) {
-            if (empty($scan->uuid)) {
-                $scan->uuid = Str::uuid();
-            }
             if (empty($scan->scanned_at)) {
                 $scan->scanned_at = now();
             }

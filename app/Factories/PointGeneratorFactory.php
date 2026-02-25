@@ -28,6 +28,9 @@ class PointGeneratorFactory
         ?int $seed = null
     ): PointGeneratorInterface {
         $config = config('game_config.galaxy');
+        // TODO: (Undefined Variable) $options references itself but is never defined as a parameter.
+        // This always evaluates to config('game_config.generator_options'). Either add ?array $options = null
+        // to the method signature, or simplify to $options = config('game_config.generator_options').
         $options = $options ?? config('game_config.generator_options');
 
         $width = $width ?? $config['width'];

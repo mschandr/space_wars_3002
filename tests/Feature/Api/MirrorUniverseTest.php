@@ -17,9 +17,13 @@ class MirrorUniverseTest extends TestCase
     use RefreshDatabase;
 
     private Galaxy $galaxy;
+
     private User $user;
+
     private Player $player;
+
     private PlayerShip $ship;
+
     private WarpGate $mirrorGate;
 
     protected function setUp(): void
@@ -74,7 +78,7 @@ class MirrorUniverseTest extends TestCase
                 ],
                 'mirror_gate' => [
                     'uuid',
-                    'location' => ['poi_uuid', 'name', 'x', 'y'],
+                    'location' => ['uuid', 'name', 'x', 'y'],
                     'is_at_gate',
                 ],
                 'mirror_modifiers',
@@ -140,7 +144,7 @@ class MirrorUniverseTest extends TestCase
                 'galaxy' => ['uuid', 'name'],
                 'mirror_gate' => [
                     'uuid',
-                    'location' => ['poi_uuid', 'name', 'coordinates'],
+                    'location' => ['uuid', 'name', 'x', 'y'],
                     'destination',
                 ],
                 'requirements' => [

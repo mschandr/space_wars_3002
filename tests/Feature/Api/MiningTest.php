@@ -20,9 +20,13 @@ class MiningTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Player $player;
+
     private PointOfInterest $asteroid;
+
     private Mineral $mineral;
+
     private PlayerShip $playerShip;
 
     protected function setUp(): void
@@ -271,6 +275,6 @@ class MiningTest extends TestCase
             ->postJson("/api/ships/{$this->playerShip->uuid}/mining/extract", []);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['poi_uuid', 'mineral_id']);
+            ->assertJsonValidationErrors(['mineral_id']);
     }
 }

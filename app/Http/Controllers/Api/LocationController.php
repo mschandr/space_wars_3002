@@ -99,7 +99,8 @@ class LocationController extends BaseApiController
 
             return $this->success([
                 'location' => 'empty_space',
-                'coordinates' => ['x' => $x, 'y' => $y],
+                'x' => $x,
+                'y' => $y,
                 'message' => 'User is in empty space',
                 'sector' => $sector ? $this->formatSectorInfo($sector) : null,
             ]);
@@ -129,7 +130,8 @@ class LocationController extends BaseApiController
                 'location' => 'star_system',
                 'system_name' => $poi->name ?? 'Unknown System',
                 'system_uuid' => $poi->uuid,
-                'coordinates' => ['x' => (int) $poi->x, 'y' => (int) $poi->y],
+                'x' => (int) $poi->x,
+                'y' => (int) $poi->y,
                 'sector' => $sector ? $this->formatSectorInfo($sector) : null,
                 'knowledge_level' => 'unknown',
                 'inhabited' => 'unknown',
@@ -156,18 +158,27 @@ class LocationController extends BaseApiController
         // Load children ONCE for reuse across multiple methods
         $children = $poi->children()->get();
 
-        // Load gates ONCE with all needed relationships for reuse
-        $gates = $poi->outgoingGates()
+        // Load ALL gates (both directions) ONCE with all needed relationships for reuse
+        $outgoing = $poi->outgoingGates()
             ->where('is_hidden', false)
             ->where('status', 'active')
             ->with(['destinationPoi', 'warpLanePirate'])
             ->get();
 
+        $incoming = $poi->incomingGates()
+            ->where('is_hidden', false)
+            ->where('status', 'active')
+            ->with(['sourcePoi', 'warpLanePirate'])
+            ->get();
+
+        $gates = $outgoing->merge($incoming);
+
         $response = [
             'location' => 'star_system',
             'system_name' => $poi->name,
             'system_uuid' => $poi->uuid,
-            'coordinates' => ['x' => (int) $poi->x, 'y' => (int) $poi->y],
+            'x' => (int) $poi->x,
+            'y' => (int) $poi->y,
             'sector' => $sector ? $this->formatSectorInfo($sector) : null,
             'type' => $poi->type?->value ?? 'unknown',
             'knowledge_level' => $this->getKnowledgeLevelLabel($scanLevel),
@@ -240,12 +251,22 @@ class LocationController extends BaseApiController
     {
         $facilities = [];
 
-        // Use pre-loaded gates or load once with all relationships
-        $gates = $gates ?? $poi->outgoingGates()
-            ->where('is_hidden', false)
-            ->where('status', 'active')
-            ->with('destinationPoi')
-            ->get();
+        // Use pre-loaded gates or load both directions
+        if ($gates === null) {
+            $outgoing = $poi->outgoingGates()
+                ->where('is_hidden', false)
+                ->where('status', 'active')
+                ->with('destinationPoi')
+                ->get();
+
+            $incoming = $poi->incomingGates()
+                ->where('is_hidden', false)
+                ->where('status', 'active')
+                ->with('sourcePoi')
+                ->get();
+
+            $gates = $outgoing->merge($incoming);
+        }
 
         // Use bulk check instead of N individual queries
         $gateIds = $gates->pluck('id')->toArray();
@@ -254,12 +275,16 @@ class LocationController extends BaseApiController
         $knownGates = [];
         foreach ($gates as $gate) {
             $knowsLane = $knownLanes[$gate->id] ?? false;
-            $destination = $gate->destinationPoi;
+
+            // For outgoing gates the other end is destinationPoi;
+            // for incoming gates the other end is sourcePoi
+            $isOutgoing = $gate->source_poi_id === $poi->id;
+            $otherEnd = $isOutgoing ? $gate->destinationPoi : $gate->sourcePoi;
 
             if ($knowsLane || $poi->is_inhabited) {
                 $knownGates[$gate->uuid] = [
-                    'destination_uuid' => $destination->uuid,
-                    'destination_name' => $destination->name ?? 'Unknown',
+                    'destination_uuid' => $otherEnd?->uuid,
+                    'destination_name' => $otherEnd?->name ?? 'Unknown',
                     'distance' => round($gate->distance ?? $gate->calculateDistance(), 1),
                 ];
             } else {

@@ -10,7 +10,6 @@ use App\Models\PointOfInterest;
 use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 class TradingHubGenerator
 {

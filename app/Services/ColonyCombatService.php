@@ -6,12 +6,13 @@ use App\Models\Colony;
 use App\Models\CombatParticipant;
 use App\Models\CombatSession;
 use App\Models\Player;
-use App\Models\PvPChallenge;
+use App\Models\PointOfInterest;
 
 class ColonyCombatService
 {
     public function __construct(
-        private readonly TeamCombatService $teamCombatService
+        private readonly TeamCombatService $teamCombatService,
+        private readonly OrbitalStructureService $orbitalStructureService,
     ) {}
 
     /**
@@ -33,7 +34,7 @@ class ColonyCombatService
         }
 
         // Check if attacker has active ship
-        if (!$attacker->activeShip) {
+        if (! $attacker->activeShip) {
             return ['success' => false, 'message' => 'You need an active ship to attack a colony'];
         }
 
@@ -43,7 +44,7 @@ class ColonyCombatService
             if ($player->current_poi_id !== $colony->poi_id) {
                 return ['success' => false, 'message' => "{$player->call_sign} is not at the colony location"];
             }
-            if (!$player->activeShip) {
+            if (! $player->activeShip) {
                 return ['success' => false, 'message' => "{$player->call_sign} does not have an active ship"];
             }
         }
@@ -99,7 +100,7 @@ class ColonyCombatService
     }
 
     /**
-     * Generate NPC defenders based on colony strength
+     * Generate NPC defenders based on colony strength and orbital defenses.
      */
     private function generateDefenders(Colony $colony): array
     {
@@ -119,10 +120,23 @@ class ColonyCombatService
             $baseWeapons = 15 + ($colony->development_level * 3);
 
             $defenders[] = [
-                'name' => "Defense Drone " . ($i + 1),
+                'name' => 'Defense Drone '.($i + 1),
                 'hull' => $baseHull,
                 'weapons' => $baseWeapons,
             ];
+        }
+
+        // Add orbital defense platforms as additional defenders
+        $poi = PointOfInterest::find($colony->poi_id);
+        if ($poi) {
+            $orbitalDamage = $this->orbitalStructureService->calculateOrbitalDefenseDamage($poi);
+            if ($orbitalDamage > 0) {
+                $defenders[] = [
+                    'name' => 'Orbital Defense Grid',
+                    'hull' => 500,
+                    'weapons' => $orbitalDamage,
+                ];
+            }
         }
 
         return $defenders;
@@ -173,13 +187,15 @@ class ColonyCombatService
             foreach ($attackers->where('current_hull', '>', 0) as $attacker) {
                 $target = $defenders->where('current_hull', '>', 0)->sortBy('current_hull')->first();
 
-                if (!$target) break;
+                if (! $target) {
+                    break;
+                }
 
                 $damage = $this->calculateDamage($attacker->playerShip->weapons);
                 $target->takeDamage($damage);
                 $attacker->recordDamageDealt($damage);
 
-                $targetIndex = $defenders->search(fn($d) => $d->id === $target->id);
+                $targetIndex = $defenders->search(fn ($d) => $d->id === $target->id);
                 $targetName = $npcDefenders[$targetIndex]['name'] ?? 'Defense Drone';
 
                 $combatLog[] = [
@@ -187,7 +203,7 @@ class ColonyCombatService
                     'message' => "  ➜ {$attacker->player->call_sign} fires at {$targetName} for {$damage} damage! (Hull: {$target->current_hull})",
                 ];
 
-                if (!$target->isAlive()) {
+                if (! $target->isAlive()) {
                     $combatLog[] = [
                         'type' => 'destroyed',
                         'message' => "  💥 {$targetName} DESTROYED!",
@@ -203,7 +219,9 @@ class ColonyCombatService
             foreach ($defenders->where('current_hull', '>', 0) as $defenderIndex => $defender) {
                 $target = $attackers->where('current_hull', '>', 0)->sortBy('current_hull')->first();
 
-                if (!$target) break;
+                if (! $target) {
+                    break;
+                }
 
                 $defenderData = $npcDefenders[$defenderIndex];
                 $damage = $this->calculateDamage($defenderData['weapons']);
@@ -215,7 +233,7 @@ class ColonyCombatService
                     'message' => "  ⬅ {$defenderData['name']} fires at {$target->player->call_sign} for {$damage} damage! (Hull: {$target->current_hull})",
                 ];
 
-                if (!$target->isAlive()) {
+                if (! $target->isAlive()) {
                     $combatLog[] = [
                         'type' => 'destroyed',
                         'message' => "  💥 {$target->player->call_sign}'s ship DESTROYED!",
@@ -308,7 +326,7 @@ class ColonyCombatService
 
         // Damage based on number of surviving attackers and their weapons
         $totalDamage = $attackers->where('current_hull', '>', 0)
-            ->sum(fn($a) => $a->playerShip->weapons);
+            ->sum(fn ($a) => $a->playerShip->weapons);
 
         // Reduce population (10-30% casualties)
         $populationLoss = (int) ($colony->population * (rand(10, 30) / 100));
@@ -377,7 +395,7 @@ class ColonyCombatService
 
         $log[] = [
             'type' => 'info',
-            'message' => "⚔️ Colony damaged but not captured. Defenses remain.",
+            'message' => '⚔️ Colony damaged but not captured. Defenses remain.',
         ];
 
         return [
@@ -400,7 +418,7 @@ class ColonyCombatService
         return [
             'success' => true,
             'instant_capture' => true,
-            'message' => "Colony had no defenses and was captured instantly",
+            'message' => 'Colony had no defenses and was captured instantly',
             'old_owner' => $oldOwner,
             'new_owner' => $attacker,
         ];

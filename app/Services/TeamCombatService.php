@@ -36,7 +36,7 @@ class TeamCombatService
         $isChallenger = $challenge->challenger_id === $inviter->id;
         $isTarget = $challenge->target_id === $inviter->id;
 
-        if (!$isChallenger && !$isTarget) {
+        if (! $isChallenger && ! $isTarget) {
             return ['success' => false, 'message' => 'You are not part of this challenge'];
         }
 
@@ -75,7 +75,7 @@ class TeamCombatService
         }
 
         // Verify invitee has active ship
-        if (!$invitee->activeShip) {
+        if (! $invitee->activeShip) {
             return ['success' => false, 'message' => 'Invited player does not have an active ship'];
         }
 
@@ -123,7 +123,7 @@ class TeamCombatService
         }
 
         // Verify player still has active ship
-        if (!$player->activeShip) {
+        if (! $player->activeShip) {
             return ['success' => false, 'message' => 'You need an active ship to join this challenge'];
         }
 
@@ -178,6 +178,7 @@ class TeamCombatService
 
         if ($challenge->isExpired()) {
             $challenge->expire();
+
             return ['success' => false, 'message' => 'This challenge has expired'];
         }
 
@@ -191,7 +192,7 @@ class TeamCombatService
                 return ['success' => false, 'message' => "{$player->call_sign} is no longer at the challenge location"];
             }
 
-            if (!$player->activeShip) {
+            if (! $player->activeShip) {
                 return ['success' => false, 'message' => "{$player->call_sign} no longer has an active ship"];
             }
         }
@@ -292,7 +293,9 @@ class TeamCombatService
                 // Target weakest defender
                 $target = $defenders->where('current_hull', '>', 0)->sortBy('current_hull')->first();
 
-                if (!$target) break;
+                if (! $target) {
+                    break;
+                }
 
                 $damage = $this->calculateDamage($attacker->playerShip->weapons);
                 $target->takeDamage($damage);
@@ -303,7 +306,7 @@ class TeamCombatService
                     'message' => "  ➜ {$attacker->player->call_sign} fires at {$target->player->call_sign} for {$damage} damage! (Hull: {$target->current_hull})",
                 ];
 
-                if (!$target->isAlive()) {
+                if (! $target->isAlive()) {
                     $combatLog[] = [
                         'type' => 'destroyed',
                         'message' => "  💥 {$target->player->call_sign}'s ship DESTROYED!",
@@ -321,7 +324,9 @@ class TeamCombatService
                 // Target weakest attacker
                 $target = $attackers->where('current_hull', '>', 0)->sortBy('current_hull')->first();
 
-                if (!$target) break;
+                if (! $target) {
+                    break;
+                }
 
                 $damage = $this->calculateDamage($defender->playerShip->weapons);
                 $target->takeDamage($damage);
@@ -332,7 +337,7 @@ class TeamCombatService
                     'message' => "  ⬅ {$defender->player->call_sign} fires at {$target->player->call_sign} for {$damage} damage! (Hull: {$target->current_hull})",
                 ];
 
-                if (!$target->isAlive()) {
+                if (! $target->isAlive()) {
                     $combatLog[] = [
                         'type' => 'destroyed',
                         'message' => "  💥 {$target->player->call_sign}'s ship DESTROYED!",
@@ -355,7 +360,7 @@ class TeamCombatService
 
         $combatLog[] = [
             'type' => 'victory',
-            'message' => '🏆 ' . ($attackersAlive ? 'ATTACKERS' : 'DEFENDERS') . ' are VICTORIOUS!',
+            'message' => '🏆 '.($attackersAlive ? 'ATTACKERS' : 'DEFENDERS').' are VICTORIOUS!',
         ];
 
         // Update ship hulls
@@ -378,7 +383,7 @@ class TeamCombatService
 
         $combatLog[] = [
             'type' => 'rewards',
-            'message' => "⭐ Each victor earned: {$xpPerVictor} XP" . ($creditsPerVictor > 0 ? " and \$" . number_format($creditsPerVictor, 2) : ''),
+            'message' => "⭐ Each victor earned: {$xpPerVictor} XP".($creditsPerVictor > 0 ? ' and $'.number_format($creditsPerVictor, 2) : ''),
         ];
 
         // Handle deaths
@@ -405,14 +410,14 @@ class TeamCombatService
 
         return [
             'victor_team' => $victorType,
-            'victors' => $victors->map(fn($v) => [
+            'victors' => $victors->map(fn ($v) => [
                 'player' => $v->player,
                 'hull_remaining' => $v->current_hull,
                 'damage_dealt' => $v->damage_dealt,
                 'xp_earned' => $xpPerVictor,
                 'credits_earned' => $creditsPerVictor,
             ]),
-            'losers' => $losers->map(fn($l) => [
+            'losers' => $losers->map(fn ($l) => [
                 'player' => $l->player,
                 'damage_dealt' => $l->damage_dealt,
             ]),

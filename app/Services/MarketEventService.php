@@ -86,6 +86,8 @@ class MarketEventService
     /**
      * Deactivate all expired events
      */
+    // TODO: (Race Condition) Wrap in DB::transaction() to prevent concurrent workers from
+    // deactivating events simultaneously and causing inconsistent state.
     public function deactivateExpiredEvents(): int
     {
         return MarketEvent::where('is_active', true)

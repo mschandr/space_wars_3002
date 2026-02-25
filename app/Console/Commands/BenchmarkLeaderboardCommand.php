@@ -24,6 +24,7 @@ class BenchmarkLeaderboardCommand extends Command
     protected $description = 'Benchmark LeaderboardController performance';
 
     private Galaxy $galaxy;
+
     private array $players = [];
 
     public function handle(): int
@@ -166,7 +167,7 @@ class BenchmarkLeaderboardCommand extends Command
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        $this->displayResults($endTime - $startTime, count($queries), $players->count() . ' players');
+        $this->displayResults($endTime - $startTime, count($queries), $players->count().' players');
     }
 
     private function benchmarkCombat(): void
@@ -212,7 +213,7 @@ class BenchmarkLeaderboardCommand extends Command
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        $this->displayResults($endTime - $startTime, count($queries), $players->count() . ' players');
+        $this->displayResults($endTime - $startTime, count($queries), $players->count().' players');
     }
 
     private function benchmarkEconomic(): void
@@ -265,7 +266,7 @@ class BenchmarkLeaderboardCommand extends Command
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        $this->displayResults($endTime - $startTime, count($queries), $players->count() . ' players');
+        $this->displayResults($endTime - $startTime, count($queries), $players->count().' players');
     }
 
     private function benchmarkColonial(): void
@@ -316,7 +317,7 @@ class BenchmarkLeaderboardCommand extends Command
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        $this->displayResults($endTime - $startTime, count($queries), $players->count() . ' players');
+        $this->displayResults($endTime - $startTime, count($queries), $players->count().' players');
     }
 
     private function displayResults(float $duration, int $queryCount, string $extra = ''): void

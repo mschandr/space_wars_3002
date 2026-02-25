@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasCreditsAndExperience;
+use App\Models\Traits\HasUuid;
 use App\Services\SystemScanService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -9,11 +11,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class Player extends Model
 {
-    use HasFactory;
+    use HasCreditsAndExperience, HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -31,6 +32,7 @@ class Player extends Model
         'last_trading_hub_poi_id',
         'last_mirror_travel_at',
         'last_accessed_at',
+        'mirror_universe_entry_time',
         'status',
         'settings',
     ];
@@ -45,19 +47,9 @@ class Player extends Model
         'total_trade_volume' => 'decimal:2',
         'last_mirror_travel_at' => 'datetime',
         'last_accessed_at' => 'datetime',
+        'mirror_universe_entry_time' => 'datetime',
         'settings' => 'array',
     ];
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($player) {
-            if (empty($player->uuid)) {
-                $player->uuid = Str::uuid();
-            }
-        });
-    }
 
     public function user(): BelongsTo
     {
@@ -93,6 +85,11 @@ class Player extends Model
     public function colonies(): HasMany
     {
         return $this->hasMany(Colony::class);
+    }
+
+    public function orbitalStructures(): HasMany
+    {
+        return $this->hasMany(OrbitalStructure::class);
     }
 
     public function combatParticipations(): HasMany
@@ -144,6 +141,14 @@ class Player extends Model
     }
 
     /**
+     * Get all system knowledge records for this player (fog-of-war).
+     */
+    public function systemKnowledge(): HasMany
+    {
+        return $this->hasMany(PlayerSystemKnowledge::class);
+    }
+
+    /**
      * Check if player knows about a specific warp gate.
      */
     public function knowsLane(WarpGate $gate): bool
@@ -170,17 +175,6 @@ class Player extends Model
             'discovery_method' => $method,
             'pirate_risk_known' => false,
         ]);
-    }
-
-    /**
-     * Get scanned systems with their scan data.
-     */
-    public function getScannedSystems(): \Illuminate\Support\Collection
-    {
-        return $this->systemScans()
-            ->with('pointOfInterest')
-            ->orderBy('scanned_at', 'desc')
-            ->get();
     }
 
     /**
@@ -252,41 +246,6 @@ class Player extends Model
     {
         // Use optimized in-memory lookup
         return $this->hasChartForId($poi->id);
-    }
-
-    public function addCredits(float $amount): void
-    {
-        $this->credits += $amount;
-        $this->save();
-    }
-
-    public function deductCredits(float $amount): bool
-    {
-        if ($this->credits < $amount) {
-            return false;
-        }
-
-        $this->credits -= $amount;
-        $this->save();
-
-        return true;
-    }
-
-    public function addExperience(int $amount): void
-    {
-        $this->experience += $amount;
-
-        $newLevel = $this->calculateLevel($this->experience);
-        if ($newLevel > $this->level) {
-            $this->level = $newLevel;
-        }
-
-        $this->save();
-    }
-
-    protected function calculateLevel(int $experience): int
-    {
-        return (int) floor(sqrt($experience / 100)) + 1;
     }
 
     /**
@@ -374,6 +333,32 @@ class Player extends Model
         }
 
         return true;
+    }
+
+    /**
+     * Check if a tutorial step has been completed.
+     */
+    public function hasCompletedTutorial(string $step): bool
+    {
+        $settings = $this->settings ?? [];
+
+        return in_array($step, $settings['completed_tutorials'] ?? [], true);
+    }
+
+    /**
+     * Mark a tutorial step as completed.
+     */
+    public function completeTutorial(string $step): void
+    {
+        $settings = $this->settings ?? [];
+        $completed = $settings['completed_tutorials'] ?? [];
+
+        if (! in_array($step, $completed, true)) {
+            $completed[] = $step;
+            $settings['completed_tutorials'] = $completed;
+            $this->settings = $settings;
+            $this->save();
+        }
     }
 
     /**

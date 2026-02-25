@@ -32,7 +32,7 @@ class CartographyController extends BaseApiController
             $systemInfo = $this->starChartService->getSystemInfo($poi, $player);
 
             return array_merge($systemInfo ?? [], [
-                'poi_uuid' => $poi->uuid,
+                'uuid' => $poi->uuid,
                 'purchased_at' => $poi->pivot->purchased_at,
                 'price_paid' => $poi->pivot->price_paid,
             ]);
@@ -75,12 +75,10 @@ class CartographyController extends BaseApiController
                 'shop_name' => $cartographer->name,
                 'markup_multiplier' => $cartographer->markup_multiplier,
                 'location' => [
-                    'poi_uuid' => $tradingHub->pointOfInterest->uuid,
+                    'uuid' => $tradingHub->pointOfInterest->uuid,
                     'name' => $tradingHub->pointOfInterest->name,
-                    'coordinates' => [
-                        'x' => $tradingHub->pointOfInterest->x,
-                        'y' => $tradingHub->pointOfInterest->y,
-                    ],
+                    'x' => $tradingHub->pointOfInterest->x,
+                    'y' => $tradingHub->pointOfInterest->y,
                 ],
             ],
         ]);
@@ -95,16 +93,23 @@ class CartographyController extends BaseApiController
     {
         $validated = $request->validate([
             'player_uuid' => 'required|exists:players,uuid',
-            'center_poi_uuid' => 'required|exists:points_of_interest,uuid',
+            'center_uuid' => 'sometimes|exists:points_of_interest,uuid',
+            'center_poi_uuid' => 'sometimes|exists:points_of_interest,uuid',
+            'cartographer_uuid' => 'sometimes|exists:points_of_interest,uuid',
             'cartographer_poi_uuid' => 'sometimes|exists:points_of_interest,uuid',
         ]);
 
         $player = Player::where('uuid', $validated['player_uuid'])->firstOrFail();
-        $centerPoi = PointOfInterest::where('uuid', $validated['center_poi_uuid'])->firstOrFail();
+        $centerPoiUuid = $validated['center_uuid'] ?? $validated['center_poi_uuid'] ?? null;
+        if (! $centerPoiUuid) {
+            return $this->validationError(['center_uuid' => 'A center system UUID is required']);
+        }
+        $centerPoi = PointOfInterest::where('uuid', $centerPoiUuid)->firstOrFail();
 
         $cartographer = null;
-        if (isset($validated['cartographer_poi_uuid'])) {
-            $cartographerPoi = PointOfInterest::where('uuid', $validated['cartographer_poi_uuid'])->firstOrFail();
+        $cartographerPoiUuid = $validated['cartographer_uuid'] ?? $validated['cartographer_poi_uuid'] ?? null;
+        if ($cartographerPoiUuid) {
+            $cartographerPoi = PointOfInterest::where('uuid', $cartographerPoiUuid)->firstOrFail();
             $cartographer = StellarCartographer::where('poi_id', $cartographerPoi->id)->first();
         }
 
@@ -120,9 +125,10 @@ class CartographyController extends BaseApiController
 
         $coverageData = $coverage->map(function ($poi) use ($player) {
             return [
-                'poi_uuid' => $poi->uuid,
+                'uuid' => $poi->uuid,
                 'name' => $poi->name,
-                'coordinates' => ['x' => $poi->x, 'y' => $poi->y],
+                'x' => $poi->x,
+                'y' => $poi->y,
                 'is_inhabited' => $poi->is_inhabited,
                 'already_known' => $player->hasChartFor($poi),
             ];
@@ -130,7 +136,7 @@ class CartographyController extends BaseApiController
 
         return $this->success([
             'center' => [
-                'poi_uuid' => $centerPoi->uuid,
+                'uuid' => $centerPoi->uuid,
                 'name' => $centerPoi->name,
             ],
             'coverage' => $coverageData,
@@ -151,16 +157,23 @@ class CartographyController extends BaseApiController
     {
         $validated = $request->validate([
             'player_uuid' => 'required|exists:players,uuid',
-            'center_poi_uuid' => 'required|exists:points_of_interest,uuid',
+            'center_uuid' => 'sometimes|exists:points_of_interest,uuid',
+            'center_poi_uuid' => 'sometimes|exists:points_of_interest,uuid',
+            'cartographer_uuid' => 'sometimes|exists:points_of_interest,uuid',
             'cartographer_poi_uuid' => 'sometimes|exists:points_of_interest,uuid',
         ]);
 
         $player = Player::where('uuid', $validated['player_uuid'])->firstOrFail();
-        $centerPoi = PointOfInterest::where('uuid', $validated['center_poi_uuid'])->firstOrFail();
+        $centerPoiUuid = $validated['center_uuid'] ?? $validated['center_poi_uuid'] ?? null;
+        if (! $centerPoiUuid) {
+            return $this->validationError(['center_uuid' => 'A center system UUID is required']);
+        }
+        $centerPoi = PointOfInterest::where('uuid', $centerPoiUuid)->firstOrFail();
 
         $cartographer = null;
-        if (isset($validated['cartographer_poi_uuid'])) {
-            $cartographerPoi = PointOfInterest::where('uuid', $validated['cartographer_poi_uuid'])->firstOrFail();
+        $cartographerPoiUuid = $validated['cartographer_uuid'] ?? $validated['cartographer_poi_uuid'] ?? null;
+        if ($cartographerPoiUuid) {
+            $cartographerPoi = PointOfInterest::where('uuid', $cartographerPoiUuid)->firstOrFail();
             $cartographer = StellarCartographer::where('poi_id', $cartographerPoi->id)->first();
         }
 
@@ -196,10 +209,15 @@ class CartographyController extends BaseApiController
         $this->authorizePlayer($player, $request->user());
 
         $validated = $request->validate([
-            'cartographer_poi_uuid' => 'required|exists:points_of_interest,uuid',
+            'cartographer_uuid' => 'sometimes|exists:points_of_interest,uuid',
+            'cartographer_poi_uuid' => 'sometimes|exists:points_of_interest,uuid',
         ]);
 
-        $cartographerPoi = PointOfInterest::where('uuid', $validated['cartographer_poi_uuid'])->firstOrFail();
+        $cartographerPoiUuid = $validated['cartographer_uuid'] ?? $validated['cartographer_poi_uuid'] ?? null;
+        if (! $cartographerPoiUuid) {
+            return $this->validationError(['cartographer_uuid' => 'A cartographer UUID is required']);
+        }
+        $cartographerPoi = PointOfInterest::where('uuid', $cartographerPoiUuid)->firstOrFail();
         $cartographer = StellarCartographer::where('poi_id', $cartographerPoi->id)->firstOrFail();
 
         if (! $cartographer) {
@@ -246,7 +264,7 @@ class CartographyController extends BaseApiController
 
         return $this->success([
             'system' => $systemInfo,
-            'poi_uuid' => $poi->uuid,
+            'uuid' => $poi->uuid,
         ]);
     }
 }

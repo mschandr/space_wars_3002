@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Enums\Galaxy\GalaxyDistributionMethod;
 use App\Enums\Galaxy\GalaxyRandomEngine;
 use App\Enums\Galaxy\GalaxyStatus;
-use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
 use App\Models\PointOfInterest;
 use App\Models\Sector;
@@ -142,14 +141,14 @@ class BenchmarkGalaxyInitCommand extends Command
         $startTime = microtime(true);
 
         // OPTIMIZED: Single UPDATE with JOIN instead of N individual updates
-        $assigned = DB::update("
+        $assigned = DB::update('
             UPDATE points_of_interest poi
             INNER JOIN sectors s ON s.galaxy_id = poi.galaxy_id
                 AND poi.x >= s.x_min AND poi.x < s.x_max
                 AND poi.y >= s.y_min AND poi.y < s.y_max
             SET poi.sector_id = s.id
             WHERE poi.galaxy_id = ?
-        ", [$this->galaxy->id]);
+        ', [$this->galaxy->id]);
 
         $endTime = microtime(true);
         $queries = DB::getQueryLog();

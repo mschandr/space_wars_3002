@@ -144,11 +144,12 @@ class NavigationTest extends TestCase
      */
     public function test_user_can_get_nearby_systems(): void
     {
-        // Create systems within sensor range (300 units with sensor level 3)
+        // Sensor level 3 = 4 LY range (new formula: (level-1)*2)
+        // Create systems within sensor range
         $nearbySystem1 = PointOfInterest::factory()->create([
             'galaxy_id' => $this->galaxy->id,
             'type' => PointOfInterestType::STAR,
-            'x' => 600, // 100 units away
+            'x' => 502, // 2 units away
             'y' => 500,
             'name' => 'Nearby System 1',
         ]);
@@ -157,7 +158,7 @@ class NavigationTest extends TestCase
             'galaxy_id' => $this->galaxy->id,
             'type' => PointOfInterestType::STAR,
             'x' => 500,
-            'y' => 700, // 200 units away
+            'y' => 503, // 3 units away
             'name' => 'Nearby System 2',
         ]);
 
@@ -187,7 +188,7 @@ class NavigationTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'data' => [
-                    'sensor_range' => 300,
+                    'sensor_range' => 4,
                     'sensor_level' => 3,
                     'systems_detected' => 2,
                 ],
@@ -203,14 +204,14 @@ class NavigationTest extends TestCase
      */
     public function test_nearby_systems_respects_sensor_range(): void
     {
-        // Update ship to have sensor level 1 (100 unit range)
+        // Update ship to have sensor level 1 (1 LY range with new formula)
         $this->ship->update(['sensors' => 1]);
 
-        // Create system just outside range
+        // Create system just outside range (2 units away, range is 1 LY)
         PointOfInterest::factory()->create([
             'galaxy_id' => $this->galaxy->id,
             'type' => PointOfInterestType::STAR,
-            'x' => 610, // 110 units away - outside 100 unit range
+            'x' => 502, // 2 units away - outside 1 LY range
             'y' => 500,
         ]);
 
@@ -221,7 +222,7 @@ class NavigationTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'data' => [
-                    'sensor_range' => 100,
+                    'sensor_range' => 1,
                     'sensor_level' => 1,
                     'systems_detected' => 0,
                 ],
@@ -233,11 +234,11 @@ class NavigationTest extends TestCase
      */
     public function test_user_can_scan_local_area(): void
     {
-        // Create various POI types within sensor range
+        // Sensor level 3 = 4 LY range. Create POIs within range.
         PointOfInterest::factory()->create([
             'galaxy_id' => $this->galaxy->id,
             'type' => PointOfInterestType::STAR,
-            'x' => 550,
+            'x' => 502,
             'y' => 500,
         ]);
 
@@ -245,14 +246,14 @@ class NavigationTest extends TestCase
             'galaxy_id' => $this->galaxy->id,
             'type' => PointOfInterestType::PLANET,
             'x' => 500,
-            'y' => 550,
+            'y' => 501,
         ]);
 
         PointOfInterest::factory()->create([
             'galaxy_id' => $this->galaxy->id,
             'type' => PointOfInterestType::ASTEROID_BELT,
-            'x' => 550,
-            'y' => 550,
+            'x' => 501,
+            'y' => 501,
         ]);
 
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
@@ -272,7 +273,7 @@ class NavigationTest extends TestCase
             ->assertJson([
                 'success' => true,
                 'data' => [
-                    'sensor_range' => 300,
+                    'sensor_range' => 4,
                     'sensor_level' => 3,
                 ],
             ]);
@@ -375,7 +376,7 @@ class NavigationTest extends TestCase
             ->assertJsonStructure([
                 'success',
                 'data' => [
-                    'system' => ['uuid', 'name', 'type', 'coordinates', 'is_inhabited'],
+                    'system' => ['uuid', 'name', 'type', 'x', 'y', 'is_inhabited'],
                     'sector',
                     'bodies' => [
                         'planets',

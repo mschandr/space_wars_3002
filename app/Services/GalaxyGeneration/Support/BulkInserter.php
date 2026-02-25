@@ -170,7 +170,7 @@ final class BulkInserter
         $keyPlaceholders = implode(',', array_fill(0, count($keys), '?'));
         $params = array_merge($params, $keys);
 
-        $sql = "UPDATE {$table} SET ".implode(', ', $setClauses).", updated_at = ".self::nowFunction()." WHERE {$keyColumn} IN ({$keyPlaceholders})";
+        $sql = "UPDATE {$table} SET ".implode(', ', $setClauses).', updated_at = '.self::nowFunction()." WHERE {$keyColumn} IN ({$keyPlaceholders})";
 
         return DB::affectingStatement($sql, $params);
     }

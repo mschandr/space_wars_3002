@@ -3,11 +3,11 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Galaxy;
-use App\Models\Player;
-use App\Models\PlayerShip;
 use App\Models\PirateCaptain;
 use App\Models\PirateFaction;
 use App\Models\PirateFleet;
+use App\Models\Player;
+use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
 use App\Models\Ship;
 use App\Models\User;
@@ -170,7 +170,6 @@ class CombatTest extends TestCase
         $this->assertEquals(2, $response->json('data.encounter.fleet_size'));
     }
 
-
     public function test_it_gets_combat_preview()
     {
         $response = $this->actingAs($this->user, 'sanctum')
@@ -203,14 +202,12 @@ class CombatTest extends TestCase
         $this->assertNotEmpty($response->json('data.combat_preview.difficulty'));
     }
 
-
     public function test_it_requires_authentication_for_combat_preview()
     {
         $response = $this->getJson("/api/players/{$this->player->uuid}/combat/preview?encounter_uuid={$this->pirateEncounter->uuid}");
 
         $response->assertUnauthorized();
     }
-
 
     public function test_it_allows_escape_when_player_has_superior_speed_and_warp()
     {
@@ -237,7 +234,6 @@ class CombatTest extends TestCase
         $this->assertStringContainsString('escape', strtolower($response->json('data.message')));
     }
 
-
     public function test_it_prevents_escape_when_pirates_are_faster()
     {
         // Pirates are faster (speed: 5, warp: 1), player is slower
@@ -259,7 +255,6 @@ class CombatTest extends TestCase
 
         $this->assertArrayHasKey('interceptor', $response->json('data'));
     }
-
 
     public function test_it_processes_surrender()
     {
@@ -294,7 +289,6 @@ class CombatTest extends TestCase
         $this->assertEquals(0, $this->playerShip->cargo()->count());
     }
 
-
     public function test_it_engages_in_combat()
     {
         $response = $this->actingAs($this->user, 'sanctum')
@@ -319,7 +313,6 @@ class CombatTest extends TestCase
         $this->assertGreaterThan(0, $response->json('data.rounds'));
     }
 
-
     public function test_it_awards_xp_on_victory()
     {
         $oldXp = $this->player->experience;
@@ -337,7 +330,6 @@ class CombatTest extends TestCase
             $this->assertGreaterThan($oldXp, $this->player->experience);
         }
     }
-
 
     public function test_it_collects_salvage_after_victory()
     {
@@ -374,7 +366,6 @@ class CombatTest extends TestCase
         }
     }
 
-
     public function test_it_requires_active_ship_for_combat()
     {
         // Deactivate ship
@@ -394,7 +385,6 @@ class CombatTest extends TestCase
             ]);
     }
 
-
     public function test_it_validates_encounter_uuid()
     {
         $response = $this->actingAs($this->user, 'sanctum')
@@ -405,7 +395,6 @@ class CombatTest extends TestCase
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['encounter_uuid']);
     }
-
 
     public function test_it_increments_encounter_count()
     {

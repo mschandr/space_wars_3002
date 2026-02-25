@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class CombatSession extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $table = 'combat_sessions';
 
@@ -42,9 +42,6 @@ class CombatSession extends Model
         parent::boot();
 
         static::creating(function ($session) {
-            if (empty($session->uuid)) {
-                $session->uuid = Str::uuid();
-            }
             if (empty($session->started_at)) {
                 $session->started_at = now();
             }
@@ -101,6 +98,10 @@ class CombatSession extends Model
         ]);
     }
 
+    // TODO: (Unbounded Growth) Combat log appends entries indefinitely with no size limit.
+    // A large PvP battle (50 participants x 200 rounds x 5 events) could produce 50,000 entries
+    // (~25MB) in a single JSON column. Add a max entry limit (e.g., 500) with array_slice,
+    // or move detailed logs to a separate combat_log_entries table.
     public function addLogEntry(array $entry): void
     {
         $log = $this->combat_log ?? [];

@@ -2,7 +2,6 @@
 
 namespace Tests\Unit\Services;
 
-use App\Enums\Exploration\ScanLevel;
 use App\Enums\Galaxy\RegionType;
 use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Models\Galaxy;
@@ -43,10 +42,9 @@ class SystemScanServiceTest extends TestCase
 
         $user = User::factory()->create();
 
-        $this->starSystem = PointOfInterest::factory()->create([
+        $this->starSystem = PointOfInterest::factory()->inhabited()->create([
             'galaxy_id' => $this->galaxy->id,
             'type' => PointOfInterestType::STAR,
-            'is_inhabited' => true,
             'region' => RegionType::CORE,
             'attributes' => ['stellar_class' => 'G'],
         ]);
@@ -185,32 +183,30 @@ class SystemScanServiceTest extends TestCase
         $this->assertArrayHasKey('display', $result);
     }
 
-    public function test_get_scan_results_returns_baseline_for_core_unscanned(): void
+    public function test_get_scan_results_returns_baseline_for_charted_unscanned(): void
     {
-        $corePoi = PointOfInterest::factory()->create([
+        $chartedPoi = PointOfInterest::factory()->charted()->create([
             'galaxy_id' => $this->galaxy->id,
             'region' => RegionType::CORE,
-            'is_inhabited' => false,
         ]);
 
-        $result = $this->service->getScanResults($this->player, $corePoi);
+        $result = $this->service->getScanResults($this->player, $chartedPoi);
 
-        $this->assertEquals(3, $result['scan_level']); // Core baseline
+        $this->assertEquals(2, $result['scan_level']); // Charted baseline
         $this->assertTrue($result['baseline']);
         $this->assertNull($result['scanned_at']);
     }
 
     public function test_get_scan_results_returns_baseline_for_inhabited_unscanned(): void
     {
-        $inhabitedPoi = PointOfInterest::factory()->create([
+        $inhabitedPoi = PointOfInterest::factory()->inhabited()->create([
             'galaxy_id' => $this->galaxy->id,
             'region' => RegionType::OUTER,
-            'is_inhabited' => true,
         ]);
 
         $result = $this->service->getScanResults($this->player, $inhabitedPoi);
 
-        $this->assertEquals(2, $result['scan_level']); // Inhabited baseline
+        $this->assertEquals(3, $result['scan_level']); // Inhabited baseline
         $this->assertTrue($result['baseline']);
     }
 
@@ -238,7 +234,8 @@ class SystemScanServiceTest extends TestCase
 
         $this->assertArrayHasKey('uuid', $data);
         $this->assertArrayHasKey('name', $data);
-        $this->assertArrayHasKey('coordinates', $data);
+        $this->assertArrayHasKey('x', $data);
+        $this->assertArrayHasKey('y', $data);
         $this->assertArrayHasKey('geography', $data);
         $this->assertArrayNotHasKey('gates', $data);
         $this->assertArrayNotHasKey('resources', $data);
@@ -401,8 +398,8 @@ class SystemScanServiceTest extends TestCase
     {
         $level = $this->service->getScanLevelFor($this->player, $this->starSystem);
 
-        // Core + inhabited = should use inhabited baseline (2) since is_inhabited takes priority
-        $this->assertEquals(2, $level);
+        // Inhabited = baseline 3
+        $this->assertEquals(3, $level);
     }
 
     // =========================================================================
@@ -415,11 +412,11 @@ class SystemScanServiceTest extends TestCase
             'galaxy_id' => $this->galaxy->id,
             'region' => RegionType::OUTER,
             'is_inhabited' => false,
+            'is_charted' => false,
         ]);
-        $poi2 = PointOfInterest::factory()->create([
+        $poi2 = PointOfInterest::factory()->charted()->create([
             'galaxy_id' => $this->galaxy->id,
             'region' => RegionType::CORE,
-            'is_inhabited' => false,
         ]);
 
         SystemScan::factory()->create([
@@ -431,24 +428,25 @@ class SystemScanServiceTest extends TestCase
         $levels = $this->service->getBulkScanLevels($this->player, [$poi1->id, $poi2->id]);
 
         $this->assertEquals(5, $levels[$poi1->id]); // Scanned level
-        $this->assertEquals(3, $levels[$poi2->id]); // Core baseline
+        $this->assertEquals(2, $levels[$poi2->id]); // Charted baseline
     }
 
     // =========================================================================
     // getBaselineScanLevel() Tests
     // =========================================================================
 
-    public function test_get_baseline_scan_level_core_region(): void
+    public function test_get_baseline_scan_level_uncharted_core(): void
     {
         $poi = PointOfInterest::factory()->create([
             'galaxy_id' => $this->galaxy->id,
             'region' => RegionType::CORE,
             'is_inhabited' => false,
+            'is_charted' => false,
         ]);
 
         $level = $this->service->getBaselineScanLevel($poi);
 
-        $this->assertEquals(3, $level);
+        $this->assertEquals(0, $level); // Uncharted = fog
     }
 
     public function test_get_baseline_scan_level_outer_uninhabited(): void
@@ -467,15 +465,14 @@ class SystemScanServiceTest extends TestCase
     public function test_get_baseline_scan_level_inhabited_takes_priority(): void
     {
         // Inhabited in outer region still gets inhabited baseline
-        $poi = PointOfInterest::factory()->create([
+        $poi = PointOfInterest::factory()->inhabited()->create([
             'galaxy_id' => $this->galaxy->id,
             'region' => RegionType::OUTER,
-            'is_inhabited' => true,
         ]);
 
         $level = $this->service->getBaselineScanLevel($poi);
 
-        $this->assertEquals(2, $level);
+        $this->assertEquals(3, $level);
     }
 
     // =========================================================================
@@ -554,5 +551,63 @@ class SystemScanServiceTest extends TestCase
         $data = $this->service->generateScanData($this->starSystem, 2, 2);
 
         $this->assertEquals(1, $data['2']['dormant_gates']);
+    }
+
+    // =========================================================================
+    // Baseline Scan Level Tests (is_charted / is_inhabited)
+    // =========================================================================
+
+    public function test_inhabited_gets_baseline_scan_level_3(): void
+    {
+        $poi = PointOfInterest::factory()->inhabited()->create([
+            'galaxy_id' => $this->galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'region' => RegionType::CORE,
+        ]);
+
+        $level = $this->service->getBaselineScanLevel($poi);
+
+        $this->assertEquals(3, $level);
+    }
+
+    public function test_charted_uninhabited_gets_baseline_scan_level_2(): void
+    {
+        $poi = PointOfInterest::factory()->charted()->create([
+            'galaxy_id' => $this->galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'region' => RegionType::CORE,
+        ]);
+
+        $level = $this->service->getBaselineScanLevel($poi);
+
+        $this->assertEquals(2, $level);
+    }
+
+    public function test_uncharted_gets_baseline_scan_level_0(): void
+    {
+        $poi = PointOfInterest::factory()->create([
+            'galaxy_id' => $this->galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'region' => RegionType::OUTER,
+            'is_inhabited' => false,
+            'is_charted' => false,
+        ]);
+
+        $level = $this->service->getBaselineScanLevel($poi);
+
+        $this->assertEquals(0, $level);
+    }
+
+    public function test_inhabited_outer_gets_baseline_scan_level_3(): void
+    {
+        $poi = PointOfInterest::factory()->inhabited()->create([
+            'galaxy_id' => $this->galaxy->id,
+            'type' => PointOfInterestType::STAR,
+            'region' => RegionType::OUTER,
+        ]);
+
+        $level = $this->service->getBaselineScanLevel($poi);
+
+        $this->assertEquals(3, $level);
     }
 }

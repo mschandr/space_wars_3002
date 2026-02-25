@@ -124,14 +124,14 @@ class GalaxyGenerateSectors extends Command
 
         // Use a single SQL UPDATE with JOIN for massive performance improvement
         // This replaces O(n×m) PHP iterations with a single O(n) database operation
-        $assigned = DB::update("
+        $assigned = DB::update('
             UPDATE points_of_interest poi
             INNER JOIN sectors s ON s.galaxy_id = poi.galaxy_id
                 AND poi.x >= s.x_min AND poi.x < s.x_max
                 AND poi.y >= s.y_min AND poi.y < s.y_max
             SET poi.sector_id = s.id
             WHERE poi.galaxy_id = ?
-        ", [$galaxy->id]);
+        ', [$galaxy->id]);
 
         $this->info("Assigned {$assigned} POIs to sectors (of {$totalPois} total)");
     }

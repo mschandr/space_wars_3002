@@ -15,6 +15,7 @@ class PirateFactionTest extends TestCase
     use RefreshDatabase;
 
     private Galaxy $galaxy;
+
     private PirateFaction $faction;
 
     protected function setUp(): void
@@ -74,7 +75,7 @@ class PirateFactionTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonPath('success', true);
-        $response->assertJsonPath('data.uuid', $this->faction->uuid);
+        $response->assertJsonPath('data.uuid', (string) $this->faction->uuid);
         $response->assertJsonPath('data.name', 'Crimson Raiders');
         $response->assertJsonStructure([
             'success',

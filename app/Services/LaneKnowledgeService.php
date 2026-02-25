@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PilotLaneKnowledge;
 use App\Models\Player;
+use App\Models\PlayerShip;
 use App\Models\WarpGate;
 use Illuminate\Support\Collection;
 
@@ -233,20 +234,68 @@ class LaneKnowledgeService
      * Discover all outgoing gates from a POI.
      *
      * Used when a player spawns or buys a star chart.
+     * Respects sensor-level requirements — gates the player can't detect are skipped.
      *
      * @param  Player  $player  The player
      * @param  int  $poiId  The POI ID
      * @param  string  $method  Discovery method
+     * @param  PlayerShip|null  $ship  The player's ship (for sensor checks)
      * @return int Number of gates discovered
      */
-    public function discoverOutgoingGates(Player $player, int $poiId, string $method = 'spawn'): int
+    public function discoverOutgoingGates(Player $player, int $poiId, string $method = 'spawn', ?PlayerShip $ship = null): int
     {
-        $gates = WarpGate::where('source_poi_id', $poiId)
-            ->where('is_hidden', false)
+        $ship = $ship ?? $player->activeShip;
+
+        $gates = WarpGate::where('source_poi_id', $poiId)->get();
+
+        $count = 0;
+        foreach ($gates as $gate) {
+            if ($ship && ! $gate->canPlayerDetect($ship)) {
+                continue;
+            }
+
+            if (! $this->knowsLane($player, $gate)) {
+                $this->discoverLane($player, $gate, $method);
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Discover ALL gates connected to a POI (both directions).
+     *
+     * When a player arrives at a system, its gate navigation display
+     * reveals every connected lane — not just the one they traveled through.
+     * Gates are filtered by the player's sensor level — if the ship can't
+     * detect a gate (e.g. mirror gates requiring sensor level 5), it won't
+     * be discovered.
+     *
+     * @param  Player  $player  The player
+     * @param  int  $poiId  The POI ID
+     * @param  string  $method  Discovery method
+     * @param  PlayerShip|null  $ship  The player's ship (for sensor checks)
+     * @return int Number of new gates discovered
+     */
+    public function discoverAllGatesAtLocation(Player $player, int $poiId, string $method = 'travel', ?PlayerShip $ship = null): int
+    {
+        $ship = $ship ?? $player->activeShip;
+
+        $gates = WarpGate::where(function ($q) use ($poiId) {
+            $q->where('source_poi_id', $poiId)
+                ->orWhere('destination_poi_id', $poiId);
+        })
+            ->where('status', 'active')
             ->get();
 
         $count = 0;
         foreach ($gates as $gate) {
+            // Only discover gates the player's sensors can detect
+            if ($ship && ! $gate->canPlayerDetect($ship)) {
+                continue;
+            }
+
             if (! $this->knowsLane($player, $gate)) {
                 $this->discoverLane($player, $gate, $method);
                 $count++;

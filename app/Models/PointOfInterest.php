@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use mschandr\WeightedRandom\Generator\WeightedRandomGenerator;
@@ -45,9 +46,11 @@ class PointOfInterest extends Model
         'attributes',
         'is_hidden',
         'is_inhabited',
+        'is_charted',
         'region',
         'is_fortified',
         'owner_id',
+        'inventory_generated_at',
         'version',
     ];
 
@@ -56,10 +59,12 @@ class PointOfInterest extends Model
         'mineral_deposits' => 'array',
         'is_hidden' => 'boolean',
         'is_inhabited' => 'boolean',
+        'is_charted' => 'boolean',
         'is_fortified' => 'boolean',
         'status' => PointOfInterestStatus::class,
         'type' => PointOfInterestType::class,
         'region' => RegionType::class,
+        'inventory_generated_at' => 'datetime',
     ];
 
     /**
@@ -218,11 +223,60 @@ class PointOfInterest extends Model
     }
 
     /**
+     * Player-built orbital structures at this POI
+     */
+    public function orbitalStructures(): HasMany
+    {
+        return $this->hasMany(OrbitalStructure::class, 'poi_id');
+    }
+
+    /**
+     * Shipyard inventory items at this POI
+     */
+    public function shipyardInventory(): HasMany
+    {
+        return $this->hasMany(ShipyardInventory::class, 'poi_id');
+    }
+
+    /**
+     * Salvage yard inventory items at this POI
+     */
+    public function salvageYardInventory(): HasMany
+    {
+        return $this->hasMany(SalvageYardInventory::class, 'poi_id');
+    }
+
+    /**
+     * Check if inventory has been generated for this POI.
+     */
+    public function isInventoryGenerated(): bool
+    {
+        return $this->inventory_generated_at !== null;
+    }
+
+    /**
+     * Mark inventory as generated.
+     */
+    public function markInventoryGenerated(): void
+    {
+        $this->inventory_generated_at = now();
+        $this->save();
+    }
+
+    /**
      * System defenses at this POI (for fortified systems)
      */
     public function systemDefenses()
     {
         return $this->hasMany(SystemDefense::class, 'poi_id');
+    }
+
+    /**
+     * Colony at this POI (if any)
+     */
+    public function colony(): HasOne
+    {
+        return $this->hasOne(Colony::class, 'poi_id');
     }
 
     /**

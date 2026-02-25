@@ -30,6 +30,9 @@ class CreateGalaxyRequest extends FormRequest
             'height' => ['required_without:size_tier', 'integer', 'min:100', 'max:3000'],
             'stars' => ['required_without:size_tier', 'integer', 'min:50', 'max:10000'],
             'grid_size' => ['nullable', 'integer', 'min:5', 'max:50'],
+            // TODO: (Validation Gap) game_mode is always required but could be inferred from size_tier.
+            // Also, no cross-field validation prevents submitting both size_tier AND manual dimensions
+            // (width/height/stars) simultaneously, which creates ambiguity about which takes precedence.
             'game_mode' => ['required', Rule::in(['multiplayer', 'single_player'])],
             // NPC parameters removed - sensible defaults are applied based on size_tier
             'skip_mirror' => ['nullable', 'boolean'],

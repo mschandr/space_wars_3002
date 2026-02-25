@@ -454,7 +454,7 @@ class GalaxyCreationService
     {
         // Seed Minerals
         if (Mineral::count() === 0) {
-            Artisan::call('db:seed', ['--class' => 'MineralSeeder']);
+            (new \Database\Seeders\MineralSeeder)->run();
         }
 
         // Seed Ship Types
@@ -466,7 +466,7 @@ class GalaxyCreationService
 
         // Seed Upgrade Plans
         if (Plan::count() === 0) {
-            Artisan::call('db:seed', ['--class' => 'PlansSeeder']);
+            (new \Database\Seeders\PlansSeeder)->run();
         }
 
         // Seed Pirate Factions
@@ -478,7 +478,7 @@ class GalaxyCreationService
 
         // Seed Pirate Captains
         if (PirateCaptain::count() === 0) {
-            Artisan::call('db:seed', ['--class' => 'PirateCaptainSeeder']);
+            (new \Database\Seeders\PirateCaptainSeeder)->run();
         }
     }
 

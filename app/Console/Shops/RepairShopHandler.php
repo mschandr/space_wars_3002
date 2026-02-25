@@ -2,36 +2,18 @@
 
 namespace App\Console\Shops;
 
-use App\Console\Traits\ConsoleBoxRenderer;
-use App\Console\Traits\ConsoleColorizer;
-use App\Console\Traits\TerminalInputHandler;
 use App\Models\Player;
 use App\Models\TradingHub;
 use App\Services\ShipRepairService;
-use Illuminate\Console\Command;
 
-class RepairShopHandler
+class RepairShopHandler extends BaseShopHandler
 {
-    use ConsoleBoxRenderer;
-    use ConsoleColorizer;
-    use TerminalInputHandler;
-
-    private Command $command;
-
-    private int $termWidth;
-
-    public function __construct(Command $command, int $termWidth = 120)
-    {
-        $this->command = $command;
-        $this->termWidth = $termWidth;
-    }
-
     /**
      * Display the repair shop interface
      */
     public function show(Player $player, TradingHub $tradingHub): void
     {
-        system('stty sane');
+        $this->resetTerminal();
 
         $repairService = app(ShipRepairService::class);
 
@@ -45,10 +27,7 @@ class RepairShopHandler
             $this->clearScreen();
 
             // Header
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->line($this->colorize('  REPAIR & REFIT - SHIP MAINTENANCE', 'header'));
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->newLine();
+            $this->renderShopHeader('REPAIR & REFIT - SHIP MAINTENANCE');
 
             // Location and player info
             $this->line($this->colorize('  Trading Hub: ', 'label').$this->colorize($tradingHub->name, 'trade'));
@@ -102,7 +81,7 @@ class RepairShopHandler
 
             // Total repair cost
             if ($repairInfo['total_repair_cost'] > 0) {
-                $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+                $this->renderSeparator();
                 $this->newLine();
 
                 $canAfford = $player->credits >= $repairInfo['total_repair_cost'];
@@ -117,7 +96,7 @@ class RepairShopHandler
                 }
 
                 $this->newLine();
-                $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+                $this->renderSeparator();
                 $this->newLine();
 
                 // Options
@@ -202,20 +181,6 @@ class RepairShopHandler
         }
 
         $this->newLine();
-        $this->line('  '.$this->colorize('Press any key to continue...', 'dim'));
-        fgetc(STDIN);
-    }
-
-    // Helper methods
-    private function line(string $text): void
-    {
-        $this->command->line($text);
-    }
-
-    private function newLine(int $count = 1): void
-    {
-        for ($i = 0; $i < $count; $i++) {
-            $this->command->newLine();
-        }
+        $this->waitForAnyKey();
     }
 }

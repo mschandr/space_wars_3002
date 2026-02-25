@@ -18,9 +18,13 @@ class ColonyTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Player $player;
+
     private Galaxy $galaxy;
+
     private PointOfInterest $planet;
+
     private PlayerShip $playerShip;
 
     protected function setUp(): void

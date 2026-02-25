@@ -2,31 +2,19 @@
 
 namespace App\Console\Shops;
 
-use App\Console\Traits\ConsoleBoxRenderer;
-use App\Console\Traits\ConsoleColorizer;
-use App\Console\Traits\TerminalInputHandler;
 use App\Models\Player;
 use App\Models\WarpLanePirate;
 use App\Services\PirateEncounterService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 
-class PirateEncounterHandler
+class PirateEncounterHandler extends BaseShopHandler
 {
-    use ConsoleBoxRenderer;
-    use ConsoleColorizer;
-    use TerminalInputHandler;
-
-    private Command $command;
-
-    private int $termWidth;
-
     private PirateEncounterService $encounterService;
 
     public function __construct(Command $command, int $termWidth = 120)
     {
-        $this->command = $command;
-        $this->termWidth = $termWidth;
+        parent::__construct($command, $termWidth);
         $this->encounterService = app(PirateEncounterService::class);
     }
 
@@ -37,7 +25,7 @@ class PirateEncounterHandler
      */
     public function handleEncounter(Player $player, WarpLanePirate $encounter): string
     {
-        system('stty sane');
+        $this->resetTerminal();
 
         // Generate the pirate fleet
         $pirateFleet = $this->encounterService->generateFleet($encounter);
@@ -63,10 +51,7 @@ class PirateEncounterHandler
             $this->clearScreen();
 
             // Header
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->line($this->colorize('  ⚔️  PIRATE ENCOUNTER  ⚔️', 'header'));
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->newLine();
+            $this->renderShopHeader('⚔️  PIRATE ENCOUNTER  ⚔️');
 
             // Pirate info
             $this->line($this->colorize('  INTERCEPTED BY:', 'header'));
@@ -136,7 +121,7 @@ class PirateEncounterHandler
             $this->newLine();
 
             // Options
-            $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+            $this->renderSeparator();
             $this->newLine();
             $this->line('  '.$this->colorize('[F]', 'highlight').' Fight - Engage in combat');
             $this->line('  '.$this->colorize('[R]', 'highlight').' Run - Attempt to escape');
@@ -177,10 +162,7 @@ class PirateEncounterHandler
         $escapeResult = $this->encounterService->attemptEscape($ship, $pirateFleet);
 
         $this->clearScreen();
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  ESCAPE ATTEMPT', 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('ESCAPE ATTEMPT');
 
         if ($escapeResult['success']) {
             $this->line('  '.$this->colorize('✓ SUCCESS!', 'highlight'));
@@ -215,10 +197,7 @@ class PirateEncounterHandler
         $surrenderResult = $this->encounterService->processSurrender($player, $ship, $pirateFleet);
 
         $this->clearScreen();
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  SURRENDER', 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('SURRENDER');
 
         // Display surrender message
         foreach (explode("\n", $surrenderResult['message']) as $line) {
@@ -240,10 +219,7 @@ class PirateEncounterHandler
         $ship = $player->activeShip;
 
         $this->clearScreen();
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  ⚔️  COMBAT ENGAGED  ⚔️', 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('⚔️  COMBAT ENGAGED  ⚔️');
 
         // Initiate combat
         $combatResult = $this->encounterService->initiateCombat($player, $ship, $pirateFleet);
@@ -302,10 +278,7 @@ class PirateEncounterHandler
     {
         // TODO: Implement multi-select salvage screen
         $this->clearScreen();
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  SALVAGE COLLECTION', 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('SALVAGE COLLECTION');
 
         $this->line('  '.$this->colorize('Salvage available:', 'label'));
         $this->newLine();
@@ -384,18 +357,5 @@ class PirateEncounterHandler
 
         $this->newLine();
         $this->command->ask('Press any key to continue...');
-    }
-
-    // Helper methods
-    private function line(string $text): void
-    {
-        $this->command->line($text);
-    }
-
-    private function newLine(int $count = 1): void
-    {
-        for ($i = 0; $i < $count; $i++) {
-            $this->command->newLine();
-        }
     }
 }

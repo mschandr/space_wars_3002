@@ -308,6 +308,8 @@ class PlayerShipTest extends TestCase
     /** @test */
     public function test_fuel_regenerates_over_time()
     {
+        config(['game_config.ships.fuel_regen_seconds_per_unit' => 30]);
+
         $player = Player::factory()->create();
         $ship = Ship::factory()->create();
 

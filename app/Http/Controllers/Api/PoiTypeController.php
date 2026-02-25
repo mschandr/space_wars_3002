@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\PoiType;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class PoiTypeController extends BaseApiController
 {
@@ -19,7 +18,6 @@ class PoiTypeController extends BaseApiController
 
         return $this->success([
             'types' => $types->map(fn ($type) => [
-                'id' => $type->id,
                 'code' => $type->code,
                 'label' => $type->label,
                 'description' => $type->description,
@@ -57,7 +55,6 @@ class PoiTypeController extends BaseApiController
         }
 
         return $this->success([
-            'id' => $type->id,
             'code' => $type->code,
             'label' => $type->label,
             'description' => $type->description,
@@ -88,7 +85,6 @@ class PoiTypeController extends BaseApiController
         $types = PoiType::orderBy('id')->get();
 
         $grouped = $types->groupBy('category')->map(fn ($group) => $group->map(fn ($type) => [
-            'id' => $type->id,
             'code' => $type->code,
             'label' => $type->label,
             'color' => $type->color,
@@ -109,7 +105,6 @@ class PoiTypeController extends BaseApiController
 
         return $this->success([
             'types' => $types->map(fn ($type) => [
-                'id' => $type->id,
                 'code' => $type->code,
                 'label' => $type->label,
                 'description' => $type->description,
@@ -128,7 +123,6 @@ class PoiTypeController extends BaseApiController
 
         return $this->success([
             'types' => $types->map(fn ($type) => [
-                'id' => $type->id,
                 'code' => $type->code,
                 'label' => $type->label,
                 'produces_minerals' => $type->produces_minerals,

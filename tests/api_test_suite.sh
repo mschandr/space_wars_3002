@@ -588,7 +588,7 @@ test_travel_endpoints() {
 
     # Test: Get fuel cost calculation
     log_info "Testing GET /api/travel/fuel-cost"
-    api_test "Calculate fuel cost" "GET" "/travel/fuel-cost?from_poi=$POI_UUID&to_poi=$POI_UUID" "200" "" "true" || true
+    api_test "Calculate fuel cost" "GET" "/travel/fuel-cost?ship_uuid=$SHIP_UUID&poi_uuid=$POI_UUID" "200" "" "true" || true
 
     # Test: XP preview
     log_info "Testing GET /api/travel/xp-preview"

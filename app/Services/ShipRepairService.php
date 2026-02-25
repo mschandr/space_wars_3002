@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Player;
 use App\Models\PlayerShip;
+use Illuminate\Support\Facades\DB;
 
 class ShipRepairService
 {
@@ -118,20 +119,26 @@ class ShipRepairService
             ];
         }
 
-        // Deduct credits
-        $player->credits -= $cost;
-        $player->save();
+        return DB::transaction(function () use ($player, $ship, $cost, $hullDamage) {
+            if (! $player->deductCredits($cost)) {
+                return [
+                    'success' => false,
+                    'message' => 'Insufficient credits for hull repair',
+                    'cost' => $cost,
+                ];
+            }
 
-        // Repair hull
-        $ship->hull = $ship->max_hull;
-        $ship->save();
+            // Repair hull
+            $ship->hull = $ship->max_hull;
+            $ship->save();
 
-        return [
-            'success' => true,
-            'message' => "Hull repaired: {$hullDamage} points restored",
-            'cost' => $cost,
-            'hull_repaired' => $hullDamage,
-        ];
+            return [
+                'success' => true,
+                'message' => "Hull repaired: {$hullDamage} points restored",
+                'cost' => $cost,
+                'hull_repaired' => $hullDamage,
+            ];
+        });
     }
 
     /**
@@ -159,24 +166,30 @@ class ShipRepairService
             ];
         }
 
-        // Deduct credits
-        $player->credits -= $totalCost;
-        $player->save();
+        return DB::transaction(function () use ($player, $ship, $downgraded, $totalCost) {
+            if (! $player->deductCredits($totalCost)) {
+                return [
+                    'success' => false,
+                    'message' => 'Insufficient credits for component repair',
+                    'cost' => $totalCost,
+                ];
+            }
 
-        // Repair each component
-        $repaired = [];
-        foreach ($downgraded as $component) {
-            $ship->{$component['component']} = $component['should_be'];
-            $repaired[] = $component['name'];
-        }
-        $ship->save();
+            // Repair each component
+            $repaired = [];
+            foreach ($downgraded as $component) {
+                $ship->{$component['component']} = $component['should_be'];
+                $repaired[] = $component['name'];
+            }
+            $ship->save();
 
-        return [
-            'success' => true,
-            'message' => 'Components repaired: '.implode(', ', $repaired),
-            'cost' => $totalCost,
-            'components_repaired' => $repaired,
-        ];
+            return [
+                'success' => true,
+                'message' => 'Components repaired: '.implode(', ', $repaired),
+                'cost' => $totalCost,
+                'components_repaired' => $repaired,
+            ];
+        });
     }
 
     /**
@@ -203,28 +216,36 @@ class ShipRepairService
             ];
         }
 
-        $results = [];
+        return DB::transaction(function () use ($player, $ship, $repairInfo, $totalCost) {
+            $results = [];
 
-        // Repair hull
-        if ($repairInfo['needs_hull_repair']) {
-            $hullResult = $this->repairHull($player, $ship);
-            $results[] = $hullResult['message'];
-        }
+            // Deduct total cost once upfront
+            $player->deductCredits($totalCost);
 
-        // Repair components
-        if ($repairInfo['needs_component_repair']) {
-            // Reload player to get updated credits after hull repair
-            $player->refresh();
-            $componentResult = $this->repairComponents($player, $ship);
-            if ($componentResult['success']) {
-                $results[] = $componentResult['message'];
+            // Repair hull
+            if ($repairInfo['needs_hull_repair']) {
+                $hullDamage = $ship->max_hull - $ship->hull;
+                $ship->hull = $ship->max_hull;
+                $results[] = "Hull repaired: {$hullDamage} points restored";
             }
-        }
 
-        return [
-            'success' => true,
-            'message' => implode("\n", $results),
-            'cost' => $totalCost,
-        ];
+            // Repair components
+            if ($repairInfo['needs_component_repair']) {
+                $repaired = [];
+                foreach ($repairInfo['downgraded_components'] as $component) {
+                    $ship->{$component['component']} = $component['should_be'];
+                    $repaired[] = $component['name'];
+                }
+                $results[] = 'Components repaired: '.implode(', ', $repaired);
+            }
+
+            $ship->save();
+
+            return [
+                'success' => true,
+                'message' => implode("\n", $results),
+                'cost' => $totalCost,
+            ];
+        });
     }
 }

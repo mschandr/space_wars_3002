@@ -29,7 +29,7 @@ class MirrorUniverseController extends BaseApiController
         $ship = $player->activeShip;
 
         if (! $ship) {
-            return $this->error('No active ship', 400);
+            return $this->error('No active ship', 'NO_ACTIVE_SHIP', null, 400);
         }
 
         // Get mirror config
@@ -46,7 +46,7 @@ class MirrorUniverseController extends BaseApiController
         $canTravel = true;
 
         if ($lastMirrorTravel) {
-            $hoursSinceTravel = now()->diffInHours($lastMirrorTravel);
+            $hoursSinceTravel = (int) round(abs(now()->diffInHours($lastMirrorTravel)));
             $cooldownRemaining = max(0, $cooldownHours - $hoursSinceTravel);
             $canTravel = $cooldownRemaining === 0;
         }
@@ -75,7 +75,7 @@ class MirrorUniverseController extends BaseApiController
             'mirror_gate' => $mirrorGate ? [
                 'uuid' => $mirrorGate->uuid,
                 'location' => [
-                    'poi_uuid' => $mirrorGate->sourcePoi->uuid,
+                    'uuid' => $mirrorGate->sourcePoi->uuid,
                     'name' => $mirrorGate->sourcePoi->name,
                     'x' => $mirrorGate->sourcePoi->x,
                     'y' => $mirrorGate->sourcePoi->y,
@@ -99,7 +99,7 @@ class MirrorUniverseController extends BaseApiController
             ->first();
 
         if (! $mirrorGate) {
-            return $this->error('No mirror gate exists in this galaxy', 404);
+            return $this->error('No mirror gate exists in this galaxy', 'MIRROR_GATE_NOT_FOUND', null, 404);
         }
 
         $mirrorConfig = config('game_config.mirror_universe', []);
@@ -112,20 +112,16 @@ class MirrorUniverseController extends BaseApiController
             'mirror_gate' => [
                 'uuid' => $mirrorGate->uuid,
                 'location' => [
-                    'poi_uuid' => $mirrorGate->sourcePoi->uuid,
+                    'uuid' => $mirrorGate->sourcePoi->uuid,
                     'name' => $mirrorGate->sourcePoi->name,
-                    'coordinates' => [
-                        'x' => $mirrorGate->sourcePoi->x,
-                        'y' => $mirrorGate->sourcePoi->y,
-                    ],
+                    'x' => $mirrorGate->sourcePoi->x,
+                    'y' => $mirrorGate->sourcePoi->y,
                 ],
                 'destination' => $mirrorGate->destinationPoi ? [
-                    'poi_uuid' => $mirrorGate->destinationPoi->uuid,
+                    'uuid' => $mirrorGate->destinationPoi->uuid,
                     'name' => $mirrorGate->destinationPoi->name,
-                    'coordinates' => [
-                        'x' => $mirrorGate->destinationPoi->x,
-                        'y' => $mirrorGate->destinationPoi->y,
-                    ],
+                    'x' => $mirrorGate->destinationPoi->x,
+                    'y' => $mirrorGate->destinationPoi->y,
                 ] : null,
             ],
             'requirements' => [
@@ -152,7 +148,7 @@ class MirrorUniverseController extends BaseApiController
         $ship = $player->activeShip;
 
         if (! $ship) {
-            return $this->error('No active ship', 400);
+            return $this->error('No active ship', 'NO_ACTIVE_SHIP', null, 400);
         }
 
         // Get mirror config
@@ -164,6 +160,8 @@ class MirrorUniverseController extends BaseApiController
         if ($ship->sensors < $requiredSensorLevel) {
             return $this->error(
                 "Insufficient sensor level. Required: {$requiredSensorLevel}, Current: {$ship->sensors}",
+                'INSUFFICIENT_SENSORS',
+                null,
                 400
             );
         }
@@ -171,12 +169,14 @@ class MirrorUniverseController extends BaseApiController
         // Check cooldown
         $lastMirrorTravel = $player->last_mirror_travel_at ?? null;
         if ($lastMirrorTravel) {
-            $hoursSinceTravel = now()->diffInHours($lastMirrorTravel);
+            $hoursSinceTravel = (int) round(abs(now()->diffInHours($lastMirrorTravel)));
             if ($hoursSinceTravel < $cooldownHours) {
                 $hoursRemaining = $cooldownHours - $hoursSinceTravel;
 
                 return $this->error(
                     "Mirror universe cooldown active. Can travel again in {$hoursRemaining} hours",
+                    'COOLDOWN_ACTIVE',
+                    null,
                     400
                 );
             }
@@ -189,11 +189,11 @@ class MirrorUniverseController extends BaseApiController
 
         // Check if player is at mirror gate
         if ($player->current_poi_id !== $mirrorGate->source_poi_id) {
-            return $this->error('You must be at the mirror gate to enter the mirror universe', 400);
+            return $this->error('You must be at the mirror gate to enter the mirror universe', 'NOT_AT_GATE', null, 400);
         }
 
         // Execute travel through mirror gate
-        $travelResult = $this->travelService->travelViaWarpGate($player, $ship, $mirrorGate);
+        $travelResult = $this->travelService->executeTravel($player, $mirrorGate);
 
         // Update cooldown
         $player->update(['last_mirror_travel_at' => now()]);

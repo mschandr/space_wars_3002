@@ -195,7 +195,7 @@ class PlayerDeathService
      */
     private function tradingHubHasShips($tradingHub): bool
     {
-        if (!$tradingHub) {
+        if (! $tradingHub) {
             return false;
         }
 
@@ -241,7 +241,7 @@ class PlayerDeathService
         if ($respawn) {
             $messages[] = "Your escape pod drifts to {$respawn->name}...";
             if ($respawn->tradingHub && $this->tradingHubHasShips($respawn->tradingHub)) {
-                $messages[] = "This trading hub has ships available - you can purchase a new ship here.";
+                $messages[] = 'This trading hub has ships available - you can purchase a new ship here.';
             } else {
                 $messages[] = "You'll need to find a trading hub with ships to continue your journey.";
             }

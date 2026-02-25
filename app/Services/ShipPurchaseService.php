@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\Ship;
+use App\Models\ShipyardInventory;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -47,17 +49,22 @@ class ShipPurchaseService
             ];
         }
 
-        // Deduct credits
-        $player->credits -= $blueprint->base_price;
-        $player->save();
+        return DB::transaction(function () use ($player, $blueprint, $name, $quality) {
+            if (! $player->deductCredits($blueprint->base_price)) {
+                return [
+                    'success' => false,
+                    'error' => 'Insufficient credits. Need '.number_format($blueprint->base_price).' credits.',
+                ];
+            }
 
-        // Create the ship instance
-        $playerShip = $this->createShipInstance($player, $blueprint, $name, $quality);
+            // Create the ship instance
+            $playerShip = $this->createShipInstance($player, $blueprint, $name, $quality);
 
-        return [
-            'success' => true,
-            'ship' => $playerShip,
-        ];
+            return [
+                'success' => true,
+                'ship' => $playerShip,
+            ];
+        });
     }
 
     /**
@@ -88,6 +95,13 @@ class ShipPurchaseService
             'warp_drive' => $attributes['starting_warp_drive'] ?? 1,
             'weapon_slots' => $blueprint->weapon_slots ?? 2,
             'utility_slots' => $blueprint->utility_slots ?? 2,
+            'engine_slots' => $blueprint->engine_slots ?? 1,
+            'reactor_slots' => $blueprint->reactor_slots ?? 1,
+            'hull_plating_slots' => $blueprint->hull_plating_slots ?? 1,
+            'shield_slots' => $blueprint->shield_slots ?? 1,
+            'sensor_slots' => $blueprint->sensor_slots ?? 1,
+            'cargo_module_slots' => $blueprint->cargo_module_slots ?? 1,
+            'size_class' => $blueprint->size_class ?? 'medium',
             'shield_strength' => $blueprint->shield_strength ?? 50,
             'current_cargo' => 0,
             'is_active' => false,
@@ -167,6 +181,67 @@ class ShipPurchaseService
         $suffix = $suffixes[array_rand($suffixes)];
 
         return "{$prefix} {$suffix}";
+    }
+
+    /**
+     * Create a PlayerShip directly from pre-rolled shipyard inventory stats.
+     * What you see in the shop is what you get — no re-rolling.
+     */
+    public function createShipFromInventory(
+        Player $player,
+        ShipyardInventory $item,
+        ?string $name = null
+    ): PlayerShip {
+        $attributes = $item->attributes ?? [];
+
+        $playerShip = new PlayerShip([
+            'uuid' => Str::uuid(),
+            'player_id' => $player->id,
+            'ship_id' => $item->ship_id,
+            'name' => $name ?? $item->name,
+            'current_fuel' => $item->max_fuel,
+            'max_fuel' => $item->max_fuel,
+            'fuel_last_updated_at' => now(),
+            'hull' => $item->hull_strength,
+            'max_hull' => $item->hull_strength,
+            'weapons' => $item->weapons,
+            'cargo_hold' => $item->cargo_capacity,
+            'sensors' => $item->sensors,
+            'warp_drive' => $item->warp_drive,
+            'weapon_slots' => $item->weapon_slots,
+            'utility_slots' => $item->utility_slots,
+            'engine_slots' => $item->engine_slots ?? 1,
+            'reactor_slots' => $item->reactor_slots ?? 1,
+            'hull_plating_slots' => $item->hull_plating_slots ?? 1,
+            'shield_slots' => $item->shield_slots ?? 1,
+            'sensor_slots' => $item->sensor_slots ?? 1,
+            'cargo_module_slots' => $item->cargo_module_slots ?? 1,
+            'size_class' => $item->size_class ?? 'medium',
+            'shield_strength' => $item->shield_strength,
+            'current_cargo' => 0,
+            'is_active' => false,
+            'status' => 'operational',
+            'fuel_regen_modifier' => $attributes['fuel_regen_rate'] ?? 1.0,
+            'fuel_consumption_modifier' => $attributes['fuel_consumption_rate'] ?? 1.0,
+            'speed_modifier' => 1.0,
+            'hidden_hold_capacity' => $attributes['hidden_hold_capacity'] ?? 0,
+            'hidden_cargo' => 0,
+            'colonist_capacity' => $attributes['colonist_capacity'] ?? 0,
+            'current_colonists' => 0,
+            'variation_traits' => $item->variation_traits,
+        ]);
+
+        // Apply variation modifiers from stored traits
+        if (! empty($item->variation_traits)) {
+            $modifiers = $this->variationService->calculateModifiers($item->variation_traits);
+            $playerShip->fuel_regen_modifier = round($modifiers['fuel_regen_modifier'], 2);
+            $playerShip->fuel_consumption_modifier = round($modifiers['fuel_consumption_modifier'], 2);
+            $playerShip->speed_modifier = round($modifiers['speed_modifier'], 2);
+        }
+
+        $playerShip->save();
+
+        return $playerShip;
     }
 
     /**

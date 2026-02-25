@@ -16,21 +16,78 @@ use Illuminate\Support\Facades\DB;
 class StarChartService
 {
     /**
-     * Get chart coverage from a purchase location
-     * Uses BFS to traverse warp gates up to maxHops distance
-     * Optimized: Pre-loads gates per BFS level to reduce N+1 queries
+     * Get chart coverage from a purchase location.
+     *
+     * Uses a hybrid approach:
+     * 1. Distance-based: spatial radius (only at inhabited hubs)
+     * 2. Warp-gate BFS: region-dependent hop depth
      *
      * @param  PointOfInterest  $purchaseLocation  Center of the chart
-     * @param  int  $maxHops  Number of warp gate hops to traverse
+     * @param  int  $maxHops  Number of warp gate hops to traverse (0 = use config)
+     * @param  ?int  $sectorId  Optional sector filter
      * @return Collection Collection of POIs revealed by this chart
      */
-    public function getChartCoverage(PointOfInterest $purchaseLocation, int $maxHops = 2): Collection
+    public function getChartCoverage(PointOfInterest $purchaseLocation, int $maxHops = 0, ?int $sectorId = null): Collection
     {
-        $maxHops = $maxHops ?: config('game_config.star_charts.coverage_hops', 2);
+        $isInhabited = $purchaseLocation->is_inhabited;
+        $systems = collect()->keyBy('id');
 
-        $visited = collect([$purchaseLocation->id]);
-        $revealed = collect([$purchaseLocation]);
-        $queue = collect([$purchaseLocation]);
+        // 1. Distance-based: spatial radius (only at inhabited hubs — that's where cartographers are)
+        $radius = $isInhabited
+            ? config('game_config.knowledge.chart_radius_inhabited_ly', 5)
+            : 0;
+
+        if ($radius > 0) {
+            $x = $purchaseLocation->x;
+            $y = $purchaseLocation->y;
+
+            $query = PointOfInterest::where('galaxy_id', $purchaseLocation->galaxy_id)
+                ->stars()
+                ->where('is_hidden', false)
+                ->where('x', '>=', $x - $radius)
+                ->where('x', '<=', $x + $radius)
+                ->where('y', '>=', $y - $radius)
+                ->where('y', '<=', $y + $radius)
+                ->whereRaw(
+                    'SQRT(POW(CAST(x AS SIGNED) - ?, 2) + POW(CAST(y AS SIGNED) - ?, 2)) <= ?',
+                    [$x, $y, $radius]
+                );
+
+            if ($sectorId && config('game_config.knowledge.chart_sector_limited', true)) {
+                $query->where('sector_id', $sectorId);
+            }
+
+            $systems = $query->get()->keyBy('id');
+        }
+
+        // Always include the purchase location itself
+        if (! $systems->has($purchaseLocation->id)) {
+            $systems[$purchaseLocation->id] = $purchaseLocation;
+        }
+
+        // 2. Warp-gate BFS: region-dependent hop depth
+        if ($maxHops === 0) {
+            $maxHops = $isInhabited
+                ? config('game_config.knowledge.chart_hops_inhabited', 2)
+                : config('game_config.knowledge.chart_hops_uninhabited', 1);
+        }
+
+        $bfsSystems = $this->bfsWarpGates($purchaseLocation, $maxHops, $sectorId);
+        $systems = $systems->union($bfsSystems);
+
+        return $systems->values();
+    }
+
+    /**
+     * BFS traversal through warp gates from a starting POI.
+     *
+     * @return Collection Keyed by POI ID
+     */
+    private function bfsWarpGates(PointOfInterest $startPoi, int $maxHops, ?int $sectorId = null): Collection
+    {
+        $visited = collect([$startPoi->id]);
+        $revealed = collect([$startPoi->id => $startPoi]);
+        $queue = collect([$startPoi]);
 
         for ($hop = 0; $hop < $maxHops; $hop++) {
             $currentLevel = $queue;
@@ -40,7 +97,6 @@ class StarChartService
                 break;
             }
 
-            // Batch load all gates for current level systems (prevents N+1)
             $currentLevelIds = $currentLevel->pluck('id')->toArray();
             $gates = DB::table('warp_gates')
                 ->whereIn('source_poi_id', $currentLevelIds)
@@ -48,7 +104,6 @@ class StarChartService
                 ->where('status', 'active')
                 ->get();
 
-            // Get all destination POI IDs that we need
             $destinationIds = $gates->pluck('destination_poi_id')
                 ->filter(fn ($id) => ! $visited->contains($id))
                 ->unique()
@@ -58,11 +113,14 @@ class StarChartService
                 continue;
             }
 
-            // Batch load all destination POIs
-            $destinations = PointOfInterest::whereIn('id', $destinationIds)
-                ->where('is_hidden', false)
-                ->get()
-                ->keyBy('id');
+            $query = PointOfInterest::whereIn('id', $destinationIds)
+                ->where('is_hidden', false);
+
+            if ($sectorId && config('game_config.knowledge.chart_sector_limited', true)) {
+                $query->where('sector_id', $sectorId);
+            }
+
+            $destinations = $query->get()->keyBy('id');
 
             foreach ($destinations as $destination) {
                 if ($visited->contains($destination->id)) {
@@ -70,7 +128,7 @@ class StarChartService
                 }
 
                 $visited->push($destination->id);
-                $revealed->push($destination);
+                $revealed[$destination->id] = $destination;
                 $queue->push($destination);
             }
         }
@@ -98,7 +156,8 @@ class StarChartService
         // Get charted POI IDs once (cached, prevents N+1 queries)
         $chartedPoiIds = $player->getChartedPoiIds();
 
-        // Count unknown systems using in-memory lookup
+        // TODO: (Optimization) in_array() is O(n) per lookup. Use array_flip($chartedPoiIds) for
+        // O(1) lookups with isset(), especially important as chart collections grow large.
         $unknownCount = 0;
         foreach ($coverage as $poi) {
             if (! in_array($poi->id, $chartedPoiIds, true)) {
@@ -193,6 +252,10 @@ class StarChartService
 
         // Clear the chart cache so future checks reflect new charts
         $player->clearChartedPoiCache();
+
+        // Grant knowledge for charted systems (fog-of-war integration)
+        $knowledgeService = app(PlayerKnowledgeService::class);
+        $knowledgeService->applyChartKnowledge($player, $centerSystem, $centerSystem->sector_id);
 
         return [
             'success' => true,
@@ -359,6 +422,7 @@ class StarChartService
 
         $grantedCount = 0;
         $now = now();
+        $knowledgeService = app(PlayerKnowledgeService::class);
 
         foreach ($closestSystems as $system) {
             DB::table('player_star_charts')->insert([
@@ -370,8 +434,18 @@ class StarChartService
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+
+            // Grant fog-of-war knowledge for starting charts
+            $level = $system->is_inhabited
+                ? \App\Enums\Exploration\KnowledgeLevel::SURVEYED
+                : \App\Enums\Exploration\KnowledgeLevel::BASIC;
+            $knowledgeService->grantKnowledge($player, $system, $level, 'spawn', $startingLocation);
+
             $grantedCount++;
         }
+
+        // Also mark the starting location as VISITED
+        $knowledgeService->markVisited($player, $startingLocation);
 
         return $grantedCount;
     }

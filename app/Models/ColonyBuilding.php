@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
 
 class ColonyBuilding extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -50,20 +50,6 @@ class ColonyBuilding extends Model
         'credits_generated_per_cycle' => 'integer',
         'last_cycle_at' => 'datetime',
     ];
-
-    /**
-     * Boot the model
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($building) {
-            if (empty($building->uuid)) {
-                $building->uuid = Str::uuid();
-            }
-        });
-    }
 
     /**
      * Get the colony this building belongs to
@@ -385,8 +371,7 @@ class ColonyBuilding extends Model
         }
 
         // Deduct costs
-        $player->credits -= $costs['credits'];
-        $player->save();
+        $player->deductCredits($costs['credits']);
 
         // Upgrade
         $this->level = $newLevel;

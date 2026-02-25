@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Colony;
-use App\Models\CombatSession;
 use App\Models\Galaxy;
 use App\Models\Player;
 use Illuminate\Http\JsonResponse;

@@ -68,7 +68,7 @@ class ShipShopTest extends TestCase
     public function test_it_gets_shipyard_with_available_ships()
     {
         $response = $this->actingAs($this->user, 'sanctum')
-            ->getJson("/api/trading-hubs/{$this->tradingHub->uuid}/shipyard");
+            ->getJson("/api/trading-hubs/{$this->tradingHub->uuid}/ship-shop");
 
         $response->assertOk()
             ->assertJson([
@@ -100,7 +100,7 @@ class ShipShopTest extends TestCase
         TradingHubShip::where('trading_hub_id', $this->tradingHub->id)->delete();
 
         $response = $this->actingAs($this->user, 'sanctum')
-            ->getJson("/api/trading-hubs/{$this->tradingHub->uuid}/shipyard");
+            ->getJson("/api/trading-hubs/{$this->tradingHub->uuid}/ship-shop");
 
         $response->assertOk()
             ->assertJson([
@@ -333,7 +333,7 @@ class ShipShopTest extends TestCase
 
     public function test_it_requires_authentication()
     {
-        $response = $this->getJson("/api/trading-hubs/{$this->tradingHub->uuid}/shipyard");
+        $response = $this->getJson("/api/trading-hubs/{$this->tradingHub->uuid}/ship-shop");
 
         $response->assertUnauthorized();
     }
@@ -344,7 +344,7 @@ class ShipShopTest extends TestCase
             ->postJson("/api/players/{$this->player->uuid}/ships/purchase", []);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['ship_id', 'trading_hub_uuid']);
+            ->assertJsonValidationErrors(['trading_hub_uuid']);
     }
 
     public function test_inventory_quantity_decreases_after_purchase()

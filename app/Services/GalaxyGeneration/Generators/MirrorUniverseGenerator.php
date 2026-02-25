@@ -11,7 +11,10 @@ use App\Services\GalaxyGeneration\Contracts\GeneratorInterface;
 use App\Services\GalaxyGeneration\Data\GenerationConfig;
 use App\Services\GalaxyGeneration\Data\GenerationMetrics;
 use App\Services\GalaxyGeneration\Data\GenerationResult;
+use App\Services\InhabitedSystemGenerator;
 use App\Services\MirrorUniverseService;
+use App\Services\Trading\TradingHubGenerator;
+use App\Services\WarpGate\IncrementalWarpGateGenerator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -114,30 +117,23 @@ final class MirrorUniverseGenerator implements GeneratorInterface
 
             // Step 4: Designate inhabited systems
             $inhabitedPercentage = config('game_config.galaxy.inhabited_percentage', 0.40);
-            Artisan::call('galaxy:designate-inhabited', [
-                'galaxy' => $mirrorGalaxy->id,
-                '--percentage' => $inhabitedPercentage,
-            ]);
+            app(InhabitedSystemGenerator::class)->designateInhabitedSystems($mirrorGalaxy, $inhabitedPercentage);
             $this->freeMemory();
 
             // Step 5: Generate warp gates (denser network in mirror)
             Log::info('Generating warp gates in mirror galaxy');
             $adjacencyThreshold = max($mirrorGalaxy->width, $mirrorGalaxy->height) / 15;
-            Artisan::call('galaxy:generate-gates', [
-                'galaxy' => $mirrorGalaxy->id,
-                '--adjacency' => $adjacencyThreshold,
-                '--hidden-percentage' => 0.05,
-                '--max-gates' => 8,
-                '--regenerate' => true,
-                '--incremental' => true,
-            ]);
+            $gateGenerator = new IncrementalWarpGateGenerator(
+                adjacencyThreshold: $adjacencyThreshold,
+                hiddenGatePercentage: 0.05,
+                maxGatesPerSystem: 8,
+            );
+            $gateGenerator->generateGatesIncremental($mirrorGalaxy);
             $this->freeMemory();
 
             // Step 6: Generate trading hubs
             Log::info('Generating trading hubs in mirror galaxy');
-            Artisan::call('trading:generate-hubs', [
-                'galaxy' => $mirrorGalaxy->id,
-            ]);
+            (new TradingHubGenerator)->generateHubs($mirrorGalaxy);
             Log::info('Trading hubs generation complete', ['memory_mb' => round(memory_get_usage(true) / 1024 / 1024, 1)]);
             $this->freeMemory();
 

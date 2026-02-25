@@ -11,12 +11,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Core game data
+        // Core game data (galaxy-independent reference tables)
+        // Note: PirateFactionSeeder, PirateCaptainSeeder, and WarpLanePirateSeeder
+        // are galaxy-dependent and run during galaxy:initialize / galaxy:distribute-pirates
         $this->call([
+            MineralSeeder::class,
+            QuantiumMineralSeeder::class,
+            PoiTypeSeeder::class,
             ShipTypesSeeder::class,
-            PirateFactionSeeder::class,
-            PirateCaptainSeeder::class,
-            WarpLanePirateSeeder::class,
+            ShipComponentsSeeder::class,
+            PlansSeeder::class,
+            PrecursorShipSeeder::class,
         ]);
     }
 }

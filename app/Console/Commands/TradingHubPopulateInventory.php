@@ -8,6 +8,7 @@ use App\Models\Ship;
 use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
 use App\Models\TradingHubShip;
+use App\Services\TradingService;
 use DB;
 use Illuminate\Console\Command;
 
@@ -29,11 +30,12 @@ class TradingHubPopulateInventory extends Command
 
         // Get all minerals, plans, and ships
         $minerals = Mineral::all();
-        $plans    = Plan::all();
-        $ships    = Ship::where('is_available', true)->get();
+        $plans = Plan::all();
+        $ships = Ship::where('is_available', true)->get();
 
         if ($minerals->isEmpty()) {
             $this->error('No minerals found. Run MineralSeeder first.');
+
             return Command::FAILURE;
         }
 
@@ -43,6 +45,7 @@ class TradingHubPopulateInventory extends Command
 
         if ($ships->isEmpty()) {
             $this->error('No ships found. Run ShipTypesSeeder first.');
+
             return Command::FAILURE;
         }
 
@@ -51,6 +54,7 @@ class TradingHubPopulateInventory extends Command
 
         if ($hubs->isEmpty()) {
             $this->error('No active trading hubs found.');
+
             return Command::FAILURE;
         }
 
@@ -61,7 +65,7 @@ class TradingHubPopulateInventory extends Command
         $this->newLine();
 
         // Delete existing inventory if regenerating
-        if (!$galaxy_id) {
+        if (! $galaxy_id) {
             return Command::FAILURE;
         }
         if ($this->option('regenerate')) {
@@ -92,60 +96,19 @@ class TradingHubPopulateInventory extends Command
         $progressBar = $this->output->createProgressBar($hubs->count());
         $progressBar->start();
 
-        $totalInventory = 0;
+        $tradingService = app(TradingService::class);
+        $totalPopulated = 0;
 
         foreach ($hubs as $hub) {
-            // Each hub gets a random selection of minerals (60-100% of all minerals)
-            $availableMinerals = $minerals->random(rand((int)($minerals->count() * 0.6), $minerals->count()));
-
-            foreach ($availableMinerals as $mineral) {
-                // Random stock levels based on mineral rarity
-                $baseStock = match ($mineral->rarity) {
-                    'common'    => rand(5000, 15000),
-                    'uncommon'  => rand(2000, 8000),
-                    'rare'      => rand(500, 3000),
-                    'very_rare' => rand(100, 1000),
-                    'legendary' => rand(10, 200),
-                    default     => rand(1000, 5000),
-                };
-
-                // Random supply and demand levels (affects pricing)
-                $demandLevel = rand(30, 70);
-                $supplyLevel = rand(30, 70);
-
-                // Calculate initial pricing
-                $baseValue        = $mineral->base_value ?? 100;
-                $demandMultiplier = 1 + (($demandLevel - 50) / 100);
-                $supplyMultiplier = 1 - (($supplyLevel - 50) / 100);
-                $currentPrice     = $baseValue * $demandMultiplier * $supplyMultiplier;
-
-                // Hub buys at lower price, sells at higher price (15% spread)
-                $spread    = 0.15;
-                $buyPrice  = $currentPrice * (1 - $spread);
-                $sellPrice = $currentPrice * (1 + $spread);
-
-                // Create inventory record with prices
-                TradingHubInventory::create([
-                    'trading_hub_id'    => $hub->id,
-                    'mineral_id'        => $mineral->id,
-                    'quantity'          => $baseStock,
-                    'current_price'     => $currentPrice,
-                    'buy_price'         => $buyPrice,
-                    'sell_price'        => $sellPrice,
-                    'demand_level'      => $demandLevel,
-                    'supply_level'      => $supplyLevel,
-                    'last_price_update' => now(),
-                ]);
-
-                $totalInventory++;
+            if ($tradingService->ensureInventoryPopulated($hub)) {
+                $totalPopulated++;
             }
-
             $progressBar->advance();
         }
 
         $progressBar->finish();
         $this->newLine();
-        $this->info("Created {$totalInventory} inventory records");
+        $this->info("Populated {$totalPopulated} hubs with mineral inventory");
     }
 
     private function populateUpgradePlans($hubs, $plans): void
@@ -166,7 +129,7 @@ class TradingHubPopulateInventory extends Command
             // Otherwise, 30% chance to have plans
             $hasPlans = $hub->has_plans || rand(1, 100) <= 30;
 
-            if (!$hasPlans) {
+            if (! $hasPlans) {
                 $progressBar->advance();
 
                 continue;
@@ -202,16 +165,18 @@ class TradingHubPopulateInventory extends Command
         $totalShips = 0;
 
         foreach ($hubs as $hub) {
-            // Determine if this hub has a shipyard based on tier
-            // Premium hubs: 100% chance, Major hubs: 70% chance, Standard hubs: 30% chance
-            $hasShipyard = match ($hub->getTier()) {
-                'premium'  => true,
-                'major'    => rand(1, 100) <= 70,
+            // Hub has shipyard if services array declares it, or based on tier probability
+            $hubServices = $hub->services ?? [];
+            $servicesIncludeShipyard = in_array('shipyard', $hubServices)
+                || in_array('ship_sales', $hubServices);
+            $hasShipyard = $servicesIncludeShipyard || match ($hub->getTier()) {
+                'premium' => true,
+                'major' => rand(1, 100) <= 70,
                 'standard' => rand(1, 100) <= 30,
-                default    => false,
+                default => false,
             };
 
-            if (!$hasShipyard) {
+            if (! $hasShipyard) {
                 $progressBar->advance();
 
                 continue;
@@ -219,10 +184,10 @@ class TradingHubPopulateInventory extends Command
 
             // Each shipyard gets 2-6 ship types based on tier
             $shipCount = match ($hub->getTier()) {
-                'premium'  => rand(5, $ships->count()),
-                'major'    => rand(3, 6),
-                'standard' => rand(2, 4),
-                default    => 2,
+                'premium' => rand(min(5, $ships->count()), $ships->count()),
+                'major' => rand(3, min(6, $ships->count())),
+                'standard' => rand(2, min(4, $ships->count())),
+                default => min(2, $ships->count()),
             };
 
             $availableShips = $ships->random(min($shipCount, $ships->count()));
@@ -230,12 +195,12 @@ class TradingHubPopulateInventory extends Command
             foreach ($availableShips as $ship) {
                 // Stock quantity based on ship rarity
                 $quantity = match ($ship->rarity) {
-                    'common'    => rand(3, 8),
-                    'uncommon'  => rand(2, 5),
-                    'rare'      => rand(1, 3),
+                    'common' => rand(3, 8),
+                    'uncommon' => rand(2, 5),
+                    'rare' => rand(1, 3),
                     'very_rare' => rand(1, 2),
                     'legendary' => 1,
-                    default     => rand(2, 5),
+                    default => rand(2, 5),
                 };
 
                 // Random supply and demand levels (affects pricing)
@@ -243,20 +208,20 @@ class TradingHubPopulateInventory extends Command
                 $supplyLevel = rand(30, 70);
 
                 // Calculate pricing
-                $basePrice        = $ship->base_price;
+                $basePrice = $ship->base_price;
                 $demandMultiplier = 1 + (($demandLevel - 50) / 100);
                 $supplyMultiplier = 1 - (($supplyLevel - 50) / 100);
-                $currentPrice     = $basePrice * $demandMultiplier * $supplyMultiplier;
+                $currentPrice = $basePrice * $demandMultiplier * $supplyMultiplier;
 
                 // Create ship inventory record
                 TradingHubShip::create([
-                    'trading_hub_id'    => $hub->id,
-                    'galaxy_id'         => $galaxy_id,
-                    'ship_id'           => $ship->id,
-                    'quantity'          => $quantity,
-                    'current_price'     => $currentPrice,
-                    'demand_level'      => $demandLevel,
-                    'supply_level'      => $supplyLevel,
+                    'trading_hub_id' => $hub->id,
+                    'galaxy_id' => $galaxy_id,
+                    'ship_id' => $ship->id,
+                    'quantity' => $quantity,
+                    'current_price' => $currentPrice,
+                    'demand_level' => $demandLevel,
+                    'supply_level' => $supplyLevel,
                     'last_price_update' => now(),
                 ]);
 

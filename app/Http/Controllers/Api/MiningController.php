@@ -66,22 +66,27 @@ class MiningController extends BaseApiController
         $this->authorizePlayer($colony->player, $request->user());
 
         $validated = $request->validate([
-            'poi_uuid' => 'required|exists:points_of_interest,uuid',
+            'uuid' => 'sometimes|exists:points_of_interest,uuid',
+            'poi_uuid' => 'sometimes|exists:points_of_interest,uuid',
             'mineral_id' => 'required|exists:minerals,id',
         ]);
 
-        $poi = PointOfInterest::where('uuid', $validated['poi_uuid'])->firstOrFail();
+        $poiUuid = $validated['uuid'] ?? $validated['poi_uuid'] ?? null;
+        if (! $poiUuid) {
+            return $this->validationError(['uuid' => 'A system UUID is required']);
+        }
+        $poi = PointOfInterest::where('uuid', $poiUuid)->firstOrFail();
         $mineral = \App\Models\Mineral::findOrFail($validated['mineral_id']);
 
         // Check if colony has orbital mining
-        if (!$this->miningService->hasOrbitalMining($colony)) {
+        if (! $this->miningService->hasOrbitalMining($colony)) {
             return $this->error('Colony does not have an operational orbital mining facility', 'NO_MINING_FACILITY', null, 400);
         }
 
         // Start automated mining
         $result = $this->miningService->startAutomatedMining($colony, $poi, $mineral);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'MINING_FAILED', null, 400);
         }
 
@@ -103,11 +108,16 @@ class MiningController extends BaseApiController
         $this->authorizePlayer($ship->player, $request->user());
 
         $validated = $request->validate([
-            'poi_uuid' => 'required|exists:points_of_interest,uuid',
+            'uuid' => 'sometimes|exists:points_of_interest,uuid',
+            'poi_uuid' => 'sometimes|exists:points_of_interest,uuid',
             'mineral_id' => 'required|exists:minerals,id',
         ]);
 
-        $poi = PointOfInterest::where('uuid', $validated['poi_uuid'])->firstOrFail();
+        $poiUuid = $validated['uuid'] ?? $validated['poi_uuid'] ?? null;
+        if (! $poiUuid) {
+            return $this->validationError(['uuid' => 'A system UUID is required']);
+        }
+        $poi = PointOfInterest::where('uuid', $poiUuid)->firstOrFail();
         $mineral = \App\Models\Mineral::findOrFail($validated['mineral_id']);
 
         // Check if ship is at this location
@@ -117,7 +127,7 @@ class MiningController extends BaseApiController
         }
 
         // Check if POI has this mineral
-        if (!$this->miningService->canMineFromPOI($poi, $mineral)) {
+        if (! $this->miningService->canMineFromPOI($poi, $mineral)) {
             return $this->error("Cannot mine {$mineral->name} from this location", 'MINERAL_NOT_AVAILABLE', null, 400);
         }
 
@@ -125,7 +135,7 @@ class MiningController extends BaseApiController
         $deposits = $poi->mineral_deposits ?? [];
         $depositInfo = $deposits[$mineral->name] ?? null;
 
-        if (!$depositInfo) {
+        if (! $depositInfo) {
             return $this->error('No deposits of this mineral found', 'NO_DEPOSIT', null, 400);
         }
 
@@ -136,7 +146,7 @@ class MiningController extends BaseApiController
         $extractedAmount = (int) ($depositSize * min($efficiency, 1.0)); // Cap at 100% for manual extraction
 
         // Check cargo space
-        $availableSpace = $ship->cargo_hold - $ship->current_cargo;
+        $availableSpace = $ship->getEffectiveCargoHold() - $ship->current_cargo;
         if ($extractedAmount > $availableSpace) {
             $extractedAmount = $availableSpace;
             if ($extractedAmount === 0) {
@@ -178,7 +188,7 @@ class MiningController extends BaseApiController
             'efficiency_percent' => round($efficiency * 100, 1),
             'sensor_level' => $ship->sensors,
             'cargo_used' => $ship->current_cargo,
-            'cargo_remaining' => $ship->cargo_hold - $ship->current_cargo,
+            'cargo_remaining' => $ship->getEffectiveCargoHold() - $ship->current_cargo,
             'deposit_remaining' => $poi->mineral_deposits[$mineral->name]['size'] ?? 0,
         ], 'Resources extracted successfully');
     }

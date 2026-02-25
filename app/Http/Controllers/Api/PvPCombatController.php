@@ -41,7 +41,7 @@ class PvPCombatController extends BaseApiController
             $validated['max_team_size'] ?? 1
         );
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'CHALLENGE_FAILED', null, 400);
         }
 
@@ -73,7 +73,7 @@ class PvPCombatController extends BaseApiController
             ->where('status', 'pending')
             ->with(['challenger'])
             ->get()
-            ->filter(fn ($c) => !$c->isExpired())
+            ->filter(fn ($c) => ! $c->isExpired())
             ->map(fn ($c) => [
                 'uuid' => $c->uuid,
                 'type' => 'incoming',
@@ -91,7 +91,7 @@ class PvPCombatController extends BaseApiController
             ->where('status', 'pending')
             ->with(['target'])
             ->get()
-            ->filter(fn ($c) => !$c->isExpired())
+            ->filter(fn ($c) => ! $c->isExpired())
             ->map(fn ($c) => [
                 'uuid' => $c->uuid,
                 'type' => 'outgoing',
@@ -126,7 +126,7 @@ class PvPCombatController extends BaseApiController
 
         $result = $this->pvpService->acceptChallenge($challenge, $player);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'ACCEPT_FAILED', null, 400);
         }
 
@@ -148,7 +148,7 @@ class PvPCombatController extends BaseApiController
                 'xp_earned' => $result['result']['xp_earned'],
                 'credits_earned' => $result['result']['credits_earned'],
                 'combat_log' => $result['result']['combat_log'],
-                'death_result' => $result['result']['death_result'],
+                'death_result' => $this->transformDeathResult($result['result']['death_result']),
             ],
         ], 'Combat completed');
     }
@@ -167,7 +167,7 @@ class PvPCombatController extends BaseApiController
 
         $result = $this->pvpService->declineChallenge($challenge, $player);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'DECLINE_FAILED', null, 400);
         }
 
@@ -236,5 +236,25 @@ class PvPCombatController extends BaseApiController
                 'combat_log' => $session->combat_log,
             ],
         ]);
+    }
+
+    /**
+     * Transform death result for API response, converting respawn_location model to flat fields.
+     */
+    private function transformDeathResult(?array $deathResult): ?array
+    {
+        if (! $deathResult) {
+            return null;
+        }
+
+        $respawn = $deathResult['respawn_location'] ?? null;
+        $deathResult['respawn_location'] = $respawn ? [
+            'uuid' => $respawn->uuid,
+            'name' => $respawn->name,
+            'x' => (float) $respawn->x,
+            'y' => (float) $respawn->y,
+        ] : null;
+
+        return $deathResult;
     }
 }

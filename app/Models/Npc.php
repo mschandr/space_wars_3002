@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasCreditsAndExperience;
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Str;
 
 class Npc extends Model
 {
-    use HasFactory;
+    use HasCreditsAndExperience, HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -116,17 +117,6 @@ class Npc extends Model
         ],
     ];
 
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($npc) {
-            if (empty($npc->uuid)) {
-                $npc->uuid = Str::uuid();
-            }
-        });
-    }
-
     public function galaxy(): BelongsTo
     {
         return $this->belongsTo(Galaxy::class);
@@ -150,41 +140,6 @@ class Npc extends Model
     public function activeShip(): HasOne
     {
         return $this->hasOne(NpcShip::class)->where('is_active', true);
-    }
-
-    public function addCredits(float $amount): void
-    {
-        $this->credits += $amount;
-        $this->save();
-    }
-
-    public function deductCredits(float $amount): bool
-    {
-        if ($this->credits < $amount) {
-            return false;
-        }
-
-        $this->credits -= $amount;
-        $this->save();
-
-        return true;
-    }
-
-    public function addExperience(int $amount): void
-    {
-        $this->experience += $amount;
-
-        $newLevel = $this->calculateLevel($this->experience);
-        if ($newLevel > $this->level) {
-            $this->level = $newLevel;
-        }
-
-        $this->save();
-    }
-
-    protected function calculateLevel(int $experience): int
-    {
-        return (int) floor(sqrt($experience / 100)) + 1;
     }
 
     /**

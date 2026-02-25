@@ -40,7 +40,7 @@ class TeamCombatController extends BaseApiController
             $validated['side']
         );
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'INVITE_FAILED', null, 400);
         }
 
@@ -70,8 +70,8 @@ class TeamCombatController extends BaseApiController
             ->where('status', 'pending')
             ->with(['pvpChallenge.challenger', 'pvpChallenge.target', 'invitedByPlayer'])
             ->get()
-            ->filter(fn($inv) => !$inv->pvpChallenge->isExpired())
-            ->map(fn($inv) => [
+            ->filter(fn ($inv) => ! $inv->pvpChallenge->isExpired())
+            ->map(fn ($inv) => [
                 'id' => $inv->id,
                 'challenge' => [
                     'uuid' => $inv->pvpChallenge->uuid,
@@ -113,7 +113,7 @@ class TeamCombatController extends BaseApiController
 
         $result = $this->teamCombatService->acceptInvitation($invitation, $player);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'ACCEPT_FAILED', null, 400);
         }
 
@@ -134,7 +134,7 @@ class TeamCombatController extends BaseApiController
 
         $result = $this->teamCombatService->declineInvitation($invitation, $player);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'DECLINE_FAILED', null, 400);
         }
 
@@ -163,7 +163,7 @@ class TeamCombatController extends BaseApiController
                 'wager_credits' => $challenge->wager_credits,
                 'expires_at' => $challenge->expires_at,
             ],
-            'attackers' => $attackersTeam->map(fn($p) => [
+            'attackers' => $attackersTeam->map(fn ($p) => [
                 'uuid' => $p->uuid,
                 'call_sign' => $p->call_sign,
                 'ship' => $p->activeShip ? [
@@ -172,7 +172,7 @@ class TeamCombatController extends BaseApiController
                     'weapons' => $p->activeShip->weapons,
                 ] : null,
             ])->values(),
-            'defenders' => $defendersTeam->map(fn($p) => [
+            'defenders' => $defendersTeam->map(fn ($p) => [
                 'uuid' => $p->uuid,
                 'call_sign' => $p->call_sign,
                 'ship' => $p->activeShip ? [
@@ -200,7 +200,7 @@ class TeamCombatController extends BaseApiController
 
         $result = $this->teamCombatService->acceptTeamChallenge($challenge, $player);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             return $this->error($result['message'], 'ACCEPT_FAILED', null, 400);
         }
 
@@ -214,8 +214,28 @@ class TeamCombatController extends BaseApiController
                 'losers' => $result['result']['losers'],
                 'rounds' => $result['result']['rounds'],
                 'combat_log' => $result['result']['combat_log'],
-                'death_results' => $result['result']['death_results'],
+                'death_results' => array_map(fn ($dr) => $this->transformDeathResult($dr), $result['result']['death_results'] ?? []),
             ],
         ], 'Team combat completed');
+    }
+
+    /**
+     * Transform death result for API response, converting respawn_location model to flat fields.
+     */
+    private function transformDeathResult(?array $deathResult): ?array
+    {
+        if (! $deathResult) {
+            return null;
+        }
+
+        $respawn = $deathResult['respawn_location'] ?? null;
+        $deathResult['respawn_location'] = $respawn ? [
+            'uuid' => $respawn->uuid,
+            'name' => $respawn->name,
+            'x' => (float) $respawn->x,
+            'y' => (float) $respawn->y,
+        ] : null;
+
+        return $deathResult;
     }
 }

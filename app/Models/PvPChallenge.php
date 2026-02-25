@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class PvPChallenge extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $table = 'pvp_challenges';
 
@@ -40,9 +40,6 @@ class PvPChallenge extends Model
         parent::boot();
 
         static::creating(function ($challenge) {
-            if (empty($challenge->uuid)) {
-                $challenge->uuid = Str::uuid();
-            }
             if (empty($challenge->challenged_at)) {
                 $challenge->challenged_at = now();
             }
@@ -74,7 +71,7 @@ class PvPChallenge extends Model
 
     public function isPending(): bool
     {
-        return $this->status === 'pending' && !$this->isExpired();
+        return $this->status === 'pending' && ! $this->isExpired();
     }
 
     public function accept(): void

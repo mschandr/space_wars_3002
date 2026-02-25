@@ -4,7 +4,6 @@ namespace App\Generators\Points;
 
 use App\Contracts\PointGeneratorInterface;
 use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 
 /**
  * R2 Low-Discrepancy Sequence Generator
@@ -39,7 +38,9 @@ final class R2Sequence extends AbstractPointGenerator implements PointGeneratorI
     public function sample(Galaxy $galaxy): array
     {
         $pts = [];
+        $seen = [];
         $i = 0;
+        $safetyLimit = $this->count * 100;
 
         while (count($pts) < $this->count) {
             // R2 sequence formula
@@ -60,24 +61,16 @@ final class R2Sequence extends AbstractPointGenerator implements PointGeneratorI
                     $pts[] = [$x, $y];
                 }
             } else {
-                // No spacing constraint - just ensure uniqueness
                 $key = $x.':'.$y;
-                $found = false;
-                foreach ($pts as [$px, $py]) {
-                    if ($px === $x && $py === $y) {
-                        $found = true;
-                        break;
-                    }
-                }
-                if (! $found) {
+                if (! isset($seen[$key])) {
                     $pts[] = [$x, $y];
+                    $seen[$key] = true;
                 }
             }
 
             $i++;
 
-            // Safety check to prevent infinite loops
-            if ($i > $this->count * 1000) {
+            if ($i > $safetyLimit) {
                 break;
             }
         }
@@ -85,12 +78,7 @@ final class R2Sequence extends AbstractPointGenerator implements PointGeneratorI
         // Ensure we have exactly the requested count
         $pts = array_slice($pts, 0, $this->count);
 
-        if (config('game_config.feature.persist_data')) {
-            PointOfInterest::createPointsForGalaxy($galaxy, $pts);
-
-            // Generate star systems (planets, moons, asteroids)
-            $this->generateStarSystems($galaxy);
-        }
+        $this->persistIfEnabled($galaxy, $pts);
 
         return $pts;
     }

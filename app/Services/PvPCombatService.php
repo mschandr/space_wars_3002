@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\CombatParticipant;
 use App\Models\CombatSession;
 use App\Models\Player;
-use App\Models\PlayerShip;
 use App\Models\PvPChallenge;
 
 class PvPCombatService
@@ -35,12 +34,12 @@ class PvPCombatService
         }
 
         // Check if challenger has active ship
-        if (!$challenger->activeShip) {
+        if (! $challenger->activeShip) {
             return ['success' => false, 'message' => 'You need an active ship to issue a challenge'];
         }
 
         // Check if target has active ship
-        if (!$target->activeShip) {
+        if (! $target->activeShip) {
             return ['success' => false, 'message' => 'Target player does not have an active ship'];
         }
 
@@ -50,7 +49,7 @@ class PvPCombatService
             ->where('status', 'pending')
             ->first();
 
-        if ($existingChallenge && !$existingChallenge->isExpired()) {
+        if ($existingChallenge && ! $existingChallenge->isExpired()) {
             return ['success' => false, 'message' => 'You already have a pending challenge with this player'];
         }
 
@@ -97,6 +96,7 @@ class PvPCombatService
 
         if ($challenge->isExpired()) {
             $challenge->expire();
+
             return ['success' => false, 'message' => 'This challenge has expired'];
         }
 
@@ -110,11 +110,11 @@ class PvPCombatService
         $challengerShip = $challenger->activeShip;
         $targetShip = $acceptingPlayer->activeShip;
 
-        if (!$challengerShip) {
+        if (! $challengerShip) {
             return ['success' => false, 'message' => 'Challenger no longer has an active ship'];
         }
 
-        if (!$targetShip) {
+        if (! $targetShip) {
             return ['success' => false, 'message' => 'You need an active ship to accept this challenge'];
         }
 
@@ -221,7 +221,7 @@ class PvPCombatService
                 'message' => "  ➜ {$attacker->player->call_sign} fires for {$damage} damage! ({$defender->player->call_sign} Hull: {$defender->current_hull})",
             ];
 
-            if (!$defender->isAlive()) {
+            if (! $defender->isAlive()) {
                 $combatLog[] = [
                     'type' => 'destroyed',
                     'message' => "  💥 {$defender->player->call_sign}'s ship DESTROYED!",
@@ -239,7 +239,7 @@ class PvPCombatService
                 'message' => "  ⬅ {$defender->player->call_sign} fires for {$damage} damage! ({$attacker->player->call_sign} Hull: {$attacker->current_hull})",
             ];
 
-            if (!$attacker->isAlive()) {
+            if (! $attacker->isAlive()) {
                 $combatLog[] = [
                     'type' => 'destroyed',
                     'message' => "  💥 {$attacker->player->call_sign}'s ship DESTROYED!",
@@ -280,7 +280,7 @@ class PvPCombatService
 
         $combatLog[] = [
             'type' => 'rewards',
-            'message' => "⭐ {$victor->player->call_sign} earned: {$xpReward} XP".($creditReward > 0 ? " and \$".number_format($creditReward) : ''),
+            'message' => "⭐ {$victor->player->call_sign} earned: {$xpReward} XP".($creditReward > 0 ? ' and $'.number_format($creditReward) : ''),
         ];
 
         // Handle loser's death

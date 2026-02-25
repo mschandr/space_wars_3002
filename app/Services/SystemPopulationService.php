@@ -45,13 +45,13 @@ class SystemPopulationService
             $wasPopulated = true;
         }
 
-        // Ensure core inhabited systems have infrastructure (even if already populated)
-        if ($system->is_inhabited && $system->region?->value === 'core') {
+        // Ensure inhabited systems have infrastructure (even if already populated)
+        if ($system->is_inhabited) {
             $attrs = $system->attributes ?? [];
             if (! isset($attrs['system_defenses'])) {
                 DB::transaction(function () use ($system) {
                     $children = $system->children()->get();
-                    $this->addCoreSystemInfrastructure($system, $children);
+                    $this->addInhabitedSystemInfrastructure($system, $children);
                 });
                 $wasPopulated = true;
             }
@@ -113,8 +113,8 @@ class SystemPopulationService
             return false;
         }
 
-        // Also check if core inhabited system needs infrastructure
-        if ($system->is_inhabited && $system->region?->value === 'core') {
+        // Also check if inhabited system needs infrastructure
+        if ($system->is_inhabited) {
             $attrs = $system->attributes ?? [];
             if (! isset($attrs['system_defenses'])) {
                 return true;
@@ -159,13 +159,20 @@ class SystemPopulationService
         // Reload children to include new moons
         $children = $system->children()->get();
 
-        // For inhabited core systems: add mining infrastructure and defenses
-        if ($system->is_inhabited && $system->region?->value === 'core') {
-            $this->addCoreSystemInfrastructure($system, $children);
+        // Inhabited systems must have at least one habitable planet
+        if ($system->is_inhabited) {
+            $this->ensureHabitablePlanet($system, $children);
+            // Reload children in case a planet was created or modified
+            $children = $system->children()->get();
         }
 
-        // Generate anomalies and special features (not for core inhabited - too developed)
-        if (! $system->is_inhabited || $system->region?->value !== 'core') {
+        // For inhabited systems: add mining infrastructure and defenses
+        if ($system->is_inhabited) {
+            $this->addInhabitedSystemInfrastructure($system, $children);
+        }
+
+        // Generate anomalies and special features (not for inhabited - too developed)
+        if (! $system->is_inhabited) {
             $this->generateAnomalies($system, $children);
         }
 
@@ -174,10 +181,10 @@ class SystemPopulationService
     }
 
     /**
-     * Add infrastructure to inhabited core systems.
+     * Add infrastructure to inhabited systems.
      * These are established, developed systems with full mining operations and strong defenses.
      */
-    protected function addCoreSystemInfrastructure(PointOfInterest $system, $children): void
+    protected function addInhabitedSystemInfrastructure(PointOfInterest $system, $children): void
     {
         // Add orbital stations (trading, shipyard, salvage yard)
         $this->addOrbitalStations($system);
@@ -199,66 +206,60 @@ class SystemPopulationService
     {
         $stations = [];
 
-        // Trading Station (1-2 per system)
-        $tradingStationCount = mt_rand(1, 2);
-        for ($i = 1; $i <= $tradingStationCount; $i++) {
-            $stations[] = $this->createStation(
-                $system,
-                PointOfInterestType::TRADING_STATION,
-                $system->name.' Commerce Hub'.($tradingStationCount > 1 ? ' '.$this->romanNumeral($i) : ''),
-                [
-                    'station_class' => $this->weightedRandom([
-                        'outpost' => 10,
-                        'standard' => 40,
-                        'major' => 35,
-                        'hub' => 15,
-                    ]),
-                    'docking_bays' => mt_rand(8, 24),
-                    'cargo_capacity' => mt_rand(50000, 200000),
-                    'services' => ['trading', 'refueling', 'repairs', 'crew_quarters'],
-                    'market_specialization' => $this->weightedRandom([
-                        'general' => 40,
-                        'minerals' => 20,
-                        'technology' => 15,
-                        'luxury_goods' => 10,
-                        'industrial' => 15,
-                    ]),
-                ]
-            );
-        }
+        // Trading Station (1 per system)
+        $stations[] = $this->createStation(
+            $system,
+            PointOfInterestType::TRADING_STATION,
+            $system->name.' Commerce Hub',
+            [
+                'station_class' => $this->weightedRandom([
+                    'outpost' => 10,
+                    'standard' => 40,
+                    'major' => 35,
+                    'hub' => 15,
+                ]),
+                'docking_bays' => mt_rand(8, 24),
+                'cargo_capacity' => mt_rand(50000, 200000),
+                'services' => ['trading', 'refueling', 'repairs', 'crew_quarters'],
+                'market_specialization' => $this->weightedRandom([
+                    'general' => 40,
+                    'minerals' => 20,
+                    'technology' => 15,
+                    'luxury_goods' => 10,
+                    'industrial' => 15,
+                ]),
+            ]
+        );
 
-        // Shipyard (1 per system, maybe 2 for major systems)
-        $shipyardCount = mt_rand(1, 100) <= 30 ? 2 : 1;
-        for ($i = 1; $i <= $shipyardCount; $i++) {
-            $stations[] = $this->createStation(
-                $system,
-                PointOfInterestType::SHIPYARD,
-                $system->name.' Shipyard'.($shipyardCount > 1 ? ' '.$this->romanNumeral($i) : ''),
-                [
-                    'shipyard_class' => $this->weightedRandom([
-                        'light' => 20,
-                        'standard' => 40,
-                        'heavy' => 30,
-                        'capital' => 10,
-                    ]),
-                    'dry_docks' => mt_rand(4, 12),
-                    'construction_bays' => mt_rand(2, 6),
-                    'max_ship_class' => $this->weightedRandom([
-                        'frigate' => 15,
-                        'cruiser' => 35,
-                        'battleship' => 35,
-                        'dreadnought' => 15,
-                    ]),
-                    'services' => ['construction', 'repairs', 'upgrades', 'refitting'],
-                    'specialization' => $this->weightedRandom([
-                        'military' => 30,
-                        'civilian' => 30,
-                        'industrial' => 20,
-                        'mixed' => 20,
-                    ]),
-                ]
-            );
-        }
+        // Shipyard (1 per system)
+        $stations[] = $this->createStation(
+            $system,
+            PointOfInterestType::SHIPYARD,
+            $system->name.' Shipyard',
+            [
+                'shipyard_class' => $this->weightedRandom([
+                    'light' => 20,
+                    'standard' => 40,
+                    'heavy' => 30,
+                    'capital' => 10,
+                ]),
+                'dry_docks' => mt_rand(4, 12),
+                'construction_bays' => mt_rand(2, 6),
+                'max_ship_class' => $this->weightedRandom([
+                    'frigate' => 15,
+                    'cruiser' => 35,
+                    'battleship' => 35,
+                    'dreadnought' => 15,
+                ]),
+                'services' => ['construction', 'repairs', 'upgrades', 'refitting'],
+                'specialization' => $this->weightedRandom([
+                    'military' => 30,
+                    'civilian' => 30,
+                    'industrial' => 20,
+                    'mixed' => 20,
+                ]),
+            ]
+        );
 
         // Salvage Yard (1 per system)
         $stations[] = $this->createStation(
@@ -489,6 +490,88 @@ class SystemPopulationService
 
         $system->attributes = $attrs;
         $system->save();
+    }
+
+    /**
+     * Ensure an inhabited system has at least one habitable planet.
+     *
+     * 1. Check if any child has habitable = true
+     * 2. If not, find best terrestrial/ocean/super_earth candidate and upgrade it
+     * 3. If no candidates exist, create a new habitable planet
+     */
+    protected function ensureHabitablePlanet(PointOfInterest $system, $children): void
+    {
+        // Check if any child is already habitable
+        foreach ($children as $child) {
+            $attrs = $child->attributes ?? [];
+            if ($attrs['habitable'] ?? false) {
+                return;
+            }
+        }
+
+        // Find best terrestrial/ocean/super_earth candidate to upgrade
+        $candidate = $children->first(function ($child) {
+            return in_array($child->type, [
+                PointOfInterestType::TERRESTRIAL,
+                PointOfInterestType::OCEAN,
+                PointOfInterestType::SUPER_EARTH,
+            ]);
+        });
+
+        if ($candidate) {
+            // Force-upgrade the candidate to be habitable
+            $attrs = $candidate->attributes ?? [];
+            $attrs['atmosphere'] = 'nitrogen-oxygen';
+            $attrs['atmosphere_density'] = $attrs['atmosphere_density'] ?? 'normal';
+            $attrs['temperature'] = 'temperate';
+            $attrs['temperature_kelvin'] = mt_rand(280, 300);
+            $attrs['has_magnetic_field'] = true;
+            $attrs['radiation_level'] = 'low';
+            $attrs['water_coverage'] = mt_rand(30, 70);
+            $attrs['in_goldilocks_zone'] = true;
+            $attrs['habitability_score'] = round(mt_rand(60, 90) / 100, 2);
+            $attrs['habitable'] = true;
+            $candidate->attributes = $attrs;
+            $candidate->save();
+
+            return;
+        }
+
+        // No terrestrial candidates — create one
+        $starAttrs = $system->attributes ?? [];
+        $goldilocksZone = $this->calculateGoldilocksZone($starAttrs['stellar_class'] ?? 'G');
+        $orbitalDistance = ($goldilocksZone['inner'] + $goldilocksZone['outer']) / 2;
+
+        PointOfInterest::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'galaxy_id' => $system->galaxy_id,
+            'sector_id' => $system->sector_id,
+            'parent_poi_id' => $system->id,
+            'orbital_index' => 50, // High index to avoid collisions
+            'type' => PointOfInterestType::TERRESTRIAL,
+            'name' => $system->name.' Prime',
+            'x' => $system->x,
+            'y' => $system->y,
+            'attributes' => [
+                'orbital_distance' => $orbitalDistance,
+                'size' => 'medium',
+                'atmosphere' => 'nitrogen-oxygen',
+                'atmosphere_density' => 'normal',
+                'temperature' => 'temperate',
+                'temperature_kelvin' => mt_rand(280, 300),
+                'has_magnetic_field' => true,
+                'radiation_level' => 'low',
+                'water_coverage' => mt_rand(30, 70),
+                'in_goldilocks_zone' => true,
+                'habitability_score' => round(mt_rand(70, 90) / 100, 2),
+                'habitable' => true,
+                'gravity' => round(mt_rand(80, 120) / 100, 2),
+                'core_composition' => 'iron-nickel',
+                'body_populated' => true,
+            ],
+            'is_inhabited' => false,
+            'is_charted' => true,
+        ]);
     }
 
     /**

@@ -110,10 +110,8 @@ class StarSystemResponseBuilder
             'name' => $this->system->name,
             'type' => $this->system->type?->value,
             'type_label' => $this->system->type?->label(),
-            'coordinates' => [
-                'x' => (float) $this->system->x,
-                'y' => (float) $this->system->y,
-            ],
+            'x' => (float) $this->system->x,
+            'y' => (float) $this->system->y,
             'is_inhabited' => $this->system->is_inhabited,
             'region' => $this->system->region?->value,
         ];
@@ -179,10 +177,17 @@ class StarSystemResponseBuilder
      */
     protected function buildWarpGateData(): array
     {
-        $gates = $this->system->outgoingGates()
+        $outgoing = $this->system->outgoingGates()
             ->where('is_hidden', false)
             ->with(['destinationPoi'])
             ->get();
+
+        $incoming = $this->system->incomingGates()
+            ->where('is_hidden', false)
+            ->with(['sourcePoi'])
+            ->get();
+
+        $gates = $outgoing->merge($incoming);
 
         return [
             'count' => $gates->count(),
@@ -192,11 +197,14 @@ class StarSystemResponseBuilder
                     'status' => $gate->status,
                 ];
 
+                $isOutgoing = $gate->source_poi_id === $this->system->id;
+                $otherEnd = $isOutgoing ? $gate->destinationPoi : $gate->sourcePoi;
+
                 if ($gate->status === 'active' && ($this->isFullyVisible || $this->visibilityLevel >= 2)) {
-                    $gateData['destination'] = $gate->destinationPoi ? [
-                        'uuid' => $gate->destinationPoi->uuid,
-                        'name' => $this->isFullyVisible ? $gate->destinationPoi->name : 'Uncharted System',
-                        'is_inhabited' => $gate->destinationPoi->is_inhabited,
+                    $gateData['destination'] = $otherEnd ? [
+                        'uuid' => $otherEnd->uuid,
+                        'name' => $this->isFullyVisible ? $otherEnd->name : 'Uncharted System',
+                        'is_inhabited' => $otherEnd->is_inhabited,
                     ] : null;
                 }
 

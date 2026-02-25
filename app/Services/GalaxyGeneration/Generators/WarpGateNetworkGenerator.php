@@ -27,6 +27,8 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
 {
     private const HIDDEN_GATE_PERCENTAGE = 0.02;
 
+    private const MAX_GATES_PER_STAR = 8;
+
     public function getName(): string
     {
         return 'warp_gate_network';
@@ -45,8 +47,8 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
         $config = $context['config'];
         $adjacencyThreshold = $config->getWarpGateAdjacency();
 
-        // Generate core gates (active)
-        $coreResult = $this->generateCoreGates($galaxy, $adjacencyThreshold, $metrics);
+        // Generate inhabited gates (active)
+        $coreResult = $this->generateInhabitedGates($galaxy, $adjacencyThreshold, $metrics);
 
         // Generate outer gates (dormant)
         $outerResult = $this->generateOuterGates($galaxy, $metrics);
@@ -62,9 +64,9 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
     }
 
     /**
-     * Generate active warp gates for core (inhabited) systems.
+     * Generate active warp gates for all inhabited systems.
      */
-    private function generateCoreGates(Galaxy $galaxy, float $adjacencyThreshold, GenerationMetrics $metrics): int
+    private function generateInhabitedGates(Galaxy $galaxy, float $adjacencyThreshold, GenerationMetrics $metrics): int
     {
         // Load inhabited stars as minimal arrays (id, x, y only)
         $stars = PointOfInterest::where('galaxy_id', $galaxy->id)
@@ -92,7 +94,6 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
 
         // Process all at once but with smaller result batches
         $totalInserted = 0;
-        $now = now()->format('Y-m-d H:i:s');
         $globalSeen = [];
 
         // Collect all pairs first
@@ -105,13 +106,18 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
             $globalSeen
         );
 
-        // Free stars and index memory before building rows
+        // Free stars and index memory before filtering
         unset($stars, $spatialIndex, $globalSeen);
         gc_collect_cycles();
 
         $metrics->setCount('core_pairs_found', count($gatePairs));
 
+        // Cap connections per star — shortest distances win
+        $gatePairs = $this->applyMaxGatesPerStar($gatePairs, self::MAX_GATES_PER_STAR);
+        $metrics->setCount('core_pairs_after_cap', count($gatePairs));
+
         // Insert in smaller chunks
+        $now = now()->format('Y-m-d H:i:s');
         foreach (array_chunk($gatePairs, 200) as $chunk) {
             $rows = $this->buildGateRows($galaxy->id, $chunk, $now);
             $totalInserted += BulkInserter::insertOrIgnore('warp_gates', $rows, 200);
@@ -131,10 +137,11 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
     {
         $maxDistance = config('game_config.tiered_galaxy.outer_gate_max_distance', 200);
 
-        // Load outer stars as minimal arrays
+        // Load uninhabited outer stars as minimal arrays (inhabited ones already got active gates)
         $stars = PointOfInterest::where('galaxy_id', $galaxy->id)
             ->where('type', PointOfInterestType::STAR)
             ->where('region', RegionType::OUTER)
+            ->where('is_inhabited', false)
             ->select(['id', 'x', 'y'])
             ->get()
             ->map(fn ($s) => ['id' => $s->id, 'x' => (int) $s->x, 'y' => (int) $s->y])
@@ -240,6 +247,11 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
             return 0;
         }
 
+        // Cap connections per star for active gates
+        if ($status === 'active') {
+            $pairs = $this->applyMaxGatesPerStar($pairs, self::MAX_GATES_PER_STAR);
+        }
+
         $now = now()->format('Y-m-d H:i:s');
         $rows = $this->buildGateRows($galaxyId, $pairs, $now);
         $inserted = BulkInserter::insertOrIgnore('warp_gates', $rows, 200);
@@ -326,6 +338,38 @@ final class WarpGateNetworkGenerator implements GeneratorInterface
         }
 
         return $pairs;
+    }
+
+    /**
+     * Filter gate pairs so no star exceeds maxGates connections.
+     *
+     * Sorts by distance (shortest first) so closest neighbors are preferred.
+     * A pair is only kept if BOTH endpoints are still under the cap,
+     * producing natural variation — sparse-area stars get fewer gates.
+     */
+    private function applyMaxGatesPerStar(array $pairs, int $maxGates): array
+    {
+        // Sort shortest first — closest connections win
+        usort($pairs, fn ($a, $b) => $a['distance'] <=> $b['distance']);
+
+        $counts = [];
+        $filtered = [];
+
+        foreach ($pairs as $pair) {
+            $src = $pair['source_poi_id'];
+            $dst = $pair['destination_poi_id'];
+
+            $srcCount = $counts[$src] ?? 0;
+            $dstCount = $counts[$dst] ?? 0;
+
+            if ($srcCount < $maxGates && $dstCount < $maxGates) {
+                $filtered[] = $pair;
+                $counts[$src] = $srcCount + 1;
+                $counts[$dst] = $dstCount + 1;
+            }
+        }
+
+        return $filtered;
     }
 
     /**

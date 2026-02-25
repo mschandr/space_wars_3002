@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
 
 class PlayerNotification extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
+
     protected $fillable = [
         'uuid',
         'player_id',
@@ -29,20 +30,6 @@ class PlayerNotification extends Model
         'is_read' => 'boolean',
         'read_at' => 'datetime',
     ];
-
-    /**
-     * Boot the model
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($notification) {
-            if (empty($notification->uuid)) {
-                $notification->uuid = Str::uuid();
-            }
-        });
-    }
 
     /**
      * Get the player this notification belongs to

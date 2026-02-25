@@ -3,14 +3,14 @@
 namespace App\Models;
 
 use App\Enums\MarketEventType;
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
 
 class MarketEvent extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -31,17 +31,6 @@ class MarketEvent extends Model
         'expires_at' => 'datetime',
         'is_active' => 'boolean',
     ];
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($event) {
-            if (empty($event->uuid)) {
-                $event->uuid = Str::uuid();
-            }
-        });
-    }
 
     /**
      * Get the mineral affected by this event (null = all minerals)

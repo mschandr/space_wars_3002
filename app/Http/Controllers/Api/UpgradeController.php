@@ -8,7 +8,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Handles ship component upgrades
+ * @deprecated Use ComponentUpgradeController for per-component upgrades.
+ *             This controller's stat-bump upgrade system is deprecated.
  */
 class UpgradeController extends BaseApiController
 {
@@ -147,7 +148,6 @@ class UpgradeController extends BaseApiController
 
             $plansByComponent[$component]['total_additional_levels'] += $plan->additional_levels;
             $plansByComponent[$component]['plans'][] = [
-                'id' => $plan->id,
                 'uuid' => $plan->uuid,
                 'name' => $plan->name,
                 'additional_levels' => $plan->additional_levels,

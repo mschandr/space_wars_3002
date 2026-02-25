@@ -7,7 +7,6 @@ use App\Models\Galaxy;
 use App\Models\PilotLaneKnowledge;
 use App\Models\Player;
 use App\Models\PointOfInterest;
-use App\Models\Ship;
 use App\Models\User;
 use App\Models\WarpGate;
 use App\Services\LaneKnowledgeService;

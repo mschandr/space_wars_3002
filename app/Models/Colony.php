@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class Colony extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
@@ -63,9 +63,6 @@ class Colony extends Model
         parent::boot();
 
         static::creating(function ($colony) {
-            if (empty($colony->uuid)) {
-                $colony->uuid = Str::uuid();
-            }
             if (empty($colony->established_at)) {
                 $colony->established_at = now();
             }
@@ -159,6 +156,10 @@ class Colony extends Model
     /**
      * Check if colony can support a new building
      */
+    // TODO: (Logic Error) $existingCount is calculated but NEVER USED - only total building count
+    // is checked. This means there's no per-type building limit enforcement. A player could build
+    // 10 hydroponics bays with zero defense buildings, breaking game balance.
+    // Fix: Add per-type limits and check $existingCount against them before returning.
     public function canBuildBuilding(string $buildingType): bool
     {
         $existingCount = $this->buildings()->where('building_type', $buildingType)->count();
@@ -206,9 +207,7 @@ class Colony extends Model
             return false;
         }
 
-        // Deduct costs
-        $player->credits -= $creditCost;
-        $player->save();
+        $player->deductCredits($creditCost);
 
         // Upgrade
         $this->development_level++;

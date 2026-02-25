@@ -12,7 +12,6 @@ use App\Models\PvPTeamInvitation;
 use App\Models\Ship;
 use App\Models\TradingHub;
 use App\Models\User;
-use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -20,11 +19,34 @@ class TeamCombatTest extends TestCase
 {
     use RefreshDatabase;
 
-    private User $user1, $user2, $user3, $user4;
-    private Player $player1, $player2, $player3, $player4;
-    private PlayerShip $ship1, $ship2, $ship3, $ship4;
+    private User $user1;
+
+    private User $user2;
+
+    private User $user3;
+
+    private User $user4;
+
+    private Player $player1;
+
+    private Player $player2;
+
+    private Player $player3;
+
+    private Player $player4;
+
+    private PlayerShip $ship1;
+
+    private PlayerShip $ship2;
+
+    private PlayerShip $ship3;
+
+    private PlayerShip $ship4;
+
     private PointOfInterest $location;
+
     private Galaxy $galaxy;
+
     private PvPChallenge $challenge;
 
     protected function setUp(): void

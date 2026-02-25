@@ -2,53 +2,34 @@
 
 namespace App\Console\Shops;
 
-use App\Console\Traits\ConsoleBoxRenderer;
-use App\Console\Traits\ConsoleColorizer;
-use App\Console\Traits\TerminalInputHandler;
+use App\Enums\SlotType;
 use App\Models\Player;
+use App\Models\PlayerShipComponent;
 use App\Models\TradingHub;
-use App\Services\ShipUpgradeService;
-use Illuminate\Console\Command;
+use App\Services\ComponentUpgradeService;
 
-class ComponentShopHandler
+class ComponentShopHandler extends BaseShopHandler
 {
-    use ConsoleBoxRenderer;
-    use ConsoleColorizer;
-    use TerminalInputHandler;
-
-    private Command $command;
-
-    private int $termWidth;
-
-    public function __construct(Command $command, int $termWidth = 120)
-    {
-        $this->command = $command;
-        $this->termWidth = $termWidth;
-    }
-
     /**
      * Display the component shop interface
      */
     public function show(Player $player, TradingHub $tradingHub): void
     {
-        system('stty sane');
+        $this->resetTerminal();
 
-        $upgradeService = app(ShipUpgradeService::class);
+        $upgradeService = app(ComponentUpgradeService::class);
 
         $running = true;
         while ($running) {
             // Reload player and ship data to get latest values
             $player->refresh();
-            $player->load('activeShip.ship');
+            $player->load('activeShip.ship', 'activeShip.components.component');
             $ship = $player->activeShip;
 
             $this->clearScreen();
 
             // Header
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->line($this->colorize('  COMPONENT SHOP - SHIP UPGRADES', 'header'));
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->newLine();
+            $this->renderShopHeader('COMPONENT SHOP - UPGRADES');
 
             // Location and player info
             $this->line($this->colorize('  Trading Hub: ', 'label').$this->colorize($tradingHub->name, 'trade'));
@@ -57,100 +38,117 @@ class ComponentShopHandler
                        $this->colorize(number_format($player->credits, 2), 'trade'));
             $this->newLine();
 
-            // Get upgrade info (recalculated each loop with fresh data)
-            $upgradeInfo = $upgradeService->getUpgradeInfo($ship);
-            $components = ['max_fuel', 'max_hull', 'weapons', 'cargo_hold', 'sensors', 'warp_drive'];
+            // Group installed components by slot type
+            $components = $ship->components->sortBy('slot_index');
+            $upgradeableComponents = [];
+            $displayIndex = 1;
 
-            // Display components with numbers
-            $this->line($this->colorize('  AVAILABLE UPGRADES:', 'header'));
+            $this->line($this->colorize('  INSTALLED COMPONENTS:', 'header'));
             $this->newLine();
 
-            foreach ($components as $index => $component) {
-                $info = $upgradeInfo[$component];
-                $number = $index + 1;
+            foreach (SlotType::cases() as $slotType) {
+                $slotComponents = $components->filter(
+                    fn ($c) => ($c->slot_type instanceof SlotType ? $c->slot_type : SlotType::tryFrom($c->slot_type)) === $slotType
+                );
 
-                $statusColor = $info['can_upgrade'] ? 'highlight' : 'dim';
-                $status = $info['can_upgrade'] ? 'Available' : 'MAX LEVEL';
-
-                $line = '  '.$this->colorize("[$number]", 'label').' '.
-                        $this->colorize(strtoupper(str_replace('_', ' ', $component)), 'header').
-                        str_repeat(' ', 20 - strlen($component));
-
-                $line .= $this->colorize('Level: ', 'dim').
-                         $this->colorize($info['current_level'], 'highlight').
-                         $this->colorize('/'.$info['max_level'], 'dim').'  ';
-
-                $line .= $this->colorize('Value: ', 'dim').
-                         $this->colorize($info['current_value'], 'highlight');
-
-                if ($info['can_upgrade']) {
-                    $line .= $this->colorize(' → ', 'dim').
-                             $this->colorize($info['next_value'], 'trade');
-                    $line .= '  '.$this->colorize('Cost: ', 'dim').
-                             $this->colorize(number_format($info['upgrade_cost']), 'trade').' credits';
-                } else {
-                    $line .= '  '.$this->colorize('[MAX]', 'dim');
+                if ($slotComponents->isEmpty()) {
+                    continue;
                 }
 
-                $this->line($line);
+                $this->line($this->colorize('  '.$slotType->label().':', 'dim'));
+
+                foreach ($slotComponents as $installed) {
+                    $info = $upgradeService->getUpgradeInfo($installed);
+                    $upgradeableComponents[$displayIndex] = $installed;
+
+                    $statusColor = $info['can_upgrade'] ? 'highlight' : 'dim';
+
+                    $line = '    '.$this->colorize("[$displayIndex]", 'label').' '.
+                            $this->colorize($installed->component->name, $info['can_upgrade'] ? 'header' : 'dim');
+
+                    $line .= '  '.$this->colorize('Lvl ', 'dim').
+                             $this->colorize($info['current_level'], 'highlight').
+                             $this->colorize('/'.$info['max_level'], 'dim');
+
+                    if ($info['can_upgrade']) {
+                        $line .= '  '.$this->colorize('Cost: ', 'dim').
+                                 $this->colorize(number_format($info['upgrade_cost']), 'trade').' credits';
+                    } else {
+                        $line .= '  '.$this->colorize('[MAX]', 'dim');
+                    }
+
+                    $this->line($line);
+                    $displayIndex++;
+                }
+
+                $this->newLine();
             }
 
-            $this->newLine();
+            if (empty($upgradeableComponents)) {
+                $this->line($this->colorize('  No components installed on this ship.', 'dim'));
+                $this->newLine();
+            }
+
+            $maxIndex = $displayIndex - 1;
+
             $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
             $this->newLine();
-            $this->line($this->colorize('  [1-6]', 'label').' - Purchase upgrade    '.
+            $this->line($this->colorize('  [1-'.$maxIndex.']', 'label').' - Upgrade component    '.
                        $this->colorize('[ESC/q]', 'label').' - Back to main interface');
             $this->newLine();
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+            $this->renderBorder();
 
-            // Wait for input
-            system('stty -icanon -echo');
-            $char = fgetc(STDIN);
+            $char = $this->readChar();
 
-            if ($char === 'q' || $char === "\033") {
+            if ($this->isQuitKey($char)) {
                 $running = false;
-            } elseif (is_numeric($char) && $char >= '1' && $char <= '6') {
-                $componentIndex = (int) $char - 1;
-                $component = $components[$componentIndex];
-                $this->purchaseUpgrade($player, $component, $upgradeInfo[$component], $upgradeService);
+            } elseif (is_numeric($char) && (int) $char >= 1 && (int) $char <= $maxIndex) {
+                $selectedComponent = $upgradeableComponents[(int) $char] ?? null;
+                if ($selectedComponent) {
+                    $this->purchaseUpgrade($player, $selectedComponent, $upgradeService);
+                }
             }
         }
 
-        system('stty sane');
+        $this->resetTerminal();
     }
 
     /**
      * Handle the purchase upgrade flow
      */
-    private function purchaseUpgrade(Player $player, string $component, array $info, ShipUpgradeService $upgradeService): void
+    private function purchaseUpgrade(Player $player, PlayerShipComponent $installed, ComponentUpgradeService $upgradeService): void
     {
-        system('stty sane');
+        $this->resetTerminal();
         $this->clearScreen();
 
-        $ship = $player->activeShip;
-        $componentName = strtoupper(str_replace('_', ' ', $component));
+        $info = $upgradeService->getUpgradeInfo($installed);
 
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  CONFIRM PURCHASE', 'header'));
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->newLine();
+        $this->renderShopHeader('CONFIRM UPGRADE');
 
         if (! $info['can_upgrade']) {
-            $this->line($this->colorize('  This component is already at maximum level!', 'dim'));
+            $this->line($this->colorize('  '.($info['locked_reason'] ?? 'Cannot upgrade this component.'), 'dim'));
             $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
+            $this->waitForAnyKey();
 
             return;
         }
 
-        $this->line($this->colorize('  Component: ', 'label').$this->colorize($componentName, 'highlight'));
-        $this->line($this->colorize('  Current Level: ', 'label').$info['current_level']);
-        $this->line($this->colorize('  Current Value: ', 'label').$info['current_value']);
+        $this->line($this->colorize('  Component: ', 'label').$this->colorize($info['component_name'], 'highlight'));
+        $this->line($this->colorize('  Rarity: ', 'label').$this->colorize($info['rarity_label'], 'highlight'));
+        $this->line($this->colorize('  Current Level: ', 'label').$info['current_level'].' / '.$info['max_level']);
         $this->newLine();
-        $this->line($this->colorize('  Upgrade to Level: ', 'label').$this->colorize($info['current_level'] + 1, 'trade'));
-        $this->line($this->colorize('  New Value: ', 'label').$this->colorize($info['next_value'], 'trade'));
+
+        // Show effect changes
+        $this->line($this->colorize('  Effect Changes:', 'header'));
+        foreach ($info['current_effects'] as $stat => $currentValue) {
+            if (is_numeric($currentValue) && isset($info['next_effects'][$stat])) {
+                $this->line($this->colorize('    '.ucfirst(str_replace('_', ' ', $stat)).': ', 'label').
+                           $this->colorize(round($currentValue, 2), 'highlight').
+                           $this->colorize(' → ', 'dim').
+                           $this->colorize(round($info['next_effects'][$stat], 2), 'trade'));
+            }
+        }
+
         $this->newLine();
         $this->line($this->colorize('  Cost: ', 'label').
                    $this->colorize(number_format($info['upgrade_cost']).' credits', 'trade'));
@@ -158,83 +156,49 @@ class ComponentShopHandler
                    $this->colorize(number_format($player->credits, 2), 'highlight'));
 
         if ($player->credits < $info['upgrade_cost']) {
-            $this->newLine();
-            $this->line($this->colorize('  INSUFFICIENT CREDITS!', 'dim'));
-            $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
+            $this->showInsufficientCredits($info['upgrade_cost'], $player->credits);
 
             return;
         }
 
         $this->newLine();
-        $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+        $this->renderSeparator();
         $this->newLine();
-        $this->line($this->colorize('  Confirm purchase? ', 'header').
+        $this->line($this->colorize('  Confirm upgrade? ', 'header').
                    $this->colorize('[y]', 'label').' Yes  '.
                    $this->colorize('[n]', 'label').' No');
         $this->newLine();
 
-        system('stty -icanon -echo');
-        $confirm = fgetc(STDIN);
+        $confirm = $this->readChar();
 
         if (strtolower($confirm) === 'y') {
-            $result = $upgradeService->upgrade($ship, $component);
+            $result = $upgradeService->upgradeComponent($player, $installed);
 
             $this->clearScreen();
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+            $this->renderBorder();
 
             if ($result['success']) {
-                $this->line($this->colorize('  ✓ UPGRADE SUCCESSFUL!', 'trade'));
-                $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+                $this->line($this->colorize('  UPGRADE SUCCESSFUL!', 'trade'));
+                $this->renderBorder();
                 $this->newLine();
                 $this->line($this->colorize('  '.$result['message'], 'highlight'));
-                $this->line($this->colorize('  New Value: ', 'label').$this->colorize($result['new_value'], 'trade'));
                 $this->line($this->colorize('  Credits Spent: ', 'label').number_format($result['cost']));
                 $this->line($this->colorize('  Credits Remaining: ', 'label').
                            $this->colorize(number_format($player->credits, 2), 'trade'));
 
-                // Reload player data
                 $player->refresh();
             } else {
-                $this->line($this->colorize('  ✗ UPGRADE FAILED', 'dim'));
-                $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+                $this->line($this->colorize('  UPGRADE FAILED', 'dim'));
+                $this->renderBorder();
                 $this->newLine();
                 $this->line($this->colorize('  '.$result['message'], 'dim'));
             }
         } else {
             $this->clearScreen();
-            $this->line($this->colorize('  Purchase cancelled.', 'dim'));
+            $this->line($this->colorize('  Upgrade cancelled.', 'dim'));
         }
 
         $this->newLine();
-        $this->line($this->colorize('  Press any key to continue...', 'dim'));
-        system('stty -icanon -echo');
-        fgetc(STDIN);
-    }
-
-    /**
-     * Proxy method to output a line
-     */
-    private function line(string $text): void
-    {
-        $this->command->line($text);
-    }
-
-    /**
-     * Proxy method to output a newline
-     */
-    private function newLine(int $count = 1): void
-    {
-        $this->command->newLine($count);
-    }
-
-    /**
-     * Proxy method to output an error
-     */
-    private function error(string $text): void
-    {
-        $this->command->error($text);
+        $this->waitForAnyKey();
     }
 }

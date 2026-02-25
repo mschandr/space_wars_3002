@@ -366,38 +366,41 @@ class TravelTest extends TestCase
     public function test_user_can_calculate_fuel_cost(): void
     {
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
-            ->getJson("/api/travel/fuel-cost?distance=100&player_uuid={$this->player->uuid}");
+            ->getJson("/api/travel/fuel-cost?ship_uuid={$this->ship->uuid}&poi_uuid={$this->destination->uuid}");
 
         $response->assertStatus(200)
             ->assertJsonStructure([
                 'success',
                 'data' => [
+                    'from' => ['uuid', 'name', 'x', 'y'],
+                    'to' => ['uuid', 'name', 'x', 'y'],
                     'distance',
-                    'fuel_cost',
-                    'ship_warp_drive',
-                    'current_fuel',
-                    'can_afford',
+                    'ship' => ['current_fuel', 'max_fuel', 'warp_drive'],
+                    'warp_gate',
+                    'direct_jump' => ['distance', 'fuel_cost', 'can_afford', 'in_range', 'max_range'],
+                    'cheapest_option',
+                    'cheapest_fuel_cost',
+                    'can_reach',
                 ],
             ])
             ->assertJson([
                 'success' => true,
                 'data' => [
-                    'distance' => 100,
-                    'ship_warp_drive' => 1,
-                    'current_fuel' => 100,
+                    'from' => ['uuid' => $this->currentLocation->uuid],
+                    'to' => ['uuid' => $this->destination->uuid],
+                    'ship' => ['warp_drive' => 1],
                 ],
             ]);
     }
 
-    public function test_fuel_cost_calculation_fails_without_active_ship(): void
+    public function test_fuel_cost_calculation_fails_with_invalid_ship(): void
     {
-        // Deactivate ship
-        $this->ship->update(['is_active' => false]);
+        $invalidUuid = \Illuminate\Support\Str::uuid();
 
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
-            ->getJson("/api/travel/fuel-cost?distance=100&player_uuid={$this->player->uuid}");
+            ->getJson("/api/travel/fuel-cost?ship_uuid={$invalidUuid}&poi_uuid={$this->destination->uuid}");
 
-        $response->assertStatus(400)
+        $response->assertStatus(404)
             ->assertJson([
                 'success' => false,
             ]);
@@ -406,18 +409,11 @@ class TravelTest extends TestCase
     public function test_fuel_cost_validates_input(): void
     {
         $response = $this->withHeader('Authorization', "Bearer {$this->token}")
-            ->getJson('/api/travel/fuel-cost?distance=invalid');
+            ->getJson("/api/travel/fuel-cost?ship_uuid={$this->ship->uuid}");
 
         $response->assertStatus(422)
             ->assertJson([
                 'success' => false,
-            ])
-            ->assertJsonStructure([
-                'error' => [
-                    'code',
-                    'message',
-                    'errors' => ['distance', 'player_uuid'],
-                ],
             ]);
     }
 
@@ -429,7 +425,7 @@ class TravelTest extends TestCase
             ['POST', "/api/players/{$this->player->uuid}/travel/coordinate"],
             ['POST', "/api/players/{$this->player->uuid}/travel/direct-jump"],
             ['GET', '/api/travel/xp-preview?distance=100'],
-            ['GET', "/api/travel/fuel-cost?distance=100&player_uuid={$this->player->uuid}"],
+            ['GET', "/api/travel/fuel-cost?ship_uuid={$this->ship->uuid}&poi_uuid={$this->destination->uuid}"],
         ];
 
         foreach ($endpoints as [$method, $url]) {

@@ -2,30 +2,21 @@
 
 namespace App\Console\Shops;
 
-use App\Console\Traits\ConsoleBoxRenderer;
-use App\Console\Traits\ConsoleColorizer;
-use App\Console\Traits\TerminalInputHandler;
 use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\TradingHub;
 use App\Models\TradingHubShip;
-use Illuminate\Console\Command;
+use App\Services\MerchantCommentaryService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class ShipShopHandler
+class ShipShopHandler extends BaseShopHandler
 {
-    use ConsoleBoxRenderer;
-    use ConsoleColorizer;
-    use TerminalInputHandler;
+    private MerchantCommentaryService $commentaryService;
 
-    private Command $command;
-
-    private int $termWidth;
-
-    public function __construct(Command $command, int $termWidth = 120)
+    public function __construct()
     {
-        $this->command = $command;
-        $this->termWidth = $termWidth;
+        $this->commentaryService = app(MerchantCommentaryService::class);
     }
 
     /**
@@ -33,7 +24,7 @@ class ShipShopHandler
      */
     public function show(Player $player, TradingHub $tradingHub): void
     {
-        system('stty sane');
+        $this->resetTerminal();
 
         $running = true;
         while ($running) {
@@ -51,10 +42,7 @@ class ShipShopHandler
             $this->clearScreen();
 
             // Header
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->line($this->colorize('  SHIPYARD - NEW VESSEL SALES', 'header'));
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->newLine();
+            $this->renderShopHeader('SHIPYARD - NEW VESSEL SALES');
 
             // Location and player info
             $this->line($this->colorize('  Trading Hub: ', 'label').$this->colorize($tradingHub->name, 'trade'));
@@ -76,8 +64,7 @@ class ShipShopHandler
             if ($availableShips->isEmpty()) {
                 $this->line($this->colorize('  This trading hub does not have a shipyard.', 'dim'));
                 $this->newLine();
-                $this->line($this->colorize('  Press any key to return...', 'dim'));
-                $this->waitForAnyKey();
+                $this->waitForAnyKey('Press any key to return...');
 
                 return;
             }
@@ -140,10 +127,22 @@ class ShipShopHandler
                     $this->line('      '.$reqText);
                 }
 
+                // Shipyard owner commentary: hand-written overrides dynamic
+                $pitch = ! empty($ship->sales_pitches)
+                    ? $ship->getSalesPitch($currentShip !== null)
+                    : $this->commentaryService->generateShipCommentary(
+                        $ship,
+                        (float) $inventory->current_price,
+                        $player
+                    );
+                if ($pitch) {
+                    $this->line('      '.$this->colorize('"'.$this->wrapText($pitch, $this->termWidth - 8).'"', 'dim'));
+                }
+
                 $this->newLine();
             }
 
-            $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+            $this->renderSeparator();
             $this->newLine();
             $this->line($this->colorize('  Select ship [1-'.$availableShips->count().'] to purchase, or [q] to exit: ', 'label'));
 
@@ -213,7 +212,6 @@ class ShipShopHandler
         if (! $ship->meetsRequirements(['level' => $player->level])) {
             $this->newLine();
             $this->line($this->colorize('  ❌ You do not meet the requirements for this ship.', 'pirate'));
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
             $this->waitForAnyKey();
 
             return;
@@ -224,7 +222,6 @@ class ShipShopHandler
             $this->newLine();
             $this->line($this->colorize('  ❌ Insufficient funds. You need '.
                        number_format($netCost - $player->credits, 2).' more credits.', 'pirate'));
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
             $this->waitForAnyKey();
 
             return;
@@ -281,14 +278,13 @@ class ShipShopHandler
         if ($confirm !== 'y') {
             $this->newLine();
             $this->line($this->colorize('  Purchase cancelled.', 'dim'));
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
             $this->waitForAnyKey();
 
             return;
         }
 
         // Process purchase
-        \DB::transaction(function () use ($player, $currentShip, $ship, $inventory, $netCost) {
+        DB::transaction(function () use ($player, $currentShip, $ship, $inventory, $netCost) {
             // Delete the ship being traded in (if player has one)
             if ($currentShip) {
                 $currentShip->cargo()->delete();
@@ -304,6 +300,7 @@ class ShipShopHandler
                 'uuid' => Str::uuid(),
                 'player_id' => $player->id,
                 'ship_id' => $ship->id,
+                'current_poi_id' => $player->current_poi_id,
                 'name' => $ship->name, // Player can rename later
                 'current_fuel' => $ship->attributes['max_fuel'] ?? 100,
                 'max_fuel' => $ship->attributes['max_fuel'] ?? 100,
@@ -319,9 +316,7 @@ class ShipShopHandler
                 'status' => 'operational',
             ]);
 
-            // Deduct credits
-            $player->credits -= $netCost;
-            $player->save();
+            $player->deductCredits($netCost);
 
             // Decrease ship inventory
             $inventory->decreaseStock();
@@ -331,26 +326,6 @@ class ShipShopHandler
         $this->line($this->colorize('  ✅ Ship purchased successfully!', 'trade'));
         $this->line($this->colorize('  Your new '.$ship->name.' is ready for departure.', 'highlight'));
         $this->newLine();
-        $this->line($this->colorize('  Press any key to continue...', 'dim'));
         $this->waitForAnyKey();
-    }
-
-    private function waitForAnyKey(): void
-    {
-        system('stty -icanon -echo');
-        fread(STDIN, 1);
-        system('stty sane');
-    }
-
-    private function newLine(int $count = 1): void
-    {
-        for ($i = 0; $i < $count; $i++) {
-            $this->command->newLine();
-        }
-    }
-
-    private function line(string $string): void
-    {
-        $this->command->line($string);
     }
 }

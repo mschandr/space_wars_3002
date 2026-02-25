@@ -16,10 +16,9 @@ use Illuminate\Support\Str;
 /**
  * Generates core region systems for tiered galaxies.
  *
- * Core systems are:
- * - 100% inhabited
- * - Have fortress defenses
- * - Have premium trading posts with all services
+ * Core systems are probabilistically:
+ * - 90% charted, of those 90% populated → ~81% inhabited
+ * - Inhabited systems get fortress defenses and trading posts
  * - Connected via active warp gates
  */
 class CoreSystemGenerator
@@ -49,9 +48,16 @@ class CoreSystemGenerator
             ? trim(file_get_contents(base_path('VERSION')))
             : null;
 
+        $chartedPct = RegionType::CORE->getChartedPercentage();
+        $inhabitedPct = RegionType::CORE->getInhabitedPercentage();
+
         // Batch insert for performance
         $batchData = [];
         foreach ($points as $point) {
+            $isCharted = (random_int(1, 10000) / 10000) <= $chartedPct;
+            $isInhabited = $isCharted && $chartedPct > 0
+                && (random_int(1, 10000) / 10000) <= ($inhabitedPct / $chartedPct);
+
             $batchData[] = [
                 'uuid' => (string) Str::uuid(),
                 'galaxy_id' => $galaxy->id,
@@ -62,7 +68,8 @@ class CoreSystemGenerator
                 'name' => StarNameProvider::generateStarName(),
                 'attributes' => json_encode(['stellar_class' => $this->randomStellarClass()]),
                 'is_hidden' => false,
-                'is_inhabited' => true,  // Core systems are always inhabited
+                'is_inhabited' => $isInhabited,
+                'is_charted' => $isCharted,
                 'region' => RegionType::CORE->value,
                 'is_fortified' => false,  // Will be set when defenses are deployed
                 'version' => $version,
@@ -100,6 +107,10 @@ class CoreSystemGenerator
                 continue;
             }
 
+            if (! $poi->is_inhabited) {
+                continue;
+            }
+
             $this->defenseFactory->deployFortressDefenses($poi, 1);
             $fortified++;
         }
@@ -120,6 +131,10 @@ class CoreSystemGenerator
 
         foreach ($coreSystems as $poi) {
             if ($poi->type !== PointOfInterestType::STAR) {
+                continue;
+            }
+
+            if (! $poi->is_inhabited) {
                 continue;
             }
 

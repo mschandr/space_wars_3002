@@ -1,0 +1,186 @@
+================================================================================
+SPACE WARS 3002 - CODEBASE QUICK REFERENCE
+================================================================================
+
+DOCUMENTATION FILES CREATED:
+  1. CODEBASE_MAP.md                       (47 KB, 900 lines) - DETAILED ANALYSIS
+  2. CODEBASE_ANALYSIS_SUMMARY.md          (8.2 KB, 250 lines) - QUICK OVERVIEW
+  3. CLASS_REFERENCE.md                    (19 KB, 600 lines) - LOOKUP TABLES
+  4. CODEBASE_DOCUMENTATION_INDEX.md       (Getting started guide)
+  5. QUICK_REFERENCE.txt                   (This file)
+
+QUICK STATS:
+  - Total Classes: 295+
+  - Total Code: ~33,817 lines
+    * Models: 48 classes (7,613 LOC)
+    * Services: 70+ classes (15,410 LOC)
+    * Controllers: 50+ classes (10,794 LOC)
+  - Largest Model: PointOfInterest (37 methods)
+  - Largest Service: NotificationService (16 methods)
+  - Largest Controller: GalaxyCreationController (9 methods)
+
+CRITICAL CODE SMELLS:
+  X PointOfInterest (37 methods) - GOD OBJECT
+  X PlayerShip (35 methods) - HIGH COMPLEXITY
+  X Player (35 methods) - STATE MANAGEMENT
+  X NotificationService (16 methods) - GOD SERVICE
+  X PirateEncounterService (14 methods, 6 dependencies) - HIGH COUPLING
+
+REFACTORING PRIORITIES:
+  [WEEK 1] Split PointOfInterest into 5-6 specialized classes
+  [WEEK 1] Extract NotificationService into builders
+  [WEEK 2] Refactor PlayerShip using composition
+  [WEEK 2] Consolidate thin wrapper services (1-2 methods)
+  [WEEK 3] Introduce repository pattern
+  [WEEK 3] Create value object layer
+  [WEEK 3] Implement event system for notifications
+
+KEY DIRECTORIES:
+  app/Models/                    - 48 data models with relationships
+  app/Services/                  - 70+ business logic services
+  app/Http/Controllers/Api/      - 50+ API endpoints
+  app/Console/Commands/          - 29 artisan commands
+  app/Console/Shops/             - 6 interactive handlers
+  app/Enums/                     - 15 type-safe enumerations
+  app/Generators/Points/         - 9 pluggable spatial generators
+  app/Traits/                    - 10+ shared behavior traits
+  app/ValueObjects/              - 1 configuration value object (underutilized)
+  app/Faker/                     - 10+ procedural name generators
+
+LARGEST CLASSES BY METHOD COUNT:
+  1. PointOfInterest.php         37 methods (GOD OBJECT)
+  2. PlayerShip.php              35 methods (HIGH COMPLEXITY)
+  3. Player.php                  35 methods (STATE MANAGEMENT)
+  4. WarpGate.php                23 methods
+  5. Galaxy.php                  22 methods
+  6. NotificationService.php     16 methods (GOD SERVICE)
+  7. PirateEncounterService.php  14 methods (HIGH COUPLING)
+  8. CombatSession.php           10 methods
+  9. SystemScanService.php       10 methods
+ 10. SalvageYardService.php      10 methods
+
+THIN WRAPPER CLASSES (CONSOLIDATE):
+  X BarRumorService              1 method
+  X MarketEventGenerator         2 methods
+  X SurrenderService             2 methods
+  X PlayerDeathService           2 methods
+  X CombatResolutionService      2 methods
+
+GOOD PATTERNS OBSERVED:
+  [OK] Service pattern (business logic separated)
+  [OK] Constructor injection (DI throughout)
+  [OK] Pluggable generators (factory pattern)
+  [OK] Configuration-driven (game rules in config)
+  [OK] Bulk operations (BulkInserter for performance)
+  [OK] Spatial indexing (O(1) lookups for generation)
+  [OK] Thin commands (all delegate to services)
+
+PATTERNS NEEDING IMPROVEMENT:
+  [!] God objects (PointOfInterest, PlayerShip, Player)
+  [!] God services (NotificationService, PirateEncounterService)
+  [!] Thin wrappers (1-2 method services/controllers)
+  [!] No repository pattern
+  [!] No value object layer (only 1 VO file)
+  [!] No event system (tight coupling for notifications)
+  [!] Calculation logic in controller (TravelCalculationController)
+
+KEY SERVICE GROUPS:
+  Travel        TravelService, FuelRegenerationService, TravelNotificationService
+  Trading       TradingService, StarChartService, ProximityPricingService
+  Combat        CombatResolutionService, PirateEncounterService, PvPCombatService
+  Mining        MiningService, SalvageService, SalvageYardService
+  Colonies      ColonyCycleService, OrbitalStructureService, SystemDefenseFactory
+  Ships         ShipUpgradeService, ShipRepairService, ShipPurchaseService
+  Knowledge     PlayerKnowledgeService, SystemScanService, StarChartService
+  Notify        NotificationService (16 methods - NEEDS SPLITTING)
+  Mirror        MirrorUniverseService
+  GalaxyGen     GalaxyGenerationOrchestrator + 10+ specialized generators
+  NPCs/Pirates  NpcGenerationService, PirateFleetGenerator, PirateEncounterService
+
+KEY MODELS BY CATEGORY:
+  Game State: Player, Galaxy, PointOfInterest, Sector
+  Ships: Ship, PlayerShip, ShipComponent, PlayerShipComponent
+  Combat: CombatSession, CombatParticipant, PvPChallenge
+  Pirates: PirateFaction, PirateCaptain, PirateBand, PirateFleet
+  Trading: TradingHub, Mineral, TradingHubInventory, StellarCartographer
+  Colonies: Colony, ColonyBuilding, ColonyMission, ColonyShipProduction
+  Infrastructure: SystemDefense, OrbitalStructure, SalvageYardInventory
+  Knowledge: SystemScan, PlayerSystemKnowledge, PilotLaneKnowledge
+  Special: PrecursorShip, Plan, MarketEvent, WarpGate
+
+WHERE TO FIND THINGS:
+  Player creation        InitializePlayerCommand, PlayerSpawnService
+  Travel/Navigation      TravelService, TravelController, NavigationController
+  Trading                TradingService, TradingController, TradingHubGenerator
+  Combat                 CombatResolutionService, PirateEncounterService, CombatController
+  Mining & Resources     MiningService, SalvageService, SalvageYardService
+  Galaxy Generation      GalaxyGenerationOrchestrator, StarFieldGenerator, WarpGateNetworkGenerator
+  Colonies               ColonyCycleService, ColonyController, ColonyBuilding
+  Ships & Upgrades       ShipUpgradeService, ShipRepairService, ShipPurchaseService
+  Star Charts            StarChartService, CartographyController
+  Mirror Universe        MirrorUniverseService, MirrorUniverseController
+  NPCs & Pirates         NpcGenerationService, PirateEncounterService, PirateFleetGenerator
+  Notifications          NotificationService, NotificationController
+  Console Interface      PlayerInterfaceCommand, 6 Shop Handlers, 4 Console Traits
+
+IMPORTANT FORMULAS:
+  Travel Fuel Cost       ceil(distance / (1 + (warp_drive - 1) * 0.2))
+  Travel XP              max(10, distance * 5)
+  Fuel Regen Rate        BASE_RATE * (1 + (warp_drive - 1) * 0.3) units/hour
+  Inhabited %            40% default (range: 33-50%)
+  Warp Gate Adjacency    max(width, height) / 15
+  Trading Hubs           50-80% of inhabited systems (default 65%)
+  Star Chart Price       basePrice * (multiplier ^ unknownCount)
+  Cartographer Spawn     ~30% of trading hubs
+
+NEXT STEPS:
+  1. Read CODEBASE_ANALYSIS_SUMMARY.md (15 min) - Quick overview
+  2. Browse CLASS_REFERENCE.md (10 min) - Directory structure
+  3. Deep dive CODEBASE_MAP.md (1-2 hours) - Detailed analysis
+  4. Create refactoring tickets based on priorities
+  5. Share documentation with team
+
+DOCUMENTATION LOCATIONS:
+  File Path                                Description
+  ============================================================
+  CODEBASE_MAP.md                         Detailed analysis (900 lines)
+  CODEBASE_ANALYSIS_SUMMARY.md            Quick summary (250 lines)
+  CLASS_REFERENCE.md                      Lookup tables (600 lines)
+  CODEBASE_DOCUMENTATION_INDEX.md         Getting started guide
+  QUICK_REFERENCE.txt                     This file
+
+READING RECOMMENDATIONS BY ROLE:
+  Code Reviewer        → Read SUMMARY first, then MAP for details
+  New Team Member      → Read REFERENCE to find things, then SUMMARY for context
+  Architect/Tech Lead  → Read SUMMARY for overview, then deep dive MAP
+  QA/Tester           → Read SUMMARY's testing section, then REFERENCE for navigation
+  DevOps              → Read REFERENCE's Commands section
+
+CODEBASE HEALTH ASSESSMENT:
+  Architecture         GOOD (clear service/model/controller separation)
+  Design Patterns      GOOD (factory, strategy, dependency injection)
+  Code Organization    GOOD (logical directory structure)
+  Code Complexity      MODERATE-TO-HIGH (some god objects/services)
+  Testing Surface      COMPLEX (295 classes with deep dependencies)
+  Refactoring Needs    YES (high priority for god objects)
+  Performance          GOOD (spatial indexing, bulk operations optimized)
+  Maintainability      GOOD (overall, but will degrade with god objects)
+
+COMPLEXITY INDICATORS:
+  [ ] God Objects Detected (PointOfInterest, PlayerShip, Player)
+  [ ] God Services Detected (NotificationService, PirateEncounterService)
+  [ ] Thin Wrappers Detected (multiple 1-2 method services)
+  [ ] Tight Coupling (6-dependent PirateEncounterService)
+  [ ] Underutilized Patterns (only 1 ValueObject file)
+  [V] Good Separation of Concerns (Models/Services/Controllers)
+  [V] Good Use of DI (constructor injection throughout)
+  [V] Good Factory Pattern (point generators)
+  [V] Good Bulk Operations (BulkInserter for performance)
+  [V] Good Spatial Indexing (O(1) neighbor lookups)
+
+Generated: February 2026
+Analysis Method: Static class parsing, method counting, dependency tracing
+Total Analysis Time: Comprehensive codebase mapping
+Complexity Assessment: MODERATE-TO-HIGH (refactoring recommended in next sprint)
+
+================================================================================

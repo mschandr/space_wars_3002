@@ -1104,6 +1104,7 @@ class PlayerInterfaceCommand extends Command
             'uuid' => \Illuminate\Support\Str::uuid(),
             'player_id' => $this->player->id,
             'ship_id' => $starterShip->id,
+            'current_poi_id' => $this->player->current_poi_id,
             'name' => $starterShip->name,
             'current_fuel' => $starterShip->attributes['max_fuel'] ?? 100,
             'max_fuel' => $starterShip->attributes['max_fuel'] ?? 100,

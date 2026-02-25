@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\Galaxy\GalaxyStatus;
-use App\Enums\PointsOfInterest\PointOfInterestType;
-use App\Http\Controllers\Api\Builders\SystemNameGenerator;
 use App\Http\Resources\GalaxyDehydratedResource;
 use App\Http\Resources\GalaxyResource;
 use App\Http\Resources\PlayerResource;
@@ -12,13 +10,9 @@ use App\Models\Colony;
 use App\Models\CombatSession;
 use App\Models\Galaxy;
 use App\Models\Player;
-use App\Models\PlayerShip;
 use App\Models\PvPChallenge;
 use App\Models\Sector;
-use App\Models\Ship;
 use App\Models\WarpLanePirate;
-use App\Services\LaneKnowledgeService;
-use App\Services\StarChartService;
 use App\Services\SystemScanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -562,100 +556,11 @@ class GalaxyController extends BaseApiController
 
         DB::beginTransaction();
         try {
-            // Find a random inhabited starting location
-            $startingLocation = $galaxy->pointsOfInterest()
-                ->where('type', PointOfInterestType::STAR)
-                ->where('is_inhabited', true)
-                ->inRandomOrder()
-                ->first();
+            $spawnService = app(\App\Services\PlayerSpawnService::class);
 
-            if (! $startingLocation) {
-                DB::rollBack();
+            $player = $spawnService->initializePlayer($galaxy, $user, $validated['call_sign']);
 
-                return $this->error(
-                    'No suitable starting location found in galaxy',
-                    'NO_STARTING_LOCATION'
-                );
-            }
-
-            // Get starting credits from config
-            $startingCredits = config('game_config.ships.starting_credits', 10000);
-
-            // Create player
-            $player = Player::create([
-                'user_id' => $user->id,
-                'galaxy_id' => $galaxy->id,
-                'call_sign' => $validated['call_sign'],
-                'credits' => $startingCredits,
-                'experience' => 0,
-                'level' => 1,
-                'current_poi_id' => $startingLocation->id,
-                'status' => 'active',
-            ]);
-
-            // Give player a starting ship (Starter class - Sparrow Light Freighter)
-            $starterShip = Ship::where('class', 'starter')->first();
-            if (! $starterShip) {
-                // TODO: TECH DEBT - Remove runtime seeder fallback
-                //       Issue: Running seeders in request handlers is an anti-pattern
-                //       Current behavior: Seeds ships if missing (unsafe for production)
-                //       Desired fix: Return 500 error if starter ship missing,
-                //                    enforce seeding during deployment
-                //       Priority: Medium (works but risky)
-                (new \Database\Seeders\ShipTypesSeeder)->run();
-                $starterShip = Ship::where('class', 'starter')->first();
-            }
-
-            if ($starterShip) {
-                // Get ship attributes for starting stats
-                $attrs = $starterShip->attributes ?? [];
-
-                PlayerShip::create([
-                    'player_id' => $player->id,
-                    'ship_id' => $starterShip->id,
-                    'name' => "{$player->call_sign}'s Sparrow",
-                    'current_fuel' => $attrs['max_fuel'] ?? 100,
-                    'max_fuel' => $attrs['max_fuel'] ?? 100,
-                    'hull' => $starterShip->hull_strength ?? 80,
-                    'max_hull' => $starterShip->hull_strength ?? 80,
-                    'weapons' => $attrs['starting_weapons'] ?? 15,
-                    'cargo_hold' => $starterShip->cargo_capacity ?? 50,
-                    'sensors' => $attrs['starting_sensors'] ?? 1,
-                    'warp_drive' => $attrs['starting_warp_drive'] ?? 1,
-                    'shields' => $starterShip->shield_strength ?? 40,
-                    'max_shields' => $starterShip->shield_strength ?? 40,
-                    'is_active' => true,
-                    'status' => 'operational',
-                ]);
-            }
-
-            // === SPAWN DISCOVERY ===
-
-            // Ensure spawn system has a name
-            SystemNameGenerator::ensureName($startingLocation);
-
-            // Create minimum scan for spawn location (level 1)
-            $scanService = app(SystemScanService::class);
-            $scanService->ensureMinimumScan($player, $startingLocation, 1);
-
-            // Discover outgoing lanes from spawn
-            $laneKnowledgeService = app(LaneKnowledgeService::class);
-            $laneKnowledgeService->discoverOutgoingGates($player, $startingLocation->id, 'spawn');
-
-            // Grant spawn location star chart (free)
-            DB::table('player_star_charts')->insert([
-                'player_id' => $player->id,
-                'revealed_poi_id' => $startingLocation->id,
-                'purchased_from_poi_id' => $startingLocation->id,
-                'price_paid' => 0.00,
-                'purchased_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            // Grant starting charts for nearby inhabited systems
-            $starChartService = app(StarChartService::class);
-            $starChartService->grantStartingCharts($player);
+            $spawnService->discoverSpawn($player, $player->currentLocation);
 
             DB::commit();
 

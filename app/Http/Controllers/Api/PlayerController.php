@@ -2,13 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\PointsOfInterest\PointOfInterestType;
 use App\Http\Resources\PlayerResource;
 use App\Models\Galaxy;
 use App\Models\Player;
-use App\Models\PointOfInterest;
-use App\Models\Ship;
-use App\Models\PlayerShip;
+use App\Services\PlayerSpawnService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +36,9 @@ class PlayerController extends BaseApiController
     public function store(Request $request): JsonResponse
     {
         try {
+            // TODO: (Missing Validation) call_sign lacks min length, character set regex (e.g. alphanumeric
+            // + underscore), and uniqueness-within-galaxy rule. galaxy_id accepts raw integer IDs instead
+            // of UUIDs, inconsistent with the rest of the API which uses UUID lookups.
             $validated = $request->validate([
                 'galaxy_id' => ['required', 'exists:galaxies,id'],
                 'call_sign' => ['required', 'string', 'max:50'],
@@ -65,58 +65,11 @@ class PlayerController extends BaseApiController
 
         DB::beginTransaction();
         try {
-            // Find a random inhabited starting location
-            $startingLocation = PointOfInterest::where('galaxy_id', $galaxy->id)
-                ->where('type', PointOfInterestType::STAR)
-                ->where('is_inhabited', true)
-                ->inRandomOrder()
-                ->first();
+            $spawnService = app(PlayerSpawnService::class);
 
-            if (! $startingLocation) {
-                DB::rollBack();
+            $player = $spawnService->initializePlayer($galaxy, $request->user(), $validated['call_sign']);
 
-                return $this->error(
-                    'No suitable starting location found in galaxy',
-                    'NO_STARTING_LOCATION'
-                );
-            }
-
-            // Get starting credits from config
-            $startingCredits = config('game_config.ships.starting_credits', 10000);
-
-            // Create player
-            $player = Player::create([
-                'user_id' => $request->user()->id,
-                'galaxy_id' => $galaxy->id,
-                'call_sign' => $validated['call_sign'],
-                'credits' => $startingCredits,
-                'experience' => 0,
-                'level' => 1,
-                'current_poi_id' => $startingLocation->id,
-                'status' => 'active',
-            ]);
-
-            // Give player a starting ship (Scout class)
-            $scoutShip = Ship::where('class', 'scout')->first();
-            if ($scoutShip) {
-                PlayerShip::create([
-                    'player_id' => $player->id,
-                    'ship_id' => $scoutShip->id,
-                    'name' => "{$player->call_sign}'s Scout",
-                    'current_fuel' => $scoutShip->base_max_fuel ?? 100,
-                    'max_fuel' => $scoutShip->base_max_fuel ?? 100,
-                    'hull' => $scoutShip->base_hull ?? 100,
-                    'max_hull' => $scoutShip->base_hull ?? 100,
-                    'weapons' => $scoutShip->base_weapons ?? 10,
-                    'cargo_hold' => $scoutShip->base_cargo ?? 100,
-                    'sensors' => $scoutShip->base_sensors ?? 1,
-                    'warp_drive' => $scoutShip->base_warp_drive ?? 1,
-                    'is_active' => true,
-                    'status' => 'operational',
-                ]);
-            }
-
-            // TODO: Give player starter star charts (3 nearest systems)
+            $spawnService->discoverSpawn($player, $player->currentLocation);
 
             DB::commit();
 

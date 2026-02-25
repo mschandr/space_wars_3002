@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ColonyBuildingController;
 use App\Http\Controllers\Api\ColonyCombatController;
 use App\Http\Controllers\Api\ColonyController;
 use App\Http\Controllers\Api\CombatController;
+use App\Http\Controllers\Api\ComponentUpgradeController;
 use App\Http\Controllers\Api\FacilitiesController;
 use App\Http\Controllers\Api\GalaxyController;
 use App\Http\Controllers\Api\GalaxyCreationController;
@@ -18,9 +19,11 @@ use App\Http\Controllers\Api\MiningController;
 use App\Http\Controllers\Api\MirrorUniverseController;
 use App\Http\Controllers\Api\NavigationController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OrbitalStructureController;
 use App\Http\Controllers\Api\PirateFactionController;
 use App\Http\Controllers\Api\PlansShopController;
 use App\Http\Controllers\Api\PlayerController;
+use App\Http\Controllers\Api\PlayerKnowledgeMapController;
 use App\Http\Controllers\Api\PlayerSettingsController;
 use App\Http\Controllers\Api\PlayerStatusController;
 use App\Http\Controllers\Api\PoiTypeController;
@@ -28,10 +31,12 @@ use App\Http\Controllers\Api\PrecursorRumorController;
 use App\Http\Controllers\Api\PvPCombatController;
 use App\Http\Controllers\Api\SalvageYardController;
 use App\Http\Controllers\Api\ScanController;
+use App\Http\Controllers\Api\SectorMapController;
 use App\Http\Controllers\Api\ShipController;
 use App\Http\Controllers\Api\ShipServiceController;
 use App\Http\Controllers\Api\ShipShopController;
 use App\Http\Controllers\Api\ShipStatusController;
+use App\Http\Controllers\Api\ShipyardController;
 use App\Http\Controllers\Api\StarSystemController;
 use App\Http\Controllers\Api\TeamCombatController;
 use App\Http\Controllers\Api\TradingController;
@@ -144,6 +149,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Map summaries (lightweight data for rendering)
         Route::get('map-summaries', [MapSummaryController::class, 'index']);
 
+        // Sector map (aggregate stats per sector, no individual stars)
+        Route::get('sector-map', [SectorMapController::class, 'index']);
+
         // Galaxy settings (owner only)
         Route::patch('settings', [GalaxySettingsController::class, 'update']);
     });
@@ -201,6 +209,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('{uuid}/local-bodies', [NavigationController::class, 'getLocalBodies']);
     });
 
+    // Knowledge Map (fog-of-war)
+    Route::get('players/{playerUuid}/knowledge-map', [PlayerKnowledgeMapController::class, 'index']);
+
     // Star System routes
     // Comprehensive star system data with visibility based on inhabited status + scan level
     Route::prefix('players/{playerUuid}')->group(function () {
@@ -244,13 +255,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('players/{uuid}/cargo', [TradingTransactionController::class, 'getCargo']);
     Route::get('trading/affordability', [TradingTransactionController::class, 'calculateAffordability']);
 
-    // Upgrade routes
+    // Trading history routes
+    Route::get('players/{playerUuid}/price-history', [TradingController::class, 'getPriceHistory']);
+    Route::get('players/{playerUuid}/trade-log', [TradingController::class, 'getTradeLog']);
+
+    // Upgrade routes (legacy stat-bump system — deprecated)
     Route::get('ships/{uuid}/upgrade-options', [UpgradeController::class, 'listUpgradeOptions']);
     Route::get('ships/{uuid}/upgrade/{component}', [UpgradeController::class, 'getComponentUpgradeDetails']);
     Route::post('ships/{uuid}/upgrade/{component}', [UpgradeController::class, 'executeUpgrade']);
     Route::get('players/{uuid}/plans', [UpgradeController::class, 'getOwnedPlans']);
     Route::get('upgrade-costs', [UpgradeController::class, 'getUpgradeCostFormulas']);
     Route::get('upgrade-limits', [UpgradeController::class, 'getUpgradeLimits']);
+
+    // Component upgrade routes (new per-component system)
+    Route::get('players/{uuid}/components/{componentId}/upgrade-info', [ComponentUpgradeController::class, 'upgradeInfo']);
+    Route::post('players/{uuid}/components/{componentId}/upgrade', [ComponentUpgradeController::class, 'upgrade']);
 
     // Combat routes
     Route::get('warp-gates/{warpGateUuid}/pirates', [CombatController::class, 'checkPiratePresence']);
@@ -285,7 +304,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('ships/{uuid}/repair/all', [ShipServiceController::class, 'repairAll']);
 
     // Ship shopping routes
-    Route::get('trading-hubs/{uuid}/shipyard', [ShipShopController::class, 'getShipyard']);
+    Route::get('trading-hubs/{uuid}/ship-shop', [ShipShopController::class, 'getShipyard']);
     Route::get('ships/catalog', [ShipShopController::class, 'getCatalog']);
     Route::post('players/{uuid}/ships/purchase', [ShipShopController::class, 'purchaseShip']);
     Route::post('players/{uuid}/ships/switch', [ShipShopController::class, 'switchShip']);
@@ -376,12 +395,28 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('rumors', [PrecursorRumorController::class, 'getCollectedRumors']);
     });
 
+    // Shipyard routes (unique pre-rolled ships)
+    Route::get('systems/{uuid}/shipyard', [ShipyardController::class, 'index']);
+    Route::get('shipyard-inventory/{uuid}', [ShipyardController::class, 'show']);
+    Route::post('players/{uuid}/shipyard/purchase', [ShipyardController::class, 'purchase']);
+
     // Salvage Yard routes
     // Salvage yards sell ship components: weapons, shield regenerators, hull patches
+    Route::get('systems/{uuid}/salvage-yard', [SalvageYardController::class, 'indexBySystem']);
     Route::prefix('players/{uuid}')->group(function () {
         Route::get('salvage-yard', [SalvageYardController::class, 'index']);
         Route::get('ship-components', [SalvageYardController::class, 'shipComponents']);
         Route::post('salvage-yard/purchase', [SalvageYardController::class, 'purchase']);
+        Route::post('salvage-yard/sell-ship', [SalvageYardController::class, 'sellShip']);
         Route::post('ship-components/{componentId}/uninstall', [SalvageYardController::class, 'uninstall']);
     });
+
+    // Orbital Structure routes
+    Route::get('poi/{uuid}/orbital-structures', [OrbitalStructureController::class, 'listAtBody']);
+    Route::get('players/{uuid}/orbital-structures', [OrbitalStructureController::class, 'listPlayerStructures']);
+    Route::post('players/{uuid}/orbital-structures/build', [OrbitalStructureController::class, 'build']);
+    Route::get('orbital-structures/{uuid}', [OrbitalStructureController::class, 'show']);
+    Route::put('orbital-structures/{uuid}/upgrade', [OrbitalStructureController::class, 'upgrade']);
+    Route::delete('orbital-structures/{uuid}', [OrbitalStructureController::class, 'demolish']);
+    Route::post('orbital-structures/{uuid}/collect', [OrbitalStructureController::class, 'collect']);
 });

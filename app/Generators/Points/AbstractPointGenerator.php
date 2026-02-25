@@ -128,6 +128,19 @@ abstract class AbstractPointGenerator implements PointGeneratorInterface
     abstract public function sample(Galaxy $galaxy): array;
 
     /**
+     * Persist generated points if persistence is enabled.
+     *
+     * @param  array<int,array{0:int,1:int}>  $points
+     */
+    protected function persistIfEnabled(Galaxy $galaxy, array $points): void
+    {
+        if (config('game_config.feature.persist_data')) {
+            PointOfInterest::createPointsForGalaxy($galaxy, $points);
+            $this->generateStarSystems($galaxy);
+        }
+    }
+
+    /**
      * Generate star systems (planets, moons, asteroids) for all stars in the galaxy
      *
      * @param  Galaxy  $galaxy  The galaxy to generate systems for

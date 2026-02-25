@@ -2,18 +2,23 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasUuid;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class NpcShip extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuid;
 
-    const FUEL_REGEN_RATE = 30; // seconds per fuel point
+    const FUEL_REGEN_RATE_DEFAULT = 30; // fallback if config missing
+
+    public static function fuelRegenRate(): int
+    {
+        return (int) config('game_config.ships.fuel_regen_seconds_per_unit', self::FUEL_REGEN_RATE_DEFAULT);
+    }
 
     protected $fillable = [
         'uuid',
@@ -52,9 +57,9 @@ class NpcShip extends Model
     {
         parent::boot();
 
-        static::creating(function ($npcShip) {
-            if (empty($npcShip->uuid)) {
-                $npcShip->uuid = Str::uuid();
+        static::retrieved(function ($npcShip) {
+            if ($npcShip->is_active) {
+                $npcShip->regenerateFuel();
             }
         });
     }
@@ -87,11 +92,11 @@ class NpcShip extends Model
         $lastUpdate = Carbon::parse($this->fuel_last_updated_at);
         $secondsElapsed = (int) abs($now->diffInSeconds($lastUpdate));
 
-        $fuelToRegenerate = (int) floor($secondsElapsed / self::FUEL_REGEN_RATE);
+        $fuelToRegenerate = (int) floor($secondsElapsed / self::fuelRegenRate());
 
         if ($fuelToRegenerate > 0) {
             $this->current_fuel = min($this->max_fuel, $this->current_fuel + $fuelToRegenerate);
-            $this->fuel_last_updated_at = $now->subSeconds($secondsElapsed % self::FUEL_REGEN_RATE);
+            $this->fuel_last_updated_at = $now->subSeconds($secondsElapsed % self::fuelRegenRate());
             $this->save();
         }
     }

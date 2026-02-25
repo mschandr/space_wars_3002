@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\RarityTier;
 use App\Models\PlayerShip;
 use App\Models\Ship;
 
@@ -192,7 +193,7 @@ class ShipVariationService
     /**
      * Calculate cumulative modifiers from selected traits.
      */
-    private function calculateModifiers(array $selectedTraits): array
+    public function calculateModifiers(array $selectedTraits): array
     {
         $modifiers = [
             'fuel_regen_modifier' => 1.0,
@@ -259,6 +260,21 @@ class ShipVariationService
         $playerShip->variation_traits = $variation['traits'];
 
         return $playerShip;
+    }
+
+    /**
+     * Generate variation traits mapped from a rarity tier.
+     * Higher rarity = more traits, biased toward positive.
+     */
+    public function generateVariationForRarity(Ship $blueprint, RarityTier $rarity): array
+    {
+        $quality = match ($rarity) {
+            RarityTier::EXOTIC, RarityTier::UNIQUE => 'legendary',
+            RarityTier::EPIC, RarityTier::RARE => 'premium',
+            default => 'standard',
+        };
+
+        return $this->generateVariation($blueprint, $quality);
     }
 
     /**

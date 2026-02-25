@@ -8,6 +8,7 @@ use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
 use App\Models\WarpGate;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Travel Service
@@ -93,11 +94,16 @@ class TravelService
             }
         }
 
-        $destination = $gate->destinationPoi;
+        // Gates are bidirectional — resolve the other end based on player's current location
+        $destination = $gate->source_poi_id === $player->current_poi_id
+            ? $gate->destinationPoi
+            : $gate->sourcePoi;
         $distance = $gate->distance ?? $gate->calculateDistance();
         $fuelCost = $this->calculateFuelCost($distance, $ship);
 
-        // Check if ship has enough fuel
+        // TODO: (Logical Error) Call $ship->regenerateFuel() before checking fuel to ensure
+        // passive fuel regeneration is applied. Direct property access bypasses the regeneration
+        // logic in PlayerShip::getCurrentFuel().
         if ($ship->current_fuel < $fuelCost) {
             return [
                 'success' => false,
@@ -113,8 +119,10 @@ class TravelService
         // Consume fuel
         $ship->consumeFuel($fuelCost);
 
-        // Update player location
+        // Update player and ship location
         $player->current_poi_id = $destination->id;
+        $ship->current_poi_id = $destination->id;
+        $ship->save();
 
         // Track last trading hub for respawn
         if ($destination->tradingHub && $destination->tradingHub->is_active) {
@@ -136,15 +144,23 @@ class TravelService
 
         $player->save();
 
-        // Discover the warp lane (fog of war - bidirectional discovery)
+        // Discover the warp lane traveled + all gates visible at destination
         $laneKnowledgeService = app(LaneKnowledgeService::class);
         $laneKnowledgeService->discoverLaneBidirectional($player, $gate, 'travel');
+        $laneKnowledgeService->discoverAllGatesAtLocation($player, $destination->id, 'travel');
+
+        // Update player knowledge (fog-of-war system)
+        $knowledgeService = app(PlayerKnowledgeService::class);
+        $knowledgeService->markVisited($player, $destination);
 
         // Award XP
         $xpEarned = $this->calculateTravelXP($distance);
         $oldLevel = $player->level;
         $player->addExperience($xpEarned);
         $newLevel = $player->level;
+
+        // Check for magnetic mines at destination
+        $mineResult = $this->checkMagneticMines($player, $destination);
 
         // Auto-scan destination if enabled
         $scanResult = null;
@@ -166,6 +182,7 @@ class TravelService
             'mirror_gate' => $mirrorGate,
             'universe' => $player->isInMirrorUniverse() ? 'mirror' : 'prime',
             'scan' => $scanResult,
+            'mine_encounter' => $mineResult,
         ];
     }
 
@@ -193,8 +210,13 @@ class TravelService
      */
     public function calculateDirectJumpFuelCost(float $distance, PlayerShip $ship): int
     {
-        $baseCost = $this->calculateFuelCost($distance, $ship);
-        $penalty = config('game_config.direct_travel.fuel_penalty_multiplier', 2.5);
+        // Direct jumps use reduced warp efficiency — gates are engineered for warp drives
+        $efficiencyFactor = config('game_config.direct_travel.warp_efficiency_factor', 0.25);
+        $warpLevel = $ship->warp_drive ?? 1;
+        $directEfficiency = 1 + (($warpLevel - 1) * 0.2 * $efficiencyFactor);
+        $baseCost = max(1, (int) ceil(ceil($distance) / $directEfficiency));
+
+        $penalty = config('game_config.direct_travel.fuel_penalty_multiplier', 4.0);
 
         return (int) ceil($baseCost * $penalty);
     }
@@ -323,9 +345,22 @@ class TravelService
             $targetY
         );
 
-        // Update player location
+        // Update player and ship location
         $player->current_poi_id = $targetPoi->id;
+        $ship->current_poi_id = $targetPoi->id;
+        $ship->save();
         $player->save();
+
+        // Update player knowledge (fog-of-war system)
+        $knowledgeService = app(PlayerKnowledgeService::class);
+        $knowledgeService->markVisited($player, $targetPoi);
+
+        // Discover all gates visible at the destination
+        $laneKnowledgeService = app(LaneKnowledgeService::class);
+        $laneKnowledgeService->discoverAllGatesAtLocation($player, $targetPoi->id, 'travel');
+
+        // Check for magnetic mines at destination
+        $mineResult = $this->checkMagneticMines($player, $targetPoi);
 
         // Award reduced XP
         $baseXp = $this->calculateTravelXP($distance);
@@ -356,6 +391,7 @@ class TravelService
             'leveled_up' => $newLevel > $oldLevel,
             'jump_type' => 'direct',
             'scan' => $scanResult,
+            'mine_encounter' => $mineResult,
         ];
     }
 
@@ -369,7 +405,9 @@ class TravelService
      */
     private function findOrCreateEmptySpace(int $galaxyId, int $x, int $y): PointOfInterest
     {
-        // Check if POI exists at these coordinates
+        // TODO: (Race Condition) Use firstOrCreate() inside a DB::transaction() to prevent duplicate
+        // POIs when two players jump to the same empty coordinates simultaneously. The current
+        // find-then-create pattern has a TOCTOU (time-of-check-time-of-use) vulnerability.
         $existing = PointOfInterest::where('galaxy_id', $galaxyId)
             ->where('x', $x)
             ->where('y', $y)
@@ -391,6 +429,26 @@ class TravelService
             'is_hidden' => false,
             'attributes' => [],
         ]);
+    }
+
+    /**
+     * Check for magnetic mines at destination.
+     */
+    private function checkMagneticMines(Player $player, PointOfInterest $destination): ?array
+    {
+        try {
+            $orbitalService = app(OrbitalStructureService::class);
+
+            return $orbitalService->checkMagneticMines($player, $destination);
+        } catch (\Throwable $e) {
+            Log::warning('Magnetic mine check failed', [
+                'player_id' => $player->id,
+                'destination_id' => $destination->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**
