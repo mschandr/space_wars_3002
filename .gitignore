@@ -24,3 +24,4 @@ ssl/*
 CLAUDE.md
 tags
 *.DS_Store*
+docs/
