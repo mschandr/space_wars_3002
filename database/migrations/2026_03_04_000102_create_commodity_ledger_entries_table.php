@@ -34,10 +34,10 @@ return new class extends Migration
 
             $table->timestamps();
 
-            // Critical indexes
-            $table->index(['trading_hub_id', 'commodity_id', 'timestamp']);
-            $table->index(['galaxy_id', 'commodity_id', 'timestamp']);
-            $table->index('reason_code');
+            // Critical indexes (using short names for MariaDB compatibility)
+            $table->index(['trading_hub_id', 'commodity_id', 'timestamp'], 'idx_hub_commodity_time');
+            $table->index(['galaxy_id', 'commodity_id', 'timestamp'], 'idx_galaxy_commodity_time');
+            $table->index('reason_code', 'idx_reason_code');
         });
     }
 

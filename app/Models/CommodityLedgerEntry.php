@@ -37,7 +37,7 @@ class CommodityLedgerEntry extends Model
     /**
      * Ledger entries are immutable — disable updates
      */
-    public function update(array $attributes = [])
+    public function update(array $attributes = [], array $options = [])
     {
         throw new \Exception('Ledger entries are immutable');
     }
