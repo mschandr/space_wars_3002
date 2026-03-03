@@ -11,6 +11,7 @@ use App\Models\PlayerTradeTransaction;
 use App\Models\PointOfInterest;
 use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
+use App\Services\Trading\CommodityAccessService;
 use App\Services\TradingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,8 @@ use Illuminate\Validation\ValidationException;
 class TradingController extends BaseApiController
 {
     public function __construct(
-        private readonly TradingService $tradingService
+        private readonly TradingService $tradingService,
+        private readonly CommodityAccessService $commodityAccessService
     ) {}
 
     /**
@@ -142,12 +144,15 @@ class TradingController extends BaseApiController
 
         // Record price sightings if player_uuid provided
         $playerUuid = $request->query('player_uuid');
+        $player = null;
         if ($playerUuid && $request->user()) {
             $player = Player::where('uuid', $playerUuid)
                 ->where('user_id', $request->user()->id)
                 ->first();
 
             if ($player) {
+                // Filter inventory by player's commodity access level
+                $inventory = $this->commodityAccessService->filterForPlayer($inventory, $player);
                 $this->tradingService->recordPriceSightings($player, $poi->tradingHub, $inventory);
             }
         }

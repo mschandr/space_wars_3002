@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\DataObjects\PricingContext;
 use App\Models\Mineral;
 use App\Models\Player;
 use App\Models\PlayerCargo;
@@ -10,6 +11,8 @@ use App\Models\PlayerShip;
 use App\Models\PlayerTradeTransaction;
 use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
+use App\Services\Pricing\PricingService;
+use App\Services\Trading\HubInventoryMutationService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -24,6 +27,10 @@ use Illuminate\Support\Facades\DB;
  */
 class TradingService
 {
+    public function __construct(
+        private readonly HubInventoryMutationService $mutationService,
+        private readonly PricingService $pricingService,
+    ) {}
     /**
      * Buy minerals from a trading hub
      *
@@ -63,13 +70,16 @@ class TradingService
 
         // Execute transaction atomically
         $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
-        $unitPrice = $inventory->sell_price; // Capture before removeStock recalculates prices
+        $unitPrice = $inventory->sell_price; // Capture before mutation recalculates prices
 
         return DB::transaction(function () use ($player, $ship, $inventory, $mineral, $quantity, $totalCost, $xpEarned, $unitPrice, $isTutorial) {
             if (! $isTutorial) {
                 $player->deductCredits($totalCost);
             }
-            $inventory->removeStock($quantity);
+
+            // Apply trade mutation with single save
+            $ctx = PricingContext::forHub($inventory->tradingHub);
+            $this->mutationService->applyTrade($inventory, $quantity, 'buy', $ctx);
 
             // Add to player cargo
             $playerCargo = PlayerCargo::firstOrNew([
@@ -132,7 +142,7 @@ class TradingService
             ];
         }
 
-        $unitPrice = $hubInventory->buy_price; // Capture before addStock recalculates prices
+        $unitPrice = $hubInventory->buy_price; // Capture before mutation recalculates prices
         $totalRevenue = $isTutorial ? 0 : $unitPrice * $quantity;
 
         // Execute transaction atomically
@@ -142,7 +152,10 @@ class TradingService
             if (! $isTutorial) {
                 $player->addCredits($totalRevenue);
             }
-            $hubInventory->addStock($quantity);
+
+            // Apply trade mutation with single save
+            $ctx = PricingContext::forHub($hubInventory->tradingHub);
+            $this->mutationService->applyTrade($hubInventory, $quantity, 'sell', $ctx);
 
             // Remove from player cargo
             $cargo->quantity -= $quantity;
@@ -230,14 +243,19 @@ class TradingService
         $availableMinerals = $minerals->random($count);
 
         foreach ($availableMinerals as $mineral) {
-            $baseStock = match ($mineral->rarity) {
-                'common' => rand(5000, 15000),
-                'uncommon' => rand(2000, 8000),
-                'rare' => rand(500, 3000),
-                'very_rare' => rand(100, 1000),
-                'legendary' => rand(10, 200),
-                default => rand(1000, 5000),
-            };
+            $stockRanges = config('economy.stock_by_rarity', [
+                'abundant' => [15000, 30000],
+                'common' => [5000, 15000],
+                'uncommon' => [2000, 8000],
+                'rare' => [500, 3000],
+                'epic' => [200, 1000],
+                'very_rare' => [100, 1000],
+                'legendary' => [10, 200],
+                'mythic' => [5, 50],
+            ]);
+
+            $range = $stockRanges[$mineral->rarity->value] ?? $stockRanges['common'];
+            $baseStock = rand($range[0], $range[1]);
 
             $tradingConfig = config('game_config.trading_economy');
             $demandRange = $tradingConfig['demand_range'] ?? [20, 80];
@@ -265,7 +283,7 @@ class TradingService
                 }
             }
 
-            $spread = $tradingConfig['spread'] ?? 0.08;
+            $spread = config('economy.pricing.spread_per_side');
             $buyPrice = $currentPrice * (1 - $spread);
             $sellPrice = $currentPrice * (1 + $spread);
 

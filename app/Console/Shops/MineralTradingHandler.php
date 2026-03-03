@@ -2,10 +2,13 @@
 
 namespace App\Console\Shops;
 
+use App\DataObjects\PricingContext;
 use App\Models\Player;
 use App\Models\PlayerCargo;
 use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
+use App\Services\Trading\HubInventoryMutationService;
+use Illuminate\Support\Facades\DB;
 
 class MineralTradingHandler extends BaseShopHandler
 {
@@ -232,40 +235,46 @@ class MineralTradingHandler extends BaseShopHandler
             return;
         }
 
-        // TODO: (Race Condition) This buy transaction is NOT wrapped in a DB::transaction().
-        // Between checking stock and deducting, another process could purchase the same items.
-        // Stock could go negative. Wrap all operations (deductCredits, removeStock, cargo update)
-        // in DB::transaction() and re-check stock within the transaction.
-        $player->deductCredits($totalCost);
-        $inventory->removeStock($quantity);
+        // Execute atomically
+        $result = DB::transaction(function () use ($player, $inventory, $ship, $mineral, $quantity, $totalCost) {
+            // Deduct credits
+            $player->deductCredits($totalCost);
 
-        // Add to player cargo
-        $playerCargo = PlayerCargo::firstOrNew([
-            'player_ship_id' => $ship->id,
-            'mineral_id' => $mineral->id,
-        ]);
-        $playerCargo->quantity = ($playerCargo->quantity ?? 0) + $quantity;
-        $playerCargo->save();
+            // Apply trade mutation with single save
+            $ctx = PricingContext::forHub($inventory->tradingHub);
+            $mutationService = app(HubInventoryMutationService::class);
+            $mutationService->applyTrade($inventory, $quantity, 'buy', $ctx);
 
-        // Update ship cargo
-        $ship->current_cargo += $quantity;
-        $ship->save();
+            // Add to player cargo
+            $playerCargo = PlayerCargo::firstOrNew([
+                'player_ship_id' => $ship->id,
+                'mineral_id' => $mineral->id,
+            ]);
+            $playerCargo->quantity = ($playerCargo->quantity ?? 0) + $quantity;
+            $playerCargo->save();
 
-        // Award XP for trading (small amount for purchases)
-        $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
-        $oldLevel = $player->level;
-        $player->addExperience($xpEarned);
-        $newLevel = $player->level;
+            // Update ship cargo
+            $ship->current_cargo += $quantity;
+            $ship->save();
+
+            // Award XP for trading (small amount for purchases)
+            $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
+            $oldLevel = $player->level;
+            $player->addExperience($xpEarned);
+            $newLevel = $player->level;
+
+            return compact('xpEarned', 'oldLevel', 'newLevel');
+        });
 
         // Success message
         $this->clearScreen();
         $this->showSuccess('✓ PURCHASE SUCCESSFUL');
         $this->line('  Purchased: '.number_format($quantity).' units of '.$mineral->name);
         $this->line('  Cost: '.number_format($totalCost, 2).' credits');
-        $this->line('  XP Earned: '.$this->colorize('+'.$xpEarned.' XP', 'highlight'));
+        $this->line('  XP Earned: '.$this->colorize('+'.$result['xpEarned'].' XP', 'highlight'));
 
-        if ($newLevel > $oldLevel) {
-            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$newLevel.'!', 'trade'));
+        if ($result['newLevel'] > $result['oldLevel']) {
+            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$result['newLevel'].'!', 'trade'));
         }
 
         $this->newLine();
@@ -345,37 +354,46 @@ class MineralTradingHandler extends BaseShopHandler
             return;
         }
 
-        // Execute transaction
-        $player->addCredits($totalRevenue);
-        $hubInventory->addStock($quantity);
+        // Execute atomically
+        $result = DB::transaction(function () use ($player, $hubInventory, $ship, $cargo, $mineral, $quantity, $totalRevenue) {
+            // Add credits
+            $player->addCredits($totalRevenue);
 
-        // Remove from player cargo
-        $cargo->quantity -= $quantity;
-        if ($cargo->quantity <= 0) {
-            $cargo->delete();
-        } else {
-            $cargo->save();
-        }
+            // Apply trade mutation with single save
+            $ctx = PricingContext::forHub($hubInventory->tradingHub);
+            $mutationService = app(HubInventoryMutationService::class);
+            $mutationService->applyTrade($hubInventory, $quantity, 'sell', $ctx);
 
-        // Update ship cargo
-        $ship->current_cargo -= $quantity;
-        $ship->save();
+            // Remove from player cargo
+            $cargo->quantity -= $quantity;
+            if ($cargo->quantity <= 0) {
+                $cargo->delete();
+            } else {
+                $cargo->save();
+            }
 
-        // Award XP for trading (based on revenue/profit)
-        $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits revenue, min 10
-        $oldLevel = $player->level;
-        $player->addExperience($xpEarned);
-        $newLevel = $player->level;
+            // Update ship cargo
+            $ship->current_cargo -= $quantity;
+            $ship->save();
+
+            // Award XP for trading (based on revenue/profit)
+            $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits revenue, min 10
+            $oldLevel = $player->level;
+            $player->addExperience($xpEarned);
+            $newLevel = $player->level;
+
+            return compact('xpEarned', 'oldLevel', 'newLevel');
+        });
 
         // Success message
         $this->clearScreen();
         $this->showSuccess('✓ SALE SUCCESSFUL');
         $this->line('  Sold: '.number_format($quantity).' units of '.$mineral->name);
         $this->line('  Revenue: '.number_format($totalRevenue, 2).' credits');
-        $this->line('  XP Earned: '.$this->colorize('+'.$xpEarned.' XP', 'highlight'));
+        $this->line('  XP Earned: '.$this->colorize('+'.$result['xpEarned'].' XP', 'highlight'));
 
-        if ($newLevel > $oldLevel) {
-            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$newLevel.'!', 'trade'));
+        if ($result['newLevel'] > $result['oldLevel']) {
+            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$result['newLevel'].'!', 'trade'));
         }
 
         $this->newLine();

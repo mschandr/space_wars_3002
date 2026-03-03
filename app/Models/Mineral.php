@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Trading\CommodityCategory;
 use App\Enums\Trading\MineralRarity;
 use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,12 +20,20 @@ class Mineral extends Model
         'description',
         'base_value',
         'rarity',
+        'category',
+        'is_illegal',
+        'min_reputation',
+        'min_sector_security',
         'attributes',
     ];
 
     protected $casts = [
         'base_value' => 'decimal:2',
         'rarity' => MineralRarity::class,
+        'category' => CommodityCategory::class,
+        'is_illegal' => 'boolean',
+        'min_reputation' => 'integer',
+        'min_sector_security' => 'integer',
         'attributes' => 'array',
     ];
 
