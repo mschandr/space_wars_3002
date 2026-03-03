@@ -3,8 +3,11 @@
 namespace App\Console\Commands;
 
 use App\Models\Galaxy;
+use Database\Seeders\CrewAssignmentSeeder;
 use Database\Seeders\CrewMemberSeeder;
 use Database\Seeders\CustomsOfficialSeeder;
+use Database\Seeders\GalaxyCustomsRecordSeeder;
+use Database\Seeders\GalaxyVendorStateSeeder;
 use Database\Seeders\TradingPostSeeder;
 use Database\Seeders\VendorProfileSeeder;
 use Illuminate\Console\Command;
@@ -74,6 +77,25 @@ class SeedTestData extends Command
         $seeder->setCommand($this);
         $seeder->run();
 
+        // Seed galaxy-specific states (for crew, vendors, and customs)
+        $this->info('');
+        $this->info('--- Seeding Galaxy Crew Assignments ---');
+        $seeder = new CrewAssignmentSeeder();
+        $seeder->setCommand($this);
+        $seeder->run();
+
+        $this->info('');
+        $this->info('--- Seeding Galaxy Vendor States ---');
+        $seeder = new GalaxyVendorStateSeeder();
+        $seeder->setCommand($this);
+        $seeder->run();
+
+        $this->info('');
+        $this->info('--- Seeding Galaxy Customs Records ---');
+        $seeder = new GalaxyCustomsRecordSeeder();
+        $seeder->setCommand($this);
+        $seeder->run();
+
         // Verify data
         $this->info('');
         $this->info('=== Seeding Complete ===');
@@ -82,11 +104,22 @@ class SeedTestData extends Command
         $crewCount = \App\Models\CrewMember::count();
         $vendorCount = \App\Models\VendorProfile::count();
         $customsCount = \App\Models\CustomsOfficial::count();
+        $crewAssignmentCount = \App\Models\CrewAssignment::count();
+        $vendorStateCount = \App\Models\GalaxyVendorState::count();
+        $customsRecordCount = \App\Models\GalaxyCustomsRecord::count();
 
-        $this->info("✓ Trading post templates: {$tradingPostCount}");
-        $this->info("✓ Crew members: {$crewCount}");
-        $this->info("✓ Vendor instances: {$vendorCount}");
-        $this->info("✓ Customs officials: {$customsCount}");
+        $this->info('');
+        $this->info('Permanent Global Templates:');
+        $this->info("  ✓ Trading post templates: {$tradingPostCount}");
+        $this->info("  ✓ Crew members (pool): {$crewCount}");
+        $this->info("  ✓ Vendor profiles (templates): {$vendorCount}");
+        $this->info("  ✓ Customs officials (templates): {$customsCount}");
+
+        $this->info('');
+        $this->info('Galaxy-Specific State:');
+        $this->info("  ✓ Crew assignments: {$crewAssignmentCount}");
+        $this->info("  ✓ Vendor states: {$vendorStateCount}");
+        $this->info("  ✓ Customs records: {$customsRecordCount}");
 
         return 0;
     }

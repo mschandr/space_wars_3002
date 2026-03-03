@@ -64,6 +64,11 @@ class GalaxyFlushCommand extends Command
         ['trading_hub_inventories', 'Trading hub inventories', 'through trading_hubs'],
         ['system_scans', 'System scans', 'through points_of_interest'],
 
+        // Level 4a: Galaxy-specific state tables (Phase 5-9)
+        ['crew_assignments', 'Crew assignments to trading hubs', 'direct galaxy_id'],
+        ['galaxy_vendor_states', 'Galaxy vendor state changes', 'direct galaxy_id'],
+        ['galaxy_customs_records', 'Galaxy customs interaction records', 'direct galaxy_id'],
+
         // Level 3: Direct POI children
         ['colonies', 'Colonies', 'through points_of_interest'],
         ['stellar_cartographers', 'Stellar cartographers', 'through points_of_interest'],
@@ -237,7 +242,8 @@ class GalaxyFlushCommand extends Command
             'galaxies' => DB::table('galaxies')->where('id', $galaxyId)->count()
                 + DB::table('galaxies')->where('mirror_galaxy_id', $galaxyId)->count(),
             'points_of_interest', 'warp_gates', 'sectors', 'players', 'npcs',
-            'precursor_ships', 'trading_hub_ships' => DB::table($table)->where('galaxy_id', $galaxyId)->count(),
+            'precursor_ships', 'trading_hub_ships', 'crew_assignments',
+            'galaxy_vendor_states', 'galaxy_customs_records' => DB::table($table)->where('galaxy_id', $galaxyId)->count(),
 
             'pirate_factions' => DB::table('pirate_factions')
                 ->where('galaxy_id', $galaxyId)
@@ -442,7 +448,8 @@ class GalaxyFlushCommand extends Command
                 ->delete(),
 
             'points_of_interest', 'warp_gates', 'sectors', 'players', 'npcs',
-            'precursor_ships', 'trading_hub_ships' => DB::table($table)
+            'precursor_ships', 'trading_hub_ships', 'crew_assignments',
+            'galaxy_vendor_states', 'galaxy_customs_records' => DB::table($table)
                 ->whereIn('galaxy_id', $allGalaxyIds)
                 ->delete(),
 
