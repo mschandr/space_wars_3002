@@ -42,6 +42,9 @@ class InventoryService
                     [
                         'on_hand_qty' => 0,
                         'reserved_qty' => 0,
+                        'current_price' => $entry->commodity->base_value ?? 100, // Use commodity base_value or default
+                        'buy_price' => $entry->commodity->base_value ?? 100,
+                        'sell_price' => $entry->commodity->base_value ?? 100,
                     ]
                 );
 
@@ -258,6 +261,9 @@ class InventoryService
                 [
                     'on_hand_qty' => 0,
                     'reserved_qty' => 0,
+                    'current_price' => $entry->commodity->base_value ?? 100, // Use commodity base_value or default
+                    'buy_price' => $entry->commodity->base_value ?? 100,
+                    'sell_price' => $entry->commodity->base_value ?? 100,
                 ]
             );
 

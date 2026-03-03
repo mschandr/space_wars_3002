@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Commodity;
+use App\Models\Galaxy;
 use App\Models\ResourceDeposit;
 use App\Models\TradingHub;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -17,6 +18,7 @@ class ResourceDepositFactory extends Factory
     public function definition(): array
     {
         return [
+            'galaxy_id' => Galaxy::factory(),
             'trading_hub_id' => TradingHub::factory(),
             'commodity_id' => Commodity::factory(),
             'max_extraction_per_tick' => $this->faker->numberBetween(10, 100),

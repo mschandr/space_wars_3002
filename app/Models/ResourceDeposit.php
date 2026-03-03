@@ -14,6 +14,7 @@ class ResourceDeposit extends Model
     protected $fillable = [
         'uuid',
         'galaxy_id',
+        'trading_hub_id',
         'commodity_id',
         'quality',
         'max_extraction_per_tick',
@@ -49,6 +50,14 @@ class ResourceDeposit extends Model
     public function commodity(): BelongsTo
     {
         return $this->belongsTo(Commodity::class);
+    }
+
+    /**
+     * Get the trading hub (optional)
+     */
+    public function tradingHub(): BelongsTo
+    {
+        return $this->belongsTo(TradingHub::class);
     }
 
     /**
