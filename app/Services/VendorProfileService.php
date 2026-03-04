@@ -16,6 +16,17 @@ use App\Models\PlayerVendorRelationship;
 class VendorProfileService
 {
     /**
+     * Find an existing player-vendor relationship without creating one
+     * Returns null if no relationship exists
+     */
+    public function findRelationship(Player $player, VendorProfile $vendor): ?PlayerVendorRelationship
+    {
+        return PlayerVendorRelationship::where('player_id', $player->id)
+            ->where('vendor_profile_id', $vendor->id)
+            ->first();
+    }
+
+    /**
      * Get or create a player-vendor relationship
      */
     public function getOrCreateRelationship(Player $player, VendorProfile $vendor): PlayerVendorRelationship

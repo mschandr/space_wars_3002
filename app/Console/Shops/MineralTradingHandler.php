@@ -237,10 +237,29 @@ class MineralTradingHandler extends BaseShopHandler
 
         // Execute atomically
         $result = DB::transaction(function () use ($player, $inventory, $ship, $mineral, $quantity, $totalCost) {
-            // Deduct credits
+            // Re-fetch all mutable rows with locks inside transaction (prevent TOCTOU race)
+            $player = Player::where('id', $player->id)->lockForUpdate()->firstOrFail();
+            $ship = $player->activeShip()->lockForUpdate()->firstOrFail();
+            $inventory = TradingHubInventory::where('id', $inventory->id)->lockForUpdate()->firstOrFail();
+
+            // Re-validate all checks with locked rows
+            if (! $inventory->hasStock($quantity)) {
+                throw new \Exception('Insufficient stock available (race condition)');
+            }
+
+            if ($player->credits < $totalCost) {
+                throw new \Exception('Insufficient credits (race condition)');
+            }
+
+            $availableSpace = $ship->cargo_hold - $ship->current_cargo;
+            if ($availableSpace < $quantity) {
+                throw new \Exception('Insufficient cargo space (race condition)');
+            }
+
+            // Deduct credits from locked player
             $player->deductCredits($totalCost);
 
-            // Apply trade mutation with single save
+            // Apply trade mutation with single save using locked inventory
             $ctx = PricingContext::forHub($inventory->tradingHub);
             $mutationService = app(HubInventoryMutationService::class);
             $mutationService->applyTrade($inventory, $quantity, 'buy', $ctx);
@@ -253,7 +272,7 @@ class MineralTradingHandler extends BaseShopHandler
             $playerCargo->quantity = ($playerCargo->quantity ?? 0) + $quantity;
             $playerCargo->save();
 
-            // Update ship cargo
+            // Update ship cargo with locked ship object
             $ship->current_cargo += $quantity;
             $ship->save();
 
@@ -356,15 +375,26 @@ class MineralTradingHandler extends BaseShopHandler
 
         // Execute atomically
         $result = DB::transaction(function () use ($player, $hubInventory, $ship, $cargo, $mineral, $quantity, $totalRevenue) {
-            // Add credits
+            // Re-fetch all mutable rows with locks inside transaction (prevent TOCTOU race)
+            $player = Player::where('id', $player->id)->lockForUpdate()->firstOrFail();
+            $ship = $player->activeShip()->lockForUpdate()->firstOrFail();
+            $hubInventory = TradingHubInventory::where('id', $hubInventory->id)->lockForUpdate()->firstOrFail();
+            $cargo = PlayerCargo::where('id', $cargo->id)->lockForUpdate()->firstOrFail();
+
+            // Re-validate cargo quantity with locked row
+            if ($cargo->quantity < $quantity) {
+                throw new \Exception('You don\'t have that many units (race condition)');
+            }
+
+            // Add credits to locked player
             $player->addCredits($totalRevenue);
 
-            // Apply trade mutation with single save
+            // Apply trade mutation with single save using locked inventory
             $ctx = PricingContext::forHub($hubInventory->tradingHub);
             $mutationService = app(HubInventoryMutationService::class);
             $mutationService->applyTrade($hubInventory, $quantity, 'sell', $ctx);
 
-            // Remove from player cargo
+            // Remove from locked player cargo
             $cargo->quantity -= $quantity;
             if ($cargo->quantity <= 0) {
                 $cargo->delete();
@@ -372,7 +402,7 @@ class MineralTradingHandler extends BaseShopHandler
                 $cargo->save();
             }
 
-            // Update ship cargo
+            // Update locked ship cargo
             $ship->current_cargo -= $quantity;
             $ship->save();
 

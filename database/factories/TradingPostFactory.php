@@ -89,9 +89,25 @@ class TradingPostFactory extends Factory
      */
     public function blackMarket(): self
     {
-        return $this->state([
-            'base_criminality' => fake()->randomFloat(2, 0.85, 1.0),
-            'service_type' => fake()->randomElement(['salvage_yard', 'market']),
-        ]);
+        return $this->state(function (array $attributes) {
+            $serviceType = fake()->randomElement(['salvage_yard', 'market']);
+            $name = match ($serviceType) {
+                'salvage_yard' => fake()->randomElement(self::$salvageYardNames),
+                'market' => fake()->randomElement(self::$marketNames),
+                default => 'Black Market',
+            };
+            $markup = match ($serviceType) {
+                'salvage_yard' => fake()->randomFloat(4, 0.20, 0.40),
+                'market' => fake()->randomFloat(4, 0.05, 0.20),
+                default => 0.15,
+            };
+
+            return [
+                'base_criminality' => fake()->randomFloat(2, 0.85, 1.0),
+                'service_type' => $serviceType,
+                'name' => $name,
+                'markup_base' => $markup,
+            ];
+        });
     }
 }

@@ -18,12 +18,12 @@ return new class extends Migration
 
             // Officer personality
             $table->string('name', 100);
-            $table->decimal('honesty', 3, 2);        // 0.0=corrupt, 1.0=incorruptible
-            $table->decimal('severity', 3, 2);       // 0.0=lenient, 1.0=maximum enforcement
-            $table->integer('bribe_threshold');      // Minimum credits to attempt bribe
+            $table->unsignedDecimal('honesty', 3, 2);        // 0.0=corrupt, 1.0=incorruptible
+            $table->unsignedDecimal('severity', 3, 2);       // 0.0=lenient, 1.0=maximum enforcement
+            $table->unsignedInteger('bribe_threshold');      // Minimum credits to attempt bribe
 
             // Search capability
-            $table->decimal('detection_skill', 3, 2); // How well they find hidden cargo
+            $table->unsignedDecimal('detection_skill', 3, 2); // How well they find hidden cargo
 
             $table->timestamps();
 
@@ -32,6 +32,11 @@ return new class extends Migration
             $table->index('honesty');
             $table->index('severity');
         });
+
+        // Add DB-level CHECK constraints for data integrity
+        \DB::statement('ALTER TABLE customs_officials ADD CONSTRAINT honesty_range CHECK (honesty >= 0 AND honesty <= 1)');
+        \DB::statement('ALTER TABLE customs_officials ADD CONSTRAINT severity_range CHECK (severity >= 0 AND severity <= 1)');
+        \DB::statement('ALTER TABLE customs_officials ADD CONSTRAINT detection_skill_range CHECK (detection_skill >= 0 AND detection_skill <= 1)');
     }
 
     /**
@@ -39,6 +44,11 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // Drop constraints before dropping table (for cleaner rollback)
+        \DB::statement('ALTER TABLE customs_officials DROP CONSTRAINT IF EXISTS honesty_range');
+        \DB::statement('ALTER TABLE customs_officials DROP CONSTRAINT IF EXISTS severity_range');
+        \DB::statement('ALTER TABLE customs_officials DROP CONSTRAINT IF EXISTS detection_skill_range');
+
         Schema::dropIfExists('customs_officials');
     }
 };

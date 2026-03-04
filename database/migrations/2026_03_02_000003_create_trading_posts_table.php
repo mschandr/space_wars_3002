@@ -31,6 +31,9 @@ return new class extends Migration
             $table->index('service_type');
             $table->index('base_criminality');
         });
+
+        // Add DB-level CHECK constraint to enforce criminality range
+        \DB::statement('ALTER TABLE trading_posts ADD CONSTRAINT base_criminality_range CHECK (base_criminality >= 0 AND base_criminality <= 1)');
     }
 
     /**
@@ -38,6 +41,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // Drop constraint before dropping table (for cleaner rollback)
+        \DB::statement('ALTER TABLE trading_posts DROP CONSTRAINT IF EXISTS base_criminality_range');
+
         Schema::dropIfExists('trading_posts');
     }
 };

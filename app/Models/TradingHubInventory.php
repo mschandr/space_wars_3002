@@ -14,22 +14,28 @@ class TradingHubInventory extends Model
         'trading_hub_id',
         'mineral_id',
         'quantity',
+        'on_hand_qty',
+        'reserved_qty',
         'current_price',
         'buy_price',
         'sell_price',
         'demand_level',
         'supply_level',
         'last_price_update',
+        'last_snapshot_at',
     ];
 
     protected $casts = [
         'quantity' => 'integer',
+        'on_hand_qty' => 'decimal:4',
+        'reserved_qty' => 'decimal:4',
         'current_price' => 'decimal:2',
         'buy_price' => 'decimal:2',
         'sell_price' => 'decimal:2',
         'demand_level' => 'integer',
         'supply_level' => 'integer',
         'last_price_update' => 'datetime',
+        'last_snapshot_at' => 'datetime',
     ];
 
     /**
@@ -51,9 +57,11 @@ class TradingHubInventory extends Model
 
     /**
      * Check if there's enough stock to sell
+     *
+     * Uses on_hand_qty (ledger-backed inventory) which is the source of truth
      */
     public function hasStock(int $amount): bool
     {
-        return $this->quantity >= $amount;
+        return (float)$this->on_hand_qty >= $amount;
     }
 }

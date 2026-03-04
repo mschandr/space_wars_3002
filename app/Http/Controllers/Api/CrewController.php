@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\CrewMember;
+use App\Models\Galaxy;
 use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
@@ -27,8 +28,16 @@ class CrewController extends BaseApiController
             return $this->validationError($e->errors());
         }
 
-        // Find POI
-        $poi = PointOfInterest::where('uuid', $validated['poi_uuid'])->first();
+        // Resolve galaxy
+        $galaxy = Galaxy::where('uuid', $galaxyUuid)->first();
+        if (!$galaxy) {
+            return $this->notFound('Galaxy not found');
+        }
+
+        // Find POI and verify it belongs to this galaxy
+        $poi = PointOfInterest::where('uuid', $validated['poi_uuid'])
+            ->where('galaxy_id', $galaxy->id)
+            ->first();
         if (!$poi) {
             return $this->notFound('Location not found');
         }
@@ -86,6 +95,7 @@ class CrewController extends BaseApiController
         // Find crew
         $crew = CrewMember::where('uuid', $validated['crew_uuid'])
             ->where('player_ship_id', null) // Must be unassigned
+            ->where('current_poi_id', $ship->current_poi_id) // Must be at same location as ship
             ->first();
 
         if (!$crew) {
