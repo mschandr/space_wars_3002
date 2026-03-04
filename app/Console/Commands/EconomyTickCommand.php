@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Galaxy;
+use App\Services\Economy\ConstructionTickService;
 use App\Services\Economy\HubCommodityStatsService;
 use App\Services\Economy\MiningTickService;
 use App\Services\Economy\ShockDecayTickService;
@@ -14,10 +15,11 @@ class EconomyTickCommand extends Command
                             {--galaxy= : Limit to one galaxy UUID}
                             {--dry-run : Preview without writing}';
 
-    protected $description = 'Process mining extraction and shock decay for this tick, then refresh stats cache';
+    protected $description = 'Process mining extraction, construction jobs, shock decay for this tick, then refresh stats cache';
 
     public function __construct(
         private readonly MiningTickService $miningService,
+        private readonly ConstructionTickService $constructionService,
         private readonly ShockDecayTickService $shockService,
         private readonly HubCommodityStatsService $statsService,
     ) {
@@ -41,6 +43,7 @@ class EconomyTickCommand extends Command
 
         // Run tick phases
         $miningResults = $this->miningService->processTick($galaxy, $dryRun);
+        $constructionResults = $this->constructionService->processTick($galaxy, $dryRun);
         $shockResults = $this->shockService->processTick($galaxy, $dryRun);
 
         // Refresh stats cache (only if not dry-run)
@@ -54,13 +57,14 @@ class EconomyTickCommand extends Command
         }
 
         // Display results
-        $this->displayResults($miningResults, $shockResults, $statsResults, $dryRun, $galaxy);
+        $this->displayResults($miningResults, $constructionResults, $shockResults, $statsResults, $dryRun, $galaxy);
 
         return Command::SUCCESS;
     }
 
     private function displayResults(
         array $miningResults,
+        array $constructionResults,
         array $shockResults,
         ?array $statsResults,
         bool $dryRun,
@@ -95,6 +99,19 @@ class EconomyTickCommand extends Command
             }
         }
 
+        // Construction jobs results
+        $this->newLine();
+        $this->line("<fg=green>Construction Jobs:</>");
+        $this->line("  Checked: <fg=cyan>{$constructionResults['checked']}</>");
+        $this->line("  Completed: <fg=cyan>{$constructionResults['completed']}</>");
+
+        if (!empty($constructionResults['errors'])) {
+            $this->line("  <fg=red>Errors: " . count($constructionResults['errors']) . "</>");
+            foreach ($constructionResults['errors'] as $error) {
+                $this->line("    - Job {$error['job_uuid']}: {$error['message']}");
+            }
+        }
+
         // Shock decay results
         $this->newLine();
         $this->line("<fg=green>Shock Decay:</>");
@@ -125,7 +142,7 @@ class EconomyTickCommand extends Command
         // Summary
         $this->newLine();
         $this->line("<fg=cyan>{$border}</>");
-        $totalErrors = count($miningResults['errors']) + count($shockResults['errors']);
+        $totalErrors = count($miningResults['errors']) + count($constructionResults['errors']) + count($shockResults['errors']);
         if ($totalErrors === 0) {
             $this->line("<fg=green>✓ Tick processed successfully</>");
         } else {

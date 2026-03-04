@@ -70,9 +70,21 @@ class TradingService
 
         // Execute transaction atomically
         $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
-        $unitPrice = $inventory->sell_price; // Capture before mutation recalculates prices
 
-        return DB::transaction(function () use ($player, $ship, $inventory, $mineral, $quantity, $totalCost, $xpEarned, $unitPrice, $isTutorial) {
+        return DB::transaction(function () use ($player, $ship, $inventory, $mineral, $quantity, $totalCost, $xpEarned, $isTutorial) {
+            // Re-fetch inventory with lock inside transaction to prevent TOCTOU race condition
+            $inventory = TradingHubInventory::where('id', $inventory->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Validate stock again with locked inventory
+            if (! $inventory->hasStock($quantity)) {
+                throw new \Exception('Insufficient stock available (race condition)');
+            }
+
+            // Capture unit price from locked inventory
+            $unitPrice = $inventory->sell_price;
+
             if (! $isTutorial) {
                 $player->deductCredits($totalCost);
             }
@@ -142,13 +154,22 @@ class TradingService
             ];
         }
 
-        $unitPrice = $hubInventory->buy_price; // Capture before mutation recalculates prices
-        $totalRevenue = $isTutorial ? 0 : $unitPrice * $quantity;
-
         // Execute transaction atomically
-        $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits, min 10
+        $xpEarned = (int) max(10, 0 / 100); // Placeholder for xp calculation inside transaction
 
-        return DB::transaction(function () use ($player, $ship, $cargo, $hubInventory, $mineral, $quantity, $totalRevenue, $xpEarned, $unitPrice, $isTutorial) {
+        return DB::transaction(function () use ($player, $ship, $cargo, $hubInventory, $mineral, $quantity, $isTutorial) {
+            // Re-fetch inventory with lock inside transaction to prevent TOCTOU race condition
+            $hubInventory = TradingHubInventory::where('id', $hubInventory->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Capture unit price from locked inventory
+            $unitPrice = $hubInventory->buy_price;
+            $totalRevenue = $isTutorial ? 0 : $unitPrice * $quantity;
+
+            // Recalculate XP with actual total revenue
+            $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits, min 10
+
             if (! $isTutorial) {
                 $player->addCredits($totalRevenue);
             }
