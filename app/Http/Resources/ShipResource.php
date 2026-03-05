@@ -139,7 +139,7 @@ class ShipResource extends JsonResource
                 ])->values()
             ),
             'ship_persona' => $this->when(
-                config('features.crew_profiles'),
+                config('features.crew_profiles') && $this->relationLoaded('crew'),
                 fn () => $this->getCrewPersona()
             ),
         ];

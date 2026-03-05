@@ -17,7 +17,7 @@ return new class extends Migration
     {
         Schema::create('galaxy_customs_records', function (Blueprint $table) {
             $table->id();
-            $table->uuid();
+            $table->uuid('uuid')->unique();
             $table->foreignId('galaxy_id')->constrained()->cascadeOnDelete();
             $table->foreignId('customs_official_id')->constrained('customs_officials')->cascadeOnDelete();
 

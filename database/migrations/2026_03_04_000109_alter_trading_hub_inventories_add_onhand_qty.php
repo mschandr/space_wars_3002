@@ -14,8 +14,8 @@ return new class extends Migration
             $table->decimal('reserved_qty', 14, 4)->default(0)->after('on_hand_qty')->comment('Reserved for pending orders');
             $table->dateTime('last_snapshot_at')->nullable()->after('reserved_qty')->comment('Last reconciliation with ledger');
 
-            // Index for performance
-            $table->index(['trading_hub_id', 'mineral_id']);
+            // Note: No index needed here - UNIQUE constraint on [trading_hub_id, mineral_id]
+            // already exists from original table creation and serves as an index
         });
 
         // Backfill on_hand_qty from existing quantity column
@@ -25,8 +25,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('trading_hub_inventories', function (Blueprint $table) {
+            // Drop only the columns we added (the UNIQUE constraint was not added by this migration)
             $table->dropColumn(['on_hand_qty', 'reserved_qty', 'last_snapshot_at']);
-            $table->dropIndex(['trading_hub_id', 'mineral_id']);
         });
     }
 };

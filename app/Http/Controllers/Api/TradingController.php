@@ -142,19 +142,23 @@ class TradingController extends BaseApiController
             ->with('mineral')
             ->get();
 
-        // Record price sightings if player_uuid provided
+        // Resolve player if player_uuid provided and user authenticated
         $playerUuid = $request->query('player_uuid');
         $player = null;
         if ($playerUuid && $request->user()) {
             $player = Player::where('uuid', $playerUuid)
                 ->where('user_id', $request->user()->id)
                 ->first();
+        }
 
-            if ($player) {
-                // Filter inventory by player's commodity access level
-                $inventory = $this->commodityAccessService->filterForPlayer($inventory, $player);
-                $this->tradingService->recordPriceSightings($player, $poi->tradingHub, $inventory);
-            }
+        // Apply commodity access filtering: always filter, never return full inventory
+        if ($player) {
+            // Valid player: use player-specific access rules, record price sightings
+            $inventory = $this->commodityAccessService->filterForPlayer($inventory, $player);
+            $this->tradingService->recordPriceSightings($player, $poi->tradingHub, $inventory);
+        } else {
+            // No valid player context: show only civilian items to anonymous/unauthenticated users
+            $inventory = $this->commodityAccessService->filterForAnonymous($inventory);
         }
 
         return $this->success([

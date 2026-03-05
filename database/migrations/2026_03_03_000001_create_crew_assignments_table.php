@@ -16,7 +16,7 @@ return new class extends Migration
     {
         Schema::create('crew_assignments', function (Blueprint $table) {
             $table->id();
-            $table->uuid();
+            $table->uuid('uuid')->unique();
             $table->foreignId('galaxy_id')->constrained()->cascadeOnDelete();
             $table->foreignId('crew_member_id')->constrained('crew_members')->cascadeOnDelete();
             $table->foreignId('trading_hub_id')->constrained()->cascadeOnDelete();

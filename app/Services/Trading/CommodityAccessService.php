@@ -58,8 +58,11 @@ class CommodityAccessService
 
                 // Check sector security requirement
                 if ($mineral->min_sector_security !== null) {
-                    $currentSecurity = $player->currentPoi?->security_level ?? 0;
-                    if ($currentSecurity > $mineral->min_sector_security) {
+                    // Fail closed: if no POI or no security_level, deny access
+                    if ($player->currentPoi === null || $player->currentPoi->security_level === null) {
+                        return false;
+                    }
+                    if ($player->currentPoi->security_level > $mineral->min_sector_security) {
                         return false;
                     }
                 }
@@ -69,6 +72,23 @@ class CommodityAccessService
 
             // Default: hide
             return false;
+        });
+    }
+
+    /**
+     * Filter hub inventory for anonymous/unauthenticated users.
+     *
+     * Shows only CIVILIAN items. Industrial and black market items are hidden.
+     * Used when no valid player context is available (e.g., unauthenticated requests).
+     */
+    public function filterForAnonymous(Collection $inventory): Collection
+    {
+        return $inventory->filter(function (TradingHubInventory $item) {
+            $mineral = $item->mineral;
+            $category = $mineral->category ?? CommodityCategory::CIVILIAN;
+
+            // Only civilian items visible to anonymous users
+            return $category === CommodityCategory::CIVILIAN;
         });
     }
 

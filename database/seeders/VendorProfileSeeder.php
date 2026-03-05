@@ -42,8 +42,8 @@ class VendorProfileSeeder extends Seeder
             }
 
             foreach ($tradingHubPois as $poi) {
-                // Skip if vendor already exists
-                if (VendorProfile::where('poi_id', $poi->id)->exists()) {
+                // Skip if vendor for this service_type already exists at this POI
+                if (VendorProfile::where('poi_id', $poi->id)->where('service_type', 'trading_hub')->exists()) {
                     continue;
                 }
 
@@ -52,13 +52,16 @@ class VendorProfileSeeder extends Seeder
                     $tradingPost = $tradingPosts->random();
 
                     // Create vendor instance
+                    // Clamp criminality to valid range [0.0, 1.0]
+                    $criminality = max(0, min(1, $tradingPost->base_criminality + random_int(-5, 5) / 100));
+
                     VendorProfile::create([
                         'uuid' => \Illuminate\Support\Str::uuid(),
                         'galaxy_id' => $galaxy->id,
                         'poi_id' => $poi->id,
                         'trading_post_id' => $tradingPost->id,
                         'service_type' => 'trading_hub',
-                        'criminality' => $tradingPost->base_criminality + random_int(-5, 5) / 100,
+                        'criminality' => $criminality,
                         'personality' => $tradingPost->personality,
                         'dialogue_pool' => $tradingPost->dialogue_pool,
                         'markup_base' => $tradingPost->markup_base,

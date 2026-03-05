@@ -237,13 +237,19 @@ class GalaxyFlushCommand extends Command
 
         $galaxyId = $targetGalaxy->id;
 
+        // Get all galaxies affected (primary + mirrors) for tables that are deleted with mirror support
+        $allGalaxyIds = array_merge(
+            [$galaxyId],
+            DB::table('galaxies')->where('mirror_galaxy_id', $galaxyId)->pluck('id')->toArray()
+        );
+
         return match ($table) {
             // Direct galaxy_id
             'galaxies' => DB::table('galaxies')->where('id', $galaxyId)->count()
                 + DB::table('galaxies')->where('mirror_galaxy_id', $galaxyId)->count(),
             'points_of_interest', 'warp_gates', 'sectors', 'players', 'npcs',
             'precursor_ships', 'trading_hub_ships', 'crew_assignments',
-            'galaxy_vendor_states', 'galaxy_customs_records' => DB::table($table)->where('galaxy_id', $galaxyId)->count(),
+            'galaxy_vendor_states', 'galaxy_customs_records' => DB::table($table)->whereIn('galaxy_id', $allGalaxyIds)->count(),
 
             'pirate_factions' => DB::table('pirate_factions')
                 ->where('galaxy_id', $galaxyId)

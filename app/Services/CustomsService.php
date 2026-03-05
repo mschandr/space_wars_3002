@@ -171,6 +171,36 @@ class CustomsService
     }
 
     /**
+     * Compute the server-authoritative fine amount for a ship's current illegal cargo.
+     *
+     * Uses the same logic as performCheck() without re-rolling detection.
+     * Call this when the player has already been caught and is accepting penalties.
+     */
+    public function computeFineAmount(PlayerShip $ship, CustomsOfficial $official): int
+    {
+        $illegalItems = $ship->cargo()
+            ->whereHas('mineral', function ($query) {
+                $query->where(function ($subquery) {
+                    $subquery->where('is_illegal', true)
+                        ->orWhere('category', 'black');
+                });
+            })
+            ->get();
+
+        if ($illegalItems->isEmpty()) {
+            return 0;
+        }
+
+        $totalIllegalValue = $illegalItems->sum(function ($cargo) {
+            return $cargo->mineral->base_value * $cargo->quantity;
+        });
+
+        $multiplier = $official->severity > 0.6 ? 0.5 : 0.25;
+
+        return (int) ($totalIllegalValue * $multiplier);
+    }
+
+    /**
      * Seize illegal cargo from a ship
      *
      * Removes items and applies any fines

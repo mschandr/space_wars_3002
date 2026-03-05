@@ -6,6 +6,7 @@ use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 class ResourceDeposit extends Model
 {
@@ -107,16 +108,37 @@ class ResourceDeposit extends Model
     }
 
     /**
-     * Record extraction
+     * Record extraction atomically
+     * Prevents lost updates under concurrency by using DB::transaction and atomic increment
      */
     public function recordExtraction(float $amount): void
     {
-        $this->total_extracted += $amount;
+        DB::transaction(function () use ($amount) {
+            // Lock row for update
+            $deposit = DB::table('resource_deposits')
+                ->where('id', $this->id)
+                ->lockForUpdate()
+                ->first();
 
-        if ($this->isDepleted()) {
-            $this->status = 'DEPLETED';
-        }
+            if (!$deposit) {
+                return;
+            }
 
-        $this->save();
+            // Calculate new values
+            $newTotal = floatval($deposit->total_extracted) + $amount;
+            $newStatus = $newTotal >= floatval($deposit->max_total_qty) ? 'DEPLETED' : 'ACTIVE';
+
+            // Update atomically
+            DB::table('resource_deposits')
+                ->where('id', $this->id)
+                ->update([
+                    'total_extracted' => $newTotal,
+                    'status' => $newStatus,
+                    'updated_at' => now(),
+                ]);
+        });
+
+        // Reload to reflect changes
+        $this->refresh();
     }
 }

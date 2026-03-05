@@ -21,6 +21,7 @@ class EconomicShock extends Model
         'magnitude',
         'decay_half_life_ticks',
         'starts_at',
+        'started_at_tick',
         'ends_at',
         'is_active',
         'triggered_by_actor_id',
@@ -32,6 +33,7 @@ class EconomicShock extends Model
         'shock_type' => ShockType::class,
         'magnitude' => 'decimal:3',
         'decay_half_life_ticks' => 'integer',
+        'started_at_tick' => 'integer',
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
         'is_active' => 'boolean',
@@ -74,13 +76,29 @@ class EconomicShock extends Model
     /**
      * Compute effective magnitude at a given tick number
      * Uses exponential decay: effective = magnitude * exp(-decay_rate * elapsed_ticks)
+     *
+     * @param int $atTickNumber The current game tick number
+     * @return float Effective magnitude after decay
+     *
+     * Formula:
+     * - decay_rate = ln(2) / decay_half_life_ticks
+     * - elapsed_ticks = atTickNumber - started_at_tick
+     * - effective = magnitude * exp(-decay_rate * elapsed_ticks)
+     *
+     * Example:
+     * - magnitude = 1.0, half_life = 100 ticks
+     * - At tick 100 (elapsed=100): effective = 1.0 * exp(-0.00693 * 100) = 0.5
+     * - At tick 200 (elapsed=200): effective = 1.0 * exp(-0.00693 * 200) = 0.25
      */
     public function getEffectiveMagnitude(int $atTickNumber): float
     {
-        $startedAt = $this->starts_at;
-        $elapsedTicks = $atTickNumber - $startedAt->timestamp; // Rough approximation
+        // Compute elapsed ticks in consistent units
+        $elapsedTicks = $atTickNumber - $this->started_at_tick;
 
+        // Exponential decay rate: at half_life ticks, magnitude = 50%
         $decayRate = log(2) / (float)$this->decay_half_life_ticks;
+
+        // Apply decay formula
         $effective = (float)$this->magnitude * exp(-$decayRate * $elapsedTicks);
 
         return $effective;

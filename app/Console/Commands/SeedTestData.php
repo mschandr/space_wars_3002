@@ -14,40 +14,27 @@ use Illuminate\Console\Command;
 
 class SeedTestData extends Command
 {
-    protected $signature = 'seed:test-data {--galaxy-uuid=? : Optional existing galaxy UUID}';
-    protected $description = 'Seed crew, vendor, and customs data for Phase 5-7 implementation testing';
+    protected $signature = 'seed:test-data';
+    protected $description = 'Seed crew, vendor, and customs data for Phase 5-7 implementation testing. Seeds globally across all galaxies.';
 
     public function handle(): int
     {
         $this->info('Starting test data seeding...');
 
-        // Get or create a galaxy
-        $galaxyUuid = $this->option('galaxy-uuid');
-
-        if ($galaxyUuid) {
-            $galaxy = Galaxy::where('uuid', $galaxyUuid)->first();
-            if (!$galaxy) {
-                $this->error("Galaxy {$galaxyUuid} not found");
-                return 1;
-            }
-            $this->info("Using existing galaxy: {$galaxy->name}");
-        } else {
-            // Use the first available galaxy or create a test one
-            $galaxy = Galaxy::first();
-            if (!$galaxy) {
-                $this->error('No galaxies found. Create a galaxy first using the galaxy:initialize command.');
-                return 1;
-            }
-            $this->info("Using first available galaxy: {$galaxy->name}");
+        // Get the first available galaxy (for POI validation)
+        $galaxy = Galaxy::first();
+        if (!$galaxy) {
+            $this->error('No galaxies found. Create a galaxy first using the galaxy:initialize command.');
+            return 1;
         }
 
-        // Verify the galaxy has POIs
+        // Verify at least one galaxy has POIs
         $poiCount = $galaxy->pointsOfInterest()->count();
         if ($poiCount === 0) {
             $this->error("Galaxy {$galaxy->name} has no POIs. Cannot seed data without POIs.");
             return 1;
         }
-        $this->info("Galaxy has {$poiCount} points of interest");
+        $this->info("Seeding across {$poiCount} points of interest in {$galaxy->name} and other galaxies...");
 
         // Seed trading post templates (once globally)
         $this->info('');

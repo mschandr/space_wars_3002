@@ -17,7 +17,7 @@ return new class extends Migration
     {
         Schema::create('galaxy_vendor_states', function (Blueprint $table) {
             $table->id();
-            $table->uuid();
+            $table->uuid('uuid')->unique();
             $table->foreignId('galaxy_id')->constrained()->cascadeOnDelete();
             $table->foreignId('vendor_profile_id')->constrained('vendor_profiles')->cascadeOnDelete();
 

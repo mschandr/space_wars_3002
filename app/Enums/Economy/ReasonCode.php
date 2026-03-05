@@ -31,12 +31,12 @@ enum ReasonCode: string
 
     public function isSource(): bool
     {
-        return in_array($this, [self::GENESIS, self::MINING, self::SALVAGE, self::NPC_INJECT]);
+        return in_array($this, [self::GENESIS, self::MINING, self::SALVAGE, self::NPC_INJECT, self::TRADE_SELL]);
     }
 
     public function isSink(): bool
     {
-        return in_array($this, [self::CONSTRUCTION, self::UPKEEP, self::TRADE_SELL, self::NPC_CONSUME]);
+        return in_array($this, [self::CONSTRUCTION, self::UPKEEP, self::TRADE_BUY, self::NPC_CONSUME]);
     }
 
     public function isTrade(): bool

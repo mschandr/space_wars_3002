@@ -32,12 +32,12 @@ class VendorController extends BaseApiController
 
         $player = $request->user()->player ?? null;
 
-        // Get relationship
+        // Get relationship (read-only, don't create on view)
         $relationship = null;
         $effectiveMarkup = null;
 
         if ($player) {
-            $relationship = $this->vendorService->getOrCreateRelationship($player, $vendor);
+            $relationship = $this->vendorService->findRelationship($player, $vendor);
             $effectiveMarkup = $this->vendorService->getEffectiveMarkup($vendor, $player);
         }
 

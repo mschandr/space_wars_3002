@@ -34,15 +34,31 @@ class PricingService
      * - scarcity_mult = f(coverage_days) [smooth curve]
      * - shock_mult = ∏ (1 + shock_magnitude * decay_factor) [clamped]
      * - raw_price = base_price * scarcity_mult * shock_mult
-     * - buy_price = raw_price * (1 + spread_buy)
+     * - buy_price = raw_price * (1 + spread_buy + volume_fee)
      * - sell_price = raw_price * (1 - spread_sell)
+     *
+     * @param TradingHub $hub Trading hub
+     * @param Commodity $commodity Commodity being priced
+     * @param ?HubCommodityStats $stats Hub commodity stats (fetched if null)
+     * @param float $onHandQty Current on-hand quantity
+     * @param ?float $requestedQty Optional: quantity for volume fee calculation (anti-cornering)
      */
     public function computePriceCoverageBased(
         TradingHub $hub,
         Commodity $commodity,
         ?HubCommodityStats $stats = null,
-        float $onHandQty = 0
+        float $onHandQty = 0,
+        ?float $requestedQty = null
     ): array {
+        // Validate inputs are non-negative
+        if ($onHandQty < 0) {
+            throw new \InvalidArgumentException("onHandQty cannot be negative. Got: {$onHandQty}");
+        }
+
+        if ($requestedQty !== null && $requestedQty < 0) {
+            throw new \InvalidArgumentException("requestedQty cannot be negative. Got: {$requestedQty}");
+        }
+
         // Get or create stats
         if (!$stats) {
             $stats = HubCommodityStats::firstOrCreate(
@@ -57,9 +73,9 @@ class PricingService
             );
         }
 
-        // Calculate coverage days
-        $avgDailyDemand = max(0.0001, (float)$stats->avg_daily_demand);
-        $coverageDays = $onHandQty / $avgDailyDemand;
+        // Calculate coverage days with fallback demand estimation
+        $avgDailyDemand = $this->estimateDailyDemand((float)$stats->avg_daily_demand, $commodity);
+        $coverageDays = $onHandQty / max(0.0001, $avgDailyDemand);
 
         // Compute scarcity multiplier from coverage curve
         $scarcityMult = $this->computeScarcityMultiplier(
@@ -85,7 +101,18 @@ class PricingService
         $spreadBuy = $hub->spread_buy ?? config('economy.pricing.spread_per_side', 0.08);
         $spreadSell = $hub->spread_sell ?? config('economy.pricing.spread_per_side', 0.08);
 
-        $buyPrice = (int)round($clampedPrice * (1 + $spreadBuy));
+        // Apply anti-cornering volume fee (Phase 4) if purchase qty provided
+        $volumeFee = 0.0;
+        if ($requestedQty !== null) {
+            $antiCorneringService = app(\App\Services\Economy\AntiCorneringService::class);
+            // For volume fee calculation, we need the inventory object
+            // Pass it via the hub if available, otherwise just add to spread
+            $volumeFee = $antiCorneringService->computeVolumeAdjustment($requestedQty, null);
+        }
+
+        $finalSpreadBuy = $spreadBuy + $volumeFee;
+
+        $buyPrice = (int)round($clampedPrice * (1 + $finalSpreadBuy));
         $sellPrice = (int)round($clampedPrice * (1 - $spreadSell));
 
         return [
@@ -97,10 +124,51 @@ class PricingService
                 'scarcity_mult' => $scarcityMult,
                 'shock_mult' => $shockMult,
                 'coverage_days' => $coverageDays,
-                'spread_buy' => $spreadBuy,
+                'spread_buy' => $finalSpreadBuy,
                 'spread_sell' => $spreadSell,
+                'volume_fee' => $volumeFee,
             ],
         ];
+    }
+
+    /**
+     * Estimate daily demand when no historical data exists
+     *
+     * Handles edge case where new commodity or zero trading history
+     * would cause division by zero in scarcity calculations
+     *
+     * @param float $avgDailyDemand Actual average from stats, or 0
+     * @param Commodity $commodity Commodity for fallback estimation
+     * @return float Estimated or actual daily demand (guaranteed >= 0)
+     * @throws \InvalidArgumentException if avgDailyDemand is negative
+     */
+    private function estimateDailyDemand(float $avgDailyDemand, Commodity $commodity): float
+    {
+        // Validate input is non-negative
+        if ($avgDailyDemand < 0) {
+            throw new \InvalidArgumentException(
+                "avgDailyDemand cannot be negative. Got: {$avgDailyDemand}"
+            );
+        }
+
+        if ($avgDailyDemand > 0) {
+            return $avgDailyDemand;  // Use actual data
+        }
+
+        $method = config('economy.demand_estimation.fallback_method', 'base_price_ratio');
+
+        if ($method === 'base_price_ratio') {
+            // Assume 1% of base price per day in demand (e.g., 1000 credit item = 10 units/day demand)
+            $estimate = $commodity->base_price / 100;
+            // Ensure non-negative (in case base_price is somehow negative, use fallback)
+            if ($estimate >= 0) {
+                return $estimate;
+            }
+        }
+
+        // Fallback to static value, ensure non-negative
+        $fallback = (float) config('economy.demand_estimation.fallback_daily_demand', 100);
+        return max(0, $fallback);
     }
 
     /**

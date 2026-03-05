@@ -9,6 +9,7 @@ use App\Models\PlayerCargo;
 use App\Models\PlayerShip;
 use App\Models\PointOfInterest;
 use App\Models\TradingHubInventory;
+use App\Services\Economy\AntiCorneringService;
 use App\Services\TradingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,8 @@ use Illuminate\Validation\ValidationException;
 class TradingTransactionController extends BaseApiController
 {
     public function __construct(
-        private TradingService $tradingService
+        private TradingService $tradingService,
+        private AntiCorneringService $antiCorneringService
     ) {}
 
     /**
@@ -114,6 +116,12 @@ class TradingTransactionController extends BaseApiController
 
         if (! $inventory) {
             return $this->notFound('Mineral not available at this hub');
+        }
+
+        // Phase 4: Anti-cornering check - verify purchase limit not exceeded
+        if (! $this->antiCorneringService->canPurchaseThisTick($player, $validated['quantity'])) {
+            $blockReason = $this->antiCorneringService->getPurchaseBlockReason($player, $validated['quantity']);
+            return $this->error($blockReason, 'PURCHASE_LIMIT_EXCEEDED');
         }
 
         $result = $this->tradingService->buyMineral(
