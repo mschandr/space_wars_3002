@@ -74,7 +74,10 @@ class CustomsController extends BaseApiController
      * Accept a fine or cargo seizure
      *
      * POST /api/customs/{poiUuid}/accept
-     * Body: { player_uuid: string, ship_uuid: string, fine_amount: int }
+     * Body: { player_uuid: string, ship_uuid: string }
+     *
+     * The fine amount is computed server-side from the ship's current illegal
+     * cargo and the customs official's severity — never trusted from the client.
      */
     public function acceptFine(Request $request, string $poiUuid): JsonResponse
     {
@@ -82,10 +85,15 @@ class CustomsController extends BaseApiController
             $validated = $request->validate([
                 'player_uuid' => ['required', 'string'],
                 'ship_uuid' => ['required', 'string'],
-                'fine_amount' => ['required', 'integer', 'min:0'],
             ]);
         } catch (ValidationException $e) {
             return $this->validationError($e->errors());
+        }
+
+        // Resolve POI
+        $poi = PointOfInterest::where('uuid', $poiUuid)->first();
+        if (!$poi) {
+            return $this->notFound('Location not found');
         }
 
         // Find player and ship
@@ -105,12 +113,26 @@ class CustomsController extends BaseApiController
             return $this->notFound('Ship not found');
         }
 
+        // Verify ship is physically at this POI
+        if ($ship->current_poi_id !== $poi->id) {
+            return $this->error('Ship is not docked at this location', 422);
+        }
+
+        // Load customs official at this POI
+        $official = CustomsOfficial::where('poi_id', $poi->id)->first();
+        if (!$official) {
+            return $this->error('No customs authority at this location', 400);
+        }
+
+        // Compute fine server-side — never trust client-supplied amounts
+        $computedFine = $this->customsService->computeFineAmount($ship, $official);
+
         // Seize illegal cargo and apply fine
-        $this->customsService->seizeIllegalCargo($ship, $player, $validated['fine_amount']);
+        $this->customsService->seizeIllegalCargo($ship, $player, $computedFine);
 
         return $this->success([
             'message' => 'Fine accepted. Illegal cargo seized.',
-            'fine_amount' => $validated['fine_amount'],
+            'fine_amount' => $computedFine,
             'credits_remaining' => (float) $player->fresh()->credits,
             'cargo_remaining' => $ship->fresh()->current_cargo,
         ]);
