@@ -124,6 +124,24 @@ class ShipResource extends JsonResource
                     'class_info' => self::getClassInfo($this->ship->class),
                 ]
             ),
+            'crew' => $this->when(
+                $this->relationLoaded('crew') && config('features.crew_profiles'),
+                fn () => $this->crew->map(fn ($member) => [
+                    'uuid' => $member->uuid,
+                    'name' => $member->name,
+                    'role' => $member->role->value,
+                    'role_label' => $member->role->label(),
+                    'alignment' => $member->alignment->value,
+                    'alignment_label' => $member->alignment->label(),
+                    'reputation' => $member->reputation,
+                    'shady_actions' => $member->shady_actions,
+                    'traits' => $member->traits ?? [],
+                ])->values()
+            ),
+            'ship_persona' => $this->when(
+                config('features.crew_profiles') && $this->relationLoaded('crew'),
+                fn () => $this->getCrewPersona()
+            ),
         ];
     }
 

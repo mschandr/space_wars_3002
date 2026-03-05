@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Services\Crew\ShipPersonaService;
 
 class PlayerShip extends Model
 {
@@ -166,6 +167,22 @@ class PlayerShip extends Model
     public function utilityComponents(): HasMany
     {
         return $this->componentsOfType(SlotType::UTILITY);
+    }
+
+    /**
+     * Get crew members assigned to this ship
+     */
+    public function crew(): HasMany
+    {
+        return $this->hasMany(CrewMember::class);
+    }
+
+    /**
+     * Get the computed ship persona based on crew
+     */
+    public function getCrewPersona(): array
+    {
+        return app(ShipPersonaService::class)->computePersona($this);
     }
 
     /**

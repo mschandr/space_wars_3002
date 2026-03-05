@@ -129,6 +129,21 @@ class Galaxy extends Model
         return $this->hasMany(Npc::class);
     }
 
+    public function crewAssignments(): HasMany
+    {
+        return $this->hasMany(CrewAssignment::class);
+    }
+
+    public function vendorStates(): HasMany
+    {
+        return $this->hasMany(GalaxyVendorState::class);
+    }
+
+    public function customsRecords(): HasMany
+    {
+        return $this->hasMany(GalaxyCustomsRecord::class);
+    }
+
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_user_id');

@@ -288,6 +288,14 @@ class PointOfInterest extends Model
     }
 
     /**
+     * Customs official at this POI (if any)
+     */
+    public function customsOfficial()
+    {
+        return $this->hasOne(\App\Models\CustomsOfficial::class, 'poi_id');
+    }
+
+    /**
      *--------------------------------------------------------------------------
      * Query Scopes
      *--------------------------------------------------------------------------

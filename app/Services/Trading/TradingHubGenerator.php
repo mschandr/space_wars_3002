@@ -148,18 +148,37 @@ class TradingHubGenerator
 
         // Batch insert all inventory rows (1 query instead of thousands)
         if (! empty($inventoryRows)) {
+            // Compute prices inline before insertion
+            foreach ($inventoryRows as &$row) {
+                // Get the mineral to access base_value
+                $mineral = $minerals->firstWhere('id', $row['mineral_id']);
+                if ($mineral) {
+                    // Use same formula as PricingService
+                    $baseValue = $mineral->base_value;
+                    $demandMultiplier = 1 + (($row['demand_level'] - 50) / 100);
+                    $supplyMultiplier = 1 - (($row['supply_level'] - 50) / 100);
+
+                    $rawPrice = $baseValue * $demandMultiplier * $supplyMultiplier;
+
+                    // Clamp to config min/max
+                    $minMultiplier = config('economy.pricing.min_multiplier', 0.10);
+                    $maxMultiplier = config('economy.pricing.max_multiplier', 10.00);
+                    $minPrice = $baseValue * $minMultiplier;
+                    $maxPrice = $baseValue * $maxMultiplier;
+
+                    $midPrice = (int) round(max($minPrice, min($maxPrice, $rawPrice)));
+
+                    // Apply spread
+                    $spread = config('economy.pricing.spread_per_side', 0.08);
+                    $row['current_price'] = $midPrice;
+                    $row['buy_price'] = (int) round($midPrice * (1 - $spread));
+                    $row['sell_price'] = (int) round($midPrice * (1 + $spread));
+                }
+            }
+
             foreach (array_chunk($inventoryRows, 1000) as $chunk) {
                 \Illuminate\Support\Facades\DB::table('trading_hub_inventories')->insert($chunk);
             }
-
-            // Update pricing for all inventories (this triggers the pricing calculation)
-            // Use chunked updates to avoid memory issues
-            TradingHubInventory::whereIn('trading_hub_id', $hubs->pluck('id'))
-                ->chunk(500, function ($inventories) {
-                    foreach ($inventories as $inventory) {
-                        $inventory->updatePricing();
-                    }
-                });
         }
     }
 

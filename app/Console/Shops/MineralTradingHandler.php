@@ -2,10 +2,13 @@
 
 namespace App\Console\Shops;
 
+use App\DataObjects\PricingContext;
 use App\Models\Player;
 use App\Models\PlayerCargo;
 use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
+use App\Services\Trading\HubInventoryMutationService;
+use Illuminate\Support\Facades\DB;
 
 class MineralTradingHandler extends BaseShopHandler
 {
@@ -232,40 +235,65 @@ class MineralTradingHandler extends BaseShopHandler
             return;
         }
 
-        // TODO: (Race Condition) This buy transaction is NOT wrapped in a DB::transaction().
-        // Between checking stock and deducting, another process could purchase the same items.
-        // Stock could go negative. Wrap all operations (deductCredits, removeStock, cargo update)
-        // in DB::transaction() and re-check stock within the transaction.
-        $player->deductCredits($totalCost);
-        $inventory->removeStock($quantity);
+        // Execute atomically
+        $result = DB::transaction(function () use ($player, $inventory, $ship, $mineral, $quantity, $totalCost) {
+            // Re-fetch all mutable rows with locks inside transaction (prevent TOCTOU race)
+            $player = Player::where('id', $player->id)->lockForUpdate()->firstOrFail();
+            $ship = $player->activeShip()->lockForUpdate()->firstOrFail();
+            $inventory = TradingHubInventory::where('id', $inventory->id)->lockForUpdate()->firstOrFail();
 
-        // Add to player cargo
-        $playerCargo = PlayerCargo::firstOrNew([
-            'player_ship_id' => $ship->id,
-            'mineral_id' => $mineral->id,
-        ]);
-        $playerCargo->quantity = ($playerCargo->quantity ?? 0) + $quantity;
-        $playerCargo->save();
+            // Re-validate all checks with locked rows
+            if (! $inventory->hasStock($quantity)) {
+                throw new \Exception('Insufficient stock available (race condition)');
+            }
 
-        // Update ship cargo
-        $ship->current_cargo += $quantity;
-        $ship->save();
+            if ($player->credits < $totalCost) {
+                throw new \Exception('Insufficient credits (race condition)');
+            }
 
-        // Award XP for trading (small amount for purchases)
-        $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
-        $oldLevel = $player->level;
-        $player->addExperience($xpEarned);
-        $newLevel = $player->level;
+            $availableSpace = $ship->cargo_hold - $ship->current_cargo;
+            if ($availableSpace < $quantity) {
+                throw new \Exception('Insufficient cargo space (race condition)');
+            }
+
+            // Deduct credits from locked player
+            $player->deductCredits($totalCost);
+
+            // Apply trade mutation with single save using locked inventory
+            $ctx = PricingContext::forHub($inventory->tradingHub);
+            $mutationService = app(HubInventoryMutationService::class);
+            $mutationService->applyTrade($inventory, $quantity, 'buy', $ctx);
+
+            // Add to player cargo
+            $playerCargo = PlayerCargo::firstOrNew([
+                'player_ship_id' => $ship->id,
+                'mineral_id' => $mineral->id,
+            ]);
+            $playerCargo->quantity = ($playerCargo->quantity ?? 0) + $quantity;
+            $playerCargo->save();
+
+            // Update ship cargo with locked ship object
+            $ship->current_cargo += $quantity;
+            $ship->save();
+
+            // Award XP for trading (small amount for purchases)
+            $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
+            $oldLevel = $player->level;
+            $player->addExperience($xpEarned);
+            $newLevel = $player->level;
+
+            return compact('xpEarned', 'oldLevel', 'newLevel');
+        });
 
         // Success message
         $this->clearScreen();
         $this->showSuccess('✓ PURCHASE SUCCESSFUL');
         $this->line('  Purchased: '.number_format($quantity).' units of '.$mineral->name);
         $this->line('  Cost: '.number_format($totalCost, 2).' credits');
-        $this->line('  XP Earned: '.$this->colorize('+'.$xpEarned.' XP', 'highlight'));
+        $this->line('  XP Earned: '.$this->colorize('+'.$result['xpEarned'].' XP', 'highlight'));
 
-        if ($newLevel > $oldLevel) {
-            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$newLevel.'!', 'trade'));
+        if ($result['newLevel'] > $result['oldLevel']) {
+            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$result['newLevel'].'!', 'trade'));
         }
 
         $this->newLine();
@@ -345,37 +373,57 @@ class MineralTradingHandler extends BaseShopHandler
             return;
         }
 
-        // Execute transaction
-        $player->addCredits($totalRevenue);
-        $hubInventory->addStock($quantity);
+        // Execute atomically
+        $result = DB::transaction(function () use ($player, $hubInventory, $ship, $cargo, $mineral, $quantity, $totalRevenue) {
+            // Re-fetch all mutable rows with locks inside transaction (prevent TOCTOU race)
+            $player = Player::where('id', $player->id)->lockForUpdate()->firstOrFail();
+            $ship = $player->activeShip()->lockForUpdate()->firstOrFail();
+            $hubInventory = TradingHubInventory::where('id', $hubInventory->id)->lockForUpdate()->firstOrFail();
+            $cargo = PlayerCargo::where('id', $cargo->id)->lockForUpdate()->firstOrFail();
 
-        // Remove from player cargo
-        $cargo->quantity -= $quantity;
-        if ($cargo->quantity <= 0) {
-            $cargo->delete();
-        } else {
-            $cargo->save();
-        }
+            // Re-validate cargo quantity with locked row
+            if ($cargo->quantity < $quantity) {
+                throw new \Exception('You don\'t have that many units (race condition)');
+            }
 
-        // Update ship cargo
-        $ship->current_cargo -= $quantity;
-        $ship->save();
+            // Add credits to locked player
+            $player->addCredits($totalRevenue);
 
-        // Award XP for trading (based on revenue/profit)
-        $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits revenue, min 10
-        $oldLevel = $player->level;
-        $player->addExperience($xpEarned);
-        $newLevel = $player->level;
+            // Apply trade mutation with single save using locked inventory
+            $ctx = PricingContext::forHub($hubInventory->tradingHub);
+            $mutationService = app(HubInventoryMutationService::class);
+            $mutationService->applyTrade($hubInventory, $quantity, 'sell', $ctx);
+
+            // Remove from locked player cargo
+            $cargo->quantity -= $quantity;
+            if ($cargo->quantity <= 0) {
+                $cargo->delete();
+            } else {
+                $cargo->save();
+            }
+
+            // Update locked ship cargo
+            $ship->current_cargo -= $quantity;
+            $ship->save();
+
+            // Award XP for trading (based on revenue/profit)
+            $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits revenue, min 10
+            $oldLevel = $player->level;
+            $player->addExperience($xpEarned);
+            $newLevel = $player->level;
+
+            return compact('xpEarned', 'oldLevel', 'newLevel');
+        });
 
         // Success message
         $this->clearScreen();
         $this->showSuccess('✓ SALE SUCCESSFUL');
         $this->line('  Sold: '.number_format($quantity).' units of '.$mineral->name);
         $this->line('  Revenue: '.number_format($totalRevenue, 2).' credits');
-        $this->line('  XP Earned: '.$this->colorize('+'.$xpEarned.' XP', 'highlight'));
+        $this->line('  XP Earned: '.$this->colorize('+'.$result['xpEarned'].' XP', 'highlight'));
 
-        if ($newLevel > $oldLevel) {
-            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$newLevel.'!', 'trade'));
+        if ($result['newLevel'] > $result['oldLevel']) {
+            $this->line('  '.$this->colorize('🎉 LEVEL UP! You are now level '.$result['newLevel'].'!', 'trade'));
         }
 
         $this->newLine();

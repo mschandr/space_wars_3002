@@ -422,4 +422,22 @@ class Player extends Model
         $this->mirror_universe_entry_time = null;
         $this->save();
     }
+
+    /**
+     * Get total shady interaction count across all crew members in active ship.
+     * Used to determine black market visibility.
+     *
+     * Sum of crew_members.shady_actions for all crew assigned to this ship
+     */
+    public function getShadyInteractionCount(): int
+    {
+        $activeShip = $this->activeShip;
+
+        if (!$activeShip) {
+            return 0;
+        }
+
+        // Sum shady actions from all crew members on active ship
+        return $activeShip->crew()->sum('shady_actions');
+    }
 }
