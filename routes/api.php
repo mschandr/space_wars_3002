@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\CombatController;
 use App\Http\Controllers\Api\ComponentUpgradeController;
 use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\ConstructionController;
+use App\Http\Controllers\Api\FlotillaController;
 use App\Http\Controllers\Api\FacilitiesController;
 use App\Http\Controllers\Api\GalaxyController;
 use App\Http\Controllers\Api\GalaxyCreationController;
@@ -272,6 +273,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('contracts/{uuid}/deliver', [ContractController::class, 'deliverCargo']);
     Route::get('players/{uuid}/contracts', [ContractController::class, 'getMyContracts']);
     Route::get('players/{uuid}/reputation', [ContractController::class, 'getReputation']);
+
+    // Flotilla routes (multi-ship formations)
+    Route::post('players/{uuid}/flotilla', [FlotillaController::class, 'createFlotilla']);
+    Route::get('players/{uuid}/flotilla', [FlotillaController::class, 'getFlotilla']);
+    Route::post('players/{uuid}/flotilla/add-ship', [FlotillaController::class, 'addShip']);
+    Route::post('players/{uuid}/flotilla/remove-ship', [FlotillaController::class, 'removeShip']);
+    Route::post('players/{uuid}/flotilla/set-flagship', [FlotillaController::class, 'setFlagship']);
+    Route::delete('players/{uuid}/flotilla', [FlotillaController::class, 'dissolveFlotilla']);
 
     // Upgrade routes (legacy stat-bump system — deprecated)
     Route::get('ships/{uuid}/upgrade-options', [UpgradeController::class, 'listUpgradeOptions']);

@@ -560,4 +560,30 @@ return [
         ],
     ],
 
+    /**
+     * |--------------------------------------------------------------------------
+     * | Flotilla System
+     * |--------------------------------------------------------------------------
+     * | Configuration for multi-ship flotillas (2-4 ships moving together).
+     * | Flotillas have speed penalties (slowest ship sets pace) and fuel penalties.
+     */
+    'flotilla' => [
+        'max_ships' => 4,                        // Maximum ships per flotilla
+        'fuel_penalty_per_ship' => 0.10,         // +10% fuel cost per additional ship
+        'form_turn_cost' => 1,                   // Future: turns required to form flotilla
+        'cargo_recovery_rate' => 0.70,           // 70% of destroyed ship cargo recoverable
+        'pirate_loot_recovery_rate' => 0.50,     // 50% of pirate cargo recoverable
+        'component_recovery_loss' => [           // Escalating loss per component recovered
+            1 => 0.10,  // 1st component: 10% loss
+            2 => 0.20,  // 2nd component: 20% loss
+            3 => 0.30,  // 3rd component: 30% loss
+            4 => 0.40,  // 4th component: 40% loss
+            5 => 0.50,  // 5th component: 50% loss
+            6 => 0.60,  // 6th component: 60% loss
+            7 => 0.70,  // 7th component: 70% loss
+            8 => 0.80,  // 8th component: 80% loss
+            9 => 0.90,  // 9th component: 90% loss
+        ],
+    ],
+
 ];

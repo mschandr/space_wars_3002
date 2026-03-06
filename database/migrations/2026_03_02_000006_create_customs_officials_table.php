@@ -18,12 +18,12 @@ return new class extends Migration
 
             // Officer personality
             $table->string('name', 100);
-            $table->unsignedDecimal('honesty', 3, 2);        // 0.0=corrupt, 1.0=incorruptible
-            $table->unsignedDecimal('severity', 3, 2);       // 0.0=lenient, 1.0=maximum enforcement
+            $table->decimal('honesty', 3, 2);        // 0.0=corrupt, 1.0=incorruptible
+            $table->decimal('severity', 3, 2);       // 0.0=lenient, 1.0=maximum enforcement
             $table->unsignedInteger('bribe_threshold');      // Minimum credits to attempt bribe
 
             // Search capability
-            $table->unsignedDecimal('detection_skill', 3, 2); // How well they find hidden cargo
+            $table->decimal('detection_skill', 3, 2); // How well they find hidden cargo
 
             $table->timestamps();
 
