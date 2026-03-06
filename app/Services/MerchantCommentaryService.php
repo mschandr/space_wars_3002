@@ -520,47 +520,64 @@ class MerchantCommentaryService
      */
     private function scoreShipSpecialty(Ship $ship): string
     {
+        // Check explicit class/attribute indicators first
+        $specialty = $this->scoreByAttributes($ship);
+        if ($specialty !== null) {
+            return $specialty;
+        }
+
+        // Fallback to stat-based classification
+        return $this->scoreByStats($ship);
+    }
+
+    private function scoreByAttributes(Ship $ship): ?string
+    {
         $class = strtolower($ship->class ?? '');
         $attributes = $ship->attributes ?? [];
 
-        // Check explicit class/attribute indicators
         if (str_contains($class, 'precursor') || ($attributes['is_precursor'] ?? false)) {
             return 'legendary';
         }
-
         if ($attributes['is_carrier'] ?? false) {
             return 'firepower';
         }
-
-        if (str_contains($class, 'stealth') || str_contains($class, 'ghost') || str_contains($class, 'shadow')) {
+        if ($this->matchesClassPattern($class, ['stealth', 'ghost', 'shadow'])) {
             return 'stealth';
         }
-
-        if (str_contains($class, 'mining') || str_contains($class, 'miner')) {
+        if ($this->matchesClassPattern($class, ['mining', 'miner'])) {
             return 'mining';
         }
-
-        if (str_contains($class, 'colony') || str_contains($class, 'colonial') || str_contains($class, 'settler')) {
+        if ($this->matchesClassPattern($class, ['colony', 'colonial', 'settler'])) {
             return 'colonial';
         }
-
-        if (str_contains($class, 'explorer') || str_contains($class, 'scout') || str_contains($class, 'survey')) {
+        if ($this->matchesClassPattern($class, ['explorer', 'scout', 'survey'])) {
             return 'exploration';
         }
 
-        // Stat-based classification
+        return null;
+    }
+
+    private function matchesClassPattern(string $class, array $patterns): bool
+    {
+        foreach ($patterns as $pattern) {
+            if (str_contains($class, $pattern)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function scoreByStats(Ship $ship): string
+    {
         if ($ship->cargo_capacity >= 200) {
             return 'cargo';
         }
-
         if ($ship->weapon_slots >= 4) {
             return 'firepower';
         }
-
         if ($ship->speed >= 8) {
             return 'speed';
         }
-
         if ($ship->shield_strength >= 200) {
             return 'defense';
         }

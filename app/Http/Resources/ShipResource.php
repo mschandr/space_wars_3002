@@ -212,96 +212,154 @@ class ShipResource extends JsonResource
      */
     private static function getSpecialFeatures(string $class, array $attrs): array
     {
+        $features = match ($class) {
+            'smuggler' => self::extractSmugglerFeatures($attrs),
+            'battleship' => self::extractBattleshipFeatures($attrs),
+            'cargo' => self::extractCargoFeatures($attrs),
+            'carrier' => self::extractCarrierFeatures($attrs),
+            'colony_ship' => self::extractColonyShipFeatures($attrs),
+            default => [],
+        };
+
+        self::addCapitalShipFeature($features, $attrs);
+        return $features;
+    }
+
+    /**
+     * Extract smuggler-specific features.
+     */
+    private static function extractSmugglerFeatures(array $attrs): array
+    {
         $features = [];
 
-        switch ($class) {
-            case 'smuggler':
-                if (isset($attrs['hidden_hold_capacity'])) {
-                    $features[] = [
-                        'name' => 'Hidden Cargo Hold',
-                        'value' => $attrs['hidden_hold_capacity'],
-                        'description' => 'Concealed cargo space invisible to pirate scans',
-                    ];
-                }
-                if (isset($attrs['stealth_bonus'])) {
-                    $features[] = [
-                        'name' => 'Stealth Systems',
-                        'value' => ($attrs['stealth_bonus'] * 100).'%',
-                        'description' => 'Reduces pirate detection chance',
-                    ];
-                }
-                break;
-
-            case 'battleship':
-                if (isset($attrs['armor_plating'])) {
-                    $features[] = [
-                        'name' => 'Armor Plating',
-                        'value' => $attrs['armor_plating'],
-                        'description' => 'Flat damage reduction on incoming attacks',
-                    ];
-                }
-                if (isset($attrs['combat_bonus'])) {
-                    $features[] = [
-                        'name' => 'Combat Systems',
-                        'value' => ($attrs['combat_bonus'] * 100).'%',
-                        'description' => 'Bonus to overall combat effectiveness',
-                    ];
-                }
-                break;
-
-            case 'cargo':
-                if (isset($attrs['bulk_trade_bonus'])) {
-                    $features[] = [
-                        'name' => 'Bulk Trading',
-                        'value' => ($attrs['bulk_trade_bonus'] * 100).'%',
-                        'description' => 'Better prices when trading in large quantities',
-                    ];
-                }
-                break;
-
-            case 'carrier':
-                if (isset($attrs['fighter_capacity'])) {
-                    $features[] = [
-                        'name' => 'Fighter Hangar',
-                        'value' => $attrs['fighter_capacity'],
-                        'description' => 'Maximum fighter squadrons that can be deployed',
-                    ];
-                }
-                if (isset($attrs['command_bonus'])) {
-                    $features[] = [
-                        'name' => 'Command Link',
-                        'value' => ($attrs['command_bonus'] * 100).'%',
-                        'description' => 'Bonus to deployed fighter effectiveness',
-                    ];
-                }
-                break;
-
-            case 'colony_ship':
-                if (isset($attrs['colonist_capacity'])) {
-                    $features[] = [
-                        'name' => 'Cryogenic Bays',
-                        'value' => number_format($attrs['colonist_capacity']),
-                        'description' => 'Maximum colonists in cryogenic stasis',
-                    ];
-                }
-                if (isset($attrs['starting_colonists'])) {
-                    $features[] = [
-                        'name' => 'Pre-loaded Colonists',
-                        'value' => number_format($attrs['starting_colonists']),
-                        'description' => 'Colonists ready for deployment on purchase',
-                    ];
-                }
-                if (isset($attrs['colony_supplies'])) {
-                    $features[] = [
-                        'name' => 'Colony Supply Kit',
-                        'value' => 'Full loadout',
-                        'description' => 'Mining equipment, habitat modules, food, medical, and seed bank',
-                    ];
-                }
-                break;
+        if (isset($attrs['hidden_hold_capacity'])) {
+            $features[] = [
+                'name' => 'Hidden Cargo Hold',
+                'value' => $attrs['hidden_hold_capacity'],
+                'description' => 'Concealed cargo space invisible to pirate scans',
+            ];
         }
 
-        // Capital ship flag
+        if (isset($attrs['stealth_bonus'])) {
+            $features[] = [
+                'name' => 'Stealth Systems',
+                'value' => ($attrs['stealth_bonus'] * 100).'%',
+                'description' => 'Reduces pirate detection chance',
+            ];
+        }
+
+        return $features;
+    }
+
+    /**
+     * Extract battleship-specific features.
+     */
+    private static function extractBattleshipFeatures(array $attrs): array
+    {
+        $features = [];
+
+        if (isset($attrs['armor_plating'])) {
+            $features[] = [
+                'name' => 'Armor Plating',
+                'value' => $attrs['armor_plating'],
+                'description' => 'Flat damage reduction on incoming attacks',
+            ];
+        }
+
+        if (isset($attrs['combat_bonus'])) {
+            $features[] = [
+                'name' => 'Combat Systems',
+                'value' => ($attrs['combat_bonus'] * 100).'%',
+                'description' => 'Bonus to overall combat effectiveness',
+            ];
+        }
+
+        return $features;
+    }
+
+    /**
+     * Extract cargo ship-specific features.
+     */
+    private static function extractCargoFeatures(array $attrs): array
+    {
+        $features = [];
+
+        if (isset($attrs['bulk_trade_bonus'])) {
+            $features[] = [
+                'name' => 'Bulk Trading',
+                'value' => ($attrs['bulk_trade_bonus'] * 100).'%',
+                'description' => 'Better prices when trading in large quantities',
+            ];
+        }
+
+        return $features;
+    }
+
+    /**
+     * Extract carrier-specific features.
+     */
+    private static function extractCarrierFeatures(array $attrs): array
+    {
+        $features = [];
+
+        if (isset($attrs['fighter_capacity'])) {
+            $features[] = [
+                'name' => 'Fighter Hangar',
+                'value' => $attrs['fighter_capacity'],
+                'description' => 'Maximum fighter squadrons that can be deployed',
+            ];
+        }
+
+        if (isset($attrs['command_bonus'])) {
+            $features[] = [
+                'name' => 'Command Link',
+                'value' => ($attrs['command_bonus'] * 100).'%',
+                'description' => 'Bonus to deployed fighter effectiveness',
+            ];
+        }
+
+        return $features;
+    }
+
+    /**
+     * Extract colony ship-specific features.
+     */
+    private static function extractColonyShipFeatures(array $attrs): array
+    {
+        $features = [];
+
+        if (isset($attrs['colonist_capacity'])) {
+            $features[] = [
+                'name' => 'Cryogenic Bays',
+                'value' => number_format($attrs['colonist_capacity']),
+                'description' => 'Maximum colonists in cryogenic stasis',
+            ];
+        }
+
+        if (isset($attrs['starting_colonists'])) {
+            $features[] = [
+                'name' => 'Pre-loaded Colonists',
+                'value' => number_format($attrs['starting_colonists']),
+                'description' => 'Colonists ready for deployment on purchase',
+            ];
+        }
+
+        if (isset($attrs['colony_supplies'])) {
+            $features[] = [
+                'name' => 'Colony Supply Kit',
+                'value' => 'Full loadout',
+                'description' => 'Mining equipment, habitat modules, food, medical, and seed bank',
+            ];
+        }
+
+        return $features;
+    }
+
+    /**
+     * Add capital ship feature if applicable.
+     */
+    private static function addCapitalShipFeature(&$features, array $attrs): void
+    {
         if ($attrs['is_capital_ship'] ?? false) {
             $features[] = [
                 'name' => 'Capital Ship',
@@ -309,7 +367,5 @@ class ShipResource extends JsonResource
                 'description' => 'Large vessel classification — restricted from certain docking facilities',
             ];
         }
-
-        return $features;
     }
 }

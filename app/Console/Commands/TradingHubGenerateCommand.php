@@ -21,95 +21,141 @@ class TradingHubGenerateCommand extends Command
 
     public function handle(): int
     {
-        $galaxyIdentifier = $this->argument('galaxy');
-
-        // If no galaxy specified, prompt for one
-        if (! $galaxyIdentifier) {
-            $galaxies = Galaxy::all();
-
-            if ($galaxies->isEmpty()) {
-                $this->error('No galaxies found. Create a galaxy first.');
-
-                return Command::FAILURE;
-            }
-
-            $choices = $galaxies->mapWithKeys(function ($galaxy) {
-                return [$galaxy->id => "{$galaxy->name} (ID: {$galaxy->id})"];
-            })->toArray();
-
-            $galaxyId = $this->choice('Select a galaxy', $choices);
-            $galaxy = Galaxy::find($galaxyId);
-        } else {
-            // Try to find by ID first, then by name
-            $galaxy = is_numeric($galaxyIdentifier)
-                ? Galaxy::find($galaxyIdentifier)
-                : Galaxy::where('name', $galaxyIdentifier)->first();
-        }
-
+        // Resolve galaxy
+        $galaxy = $this->resolveGalaxy($this->argument('galaxy'));
         if (! $galaxy) {
-            $this->error("Galaxy not found: {$galaxyIdentifier}");
-
             return Command::FAILURE;
         }
 
-        // Check if galaxy has warp gates
+        // Validate preconditions
         $gateCount = $galaxy->warpGates()->count();
-
-        if ($gateCount < 2) {
-            $this->error("Galaxy '{$galaxy->name}' must have warp gates before generating trading hubs.");
-            $this->info("Run: php artisan galaxy:generate-gates {$galaxy->id}");
-
+        if (! $this->validateGates($galaxy, $gateCount)) {
             return Command::FAILURE;
         }
 
-        // Check if minerals exist
         $mineralCount = Mineral::count();
-        if ($mineralCount === 0) {
-            $this->warn('No minerals found in the database. Trading hubs will be created but not stocked.');
-            $this->info('Run: php artisan db:seed --class=MineralSeeder');
-
-            if (! $this->confirm('Continue anyway?', false)) {
-                return Command::FAILURE;
-            }
+        if (! $this->validateMinerals($mineralCount)) {
+            return Command::FAILURE;
         }
 
-        // Delete existing hubs if regenerating
-        if ($this->option('regenerate')) {
-            $existingHubs = $galaxy->pointsOfInterest()
-                ->whereHas('tradingHub')
-                ->get();
+        // Handle regeneration
+        $this->handleRegenerate($galaxy);
 
-            $existingCount = $existingHubs->count();
-
-            if ($existingCount > 0) {
-                foreach ($existingHubs as $poi) {
-                    $poi->tradingHub()->delete();
-                }
-                $this->info("Deleted {$existingCount} existing trading hubs");
-            }
-        }
-
-        // Create generator with options
-        $generator = new TradingHubGenerator(
-            minGatesForHub: (int) $this->option('min-gates'),
-            salvageYardProbability: (float) $this->option('salvage-probability'),
-            hubSpawnProbability: (float) $this->option('hub-probability'),
-            minHubDistance: (int) $this->option('min-spacing')
-        );
-
-        // Generate trading hubs
+        // Generate hubs
+        $generator = $this->buildGenerator();
         $this->info("Generating trading hubs for galaxy: {$galaxy->name}");
         $this->info("Warp gates: {$gateCount}");
 
         $hubs = $generator->generateHubs($galaxy);
 
-        // Display summary
+        // Display results
+        $this->displayGenerationResults($hubs, $mineralCount);
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Resolve galaxy from argument or user selection.
+     */
+    private function resolveGalaxy(?string $galaxyIdentifier): ?Galaxy
+    {
+        if (! $galaxyIdentifier) {
+            $galaxies = Galaxy::all();
+            if ($galaxies->isEmpty()) {
+                $this->error('No galaxies found. Create a galaxy first.');
+                return null;
+            }
+
+            $choices = $galaxies->mapWithKeys(fn ($galaxy) => [$galaxy->id => "{$galaxy->name} (ID: {$galaxy->id})"])->toArray();
+            $galaxyId = $this->choice('Select a galaxy', $choices);
+            return Galaxy::find($galaxyId);
+        }
+
+        $galaxy = is_numeric($galaxyIdentifier)
+            ? Galaxy::find($galaxyIdentifier)
+            : Galaxy::where('name', $galaxyIdentifier)->first();
+
+        if (! $galaxy) {
+            $this->error("Galaxy not found: {$galaxyIdentifier}");
+        }
+
+        return $galaxy;
+    }
+
+    /**
+     * Validate that galaxy has sufficient warp gates.
+     */
+    private function validateGates(Galaxy $galaxy, int $gateCount): bool
+    {
+        if ($gateCount < 2) {
+            $this->error("Galaxy '{$galaxy->name}' must have warp gates before generating trading hubs.");
+            $this->info("Run: php artisan galaxy:generate-gates {$galaxy->id}");
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate that minerals are seeded in the database.
+     */
+    private function validateMinerals(int $mineralCount): bool
+    {
+        if ($mineralCount === 0) {
+            $this->warn('No minerals found in the database. Trading hubs will be created but not stocked.');
+            $this->info('Run: php artisan db:seed --class=MineralSeeder');
+
+            return $this->confirm('Continue anyway?', false);
+        }
+
+        return true;
+    }
+
+    /**
+     * Delete existing trading hubs if regenerate flag is set.
+     */
+    private function handleRegenerate(Galaxy $galaxy): void
+    {
+        if (! $this->option('regenerate')) {
+            return;
+        }
+
+        $existingHubs = $galaxy->pointsOfInterest()
+            ->whereHas('tradingHub')
+            ->get();
+
+        $existingCount = $existingHubs->count();
+        if ($existingCount > 0) {
+            foreach ($existingHubs as $poi) {
+                $poi->tradingHub()->delete();
+            }
+            $this->info("Deleted {$existingCount} existing trading hubs");
+        }
+    }
+
+    /**
+     * Build trading hub generator with command options.
+     */
+    private function buildGenerator(): TradingHubGenerator
+    {
+        return new TradingHubGenerator(
+            minGatesForHub: (int) $this->option('min-gates'),
+            salvageYardProbability: (float) $this->option('salvage-probability'),
+            hubSpawnProbability: (float) $this->option('hub-probability'),
+            minHubDistance: (int) $this->option('min-spacing')
+        );
+    }
+
+    /**
+     * Display generation results and statistics.
+     */
+    private function displayGenerationResults($hubs, int $mineralCount): void
+    {
         $totalHubs = $hubs->count();
 
         if ($totalHubs === 0) {
             $this->warn('No trading hubs generated. Try lowering --min-gates option.');
-
-            return Command::SUCCESS;
+            return;
         }
 
         $hubsByType = $hubs->groupBy('type');
@@ -127,7 +173,6 @@ class TradingHubGenerateCommand extends Command
         ];
 
         if ($mineralCount > 0) {
-            // Use single query to count all inventory items
             $hubIds = $hubs->pluck('id');
             $totalInventoryItems = \App\Models\TradingHubInventory::whereIn('trading_hub_id', $hubIds)->count();
             $tableData[] = ['Total Inventory Items', $totalInventoryItems];
@@ -136,29 +181,34 @@ class TradingHubGenerateCommand extends Command
 
         $this->table(['Metric', 'Value'], $tableData);
 
-        // Only show individual hubs if there are fewer than 50 (for large galaxies, skip the detail table)
         if ($totalHubs <= 50) {
-            $this->newLine();
-            $this->info('Trading Hubs Created:');
-            $hubTable = [];
-            foreach ($hubs as $hub) {
-                $hubTable[] = [
-                    $hub->name,
-                    $hub->type,
-                    $hub->gate_count,
-                    $hub->has_salvage_yard ? 'Yes' : 'No',
-                    $hub->inventories()->count(),
-                ];
-            }
-            $this->table(
-                ['Name', 'Type', 'Gates', 'Salvage', 'Minerals'],
-                $hubTable
-            );
+            $this->displayHubDetails($hubs);
         } else {
             $this->newLine();
             $this->info("(Skipping individual hub listing for {$totalHubs} hubs - too many to display)");
         }
+    }
 
-        return Command::SUCCESS;
+    /**
+     * Display detailed table of created hubs.
+     */
+    private function displayHubDetails($hubs): void
+    {
+        $this->newLine();
+        $this->info('Trading Hubs Created:');
+        $hubTable = [];
+        foreach ($hubs as $hub) {
+            $hubTable[] = [
+                $hub->name,
+                $hub->type,
+                $hub->gate_count,
+                $hub->has_salvage_yard ? 'Yes' : 'No',
+                $hub->inventories()->count(),
+            ];
+        }
+        $this->table(
+            ['Name', 'Type', 'Gates', 'Salvage', 'Minerals'],
+            $hubTable
+        );
     }
 }

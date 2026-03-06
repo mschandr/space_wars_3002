@@ -56,4 +56,52 @@ return [
         'enabled'        => false,             // feature flag (off until Phase 9)
         'tick_interval'  => 300,               // seconds between NPC trade cycles
     ],
+
+    /*
+     * Reserve policies: ensure minimum inventory + NPC fallback
+     * Prevents progression-blocking scenarios where all stock is purchased
+     */
+    'reserves' => [
+        'enabled' => false,                    // Enable after Phase 3 testing (v2)
+        'policies' => [
+            // Default policy for all commodities
+            'default' => [
+                'min_qty' => 5000,
+                'npc_price_multiplier' => 1.5,
+            ],
+            // Per-commodity overrides
+            'IRON' => [
+                'min_qty' => 10000,
+                'npc_price_multiplier' => 1.25,
+            ],
+            'TITANIUM' => [
+                'min_qty' => 8000,
+                'npc_price_multiplier' => 1.35,
+            ],
+        ],
+    ],
+
+    /*
+     * Anti-cornering mechanics: prevent market monopolization
+     * Applies volume fees, purchase limits, and other safeguards
+     */
+    'anti_cornering' => [
+        'enabled' => false,                    // Enable in v1.5 (with reserves)
+        'volume_fee' => [
+            'threshold' => 500,                // Units above this trigger fee
+            'fee_per_unit' => 0.001,           // Additional spread per unit
+            'max_additional_spread' => 0.25,   // Cap on spread increase
+        ],
+        'max_purchase_per_tick' => null,       // null = disabled, or integer for limit
+        'purchase_cooldown_seconds' => null,   // null = disabled, or integer for cooldown
+    ],
+
+    /*
+     * Pricing fallback for demand estimation
+     * Handles new commodities or zero-demand edge cases
+     */
+    'demand_estimation' => [
+        'fallback_method' => 'base_price_ratio',  // 'base_price_ratio' or 'static'
+        'fallback_daily_demand' => 100,           // Units/day if ratio method fails
+    ],
 ];

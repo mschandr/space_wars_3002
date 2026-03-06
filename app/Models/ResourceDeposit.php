@@ -3,17 +3,19 @@
 namespace App\Models;
 
 use App\Models\Traits\HasUuid;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
 
 class ResourceDeposit extends Model
 {
-    use HasUuid;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',
         'galaxy_id',
+        'trading_hub_id',
         'commodity_id',
         'quality',
         'max_extraction_per_tick',
@@ -49,6 +51,14 @@ class ResourceDeposit extends Model
     public function commodity(): BelongsTo
     {
         return $this->belongsTo(Commodity::class);
+    }
+
+    /**
+     * Get the trading hub (optional)
+     */
+    public function tradingHub(): BelongsTo
+    {
+        return $this->belongsTo(TradingHub::class);
     }
 
     /**

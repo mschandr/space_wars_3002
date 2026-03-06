@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use App\Models\Traits\HasUuid;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Blueprint extends Model
 {
-    use HasUuid;
+    use HasFactory, HasUuid;
 
     protected $fillable = [
         'uuid',

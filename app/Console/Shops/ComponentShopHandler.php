@@ -16,88 +16,26 @@ class ComponentShopHandler extends BaseShopHandler
     public function show(Player $player, TradingHub $tradingHub): void
     {
         $this->resetTerminal();
-
         $upgradeService = app(ComponentUpgradeService::class);
 
         $running = true;
         while ($running) {
-            // Reload player and ship data to get latest values
             $player->refresh();
             $player->load('activeShip.ship', 'activeShip.components.component');
             $ship = $player->activeShip;
 
             $this->clearScreen();
-
-            // Header
             $this->renderShopHeader('COMPONENT SHOP - UPGRADES');
+            $this->displayPlayerInfo($tradingHub, $ship, $player);
 
-            // Location and player info
-            $this->line($this->colorize('  Trading Hub: ', 'label').$this->colorize($tradingHub->name, 'trade'));
-            $this->line($this->colorize('  Ship: ', 'label').$ship->name);
-            $this->line($this->colorize('  Credits Available: ', 'label').
-                       $this->colorize(number_format($player->credits, 2), 'trade'));
-            $this->newLine();
-
-            // Group installed components by slot type
-            $components = $ship->components->sortBy('slot_index');
-            $upgradeableComponents = [];
-            $displayIndex = 1;
-
-            $this->line($this->colorize('  INSTALLED COMPONENTS:', 'header'));
-            $this->newLine();
-
-            foreach (SlotType::cases() as $slotType) {
-                $slotComponents = $components->filter(
-                    fn ($c) => ($c->slot_type instanceof SlotType ? $c->slot_type : SlotType::tryFrom($c->slot_type)) === $slotType
-                );
-
-                if ($slotComponents->isEmpty()) {
-                    continue;
-                }
-
-                $this->line($this->colorize('  '.$slotType->label().':', 'dim'));
-
-                foreach ($slotComponents as $installed) {
-                    $info = $upgradeService->getUpgradeInfo($installed);
-                    $upgradeableComponents[$displayIndex] = $installed;
-
-                    $statusColor = $info['can_upgrade'] ? 'highlight' : 'dim';
-
-                    $line = '    '.$this->colorize("[$displayIndex]", 'label').' '.
-                            $this->colorize($installed->component->name, $info['can_upgrade'] ? 'header' : 'dim');
-
-                    $line .= '  '.$this->colorize('Lvl ', 'dim').
-                             $this->colorize($info['current_level'], 'highlight').
-                             $this->colorize('/'.$info['max_level'], 'dim');
-
-                    if ($info['can_upgrade']) {
-                        $line .= '  '.$this->colorize('Cost: ', 'dim').
-                                 $this->colorize(number_format($info['upgrade_cost']), 'trade').' credits';
-                    } else {
-                        $line .= '  '.$this->colorize('[MAX]', 'dim');
-                    }
-
-                    $this->line($line);
-                    $displayIndex++;
-                }
-
-                $this->newLine();
-            }
+            [$upgradeableComponents, $maxIndex] = $this->displayInstalledComponents($ship, $upgradeService);
 
             if (empty($upgradeableComponents)) {
                 $this->line($this->colorize('  No components installed on this ship.', 'dim'));
                 $this->newLine();
             }
 
-            $maxIndex = $displayIndex - 1;
-
-            $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
-            $this->newLine();
-            $this->line($this->colorize('  [1-'.$maxIndex.']', 'label').' - Upgrade component    '.
-                       $this->colorize('[ESC/q]', 'label').' - Back to main interface');
-            $this->newLine();
-            $this->renderBorder();
-
+            $this->displayPrompt($maxIndex);
             $char = $this->readChar();
 
             if ($this->isQuitKey($char)) {
@@ -111,6 +49,91 @@ class ComponentShopHandler extends BaseShopHandler
         }
 
         $this->resetTerminal();
+    }
+
+    /**
+     * Display player and trading hub header.
+     */
+    private function displayPlayerInfo(TradingHub $tradingHub, $ship, Player $player): void
+    {
+        $this->line($this->colorize('  Trading Hub: ', 'label').$this->colorize($tradingHub->name, 'trade'));
+        $this->line($this->colorize('  Ship: ', 'label').$ship->name);
+        $this->line($this->colorize('  Credits Available: ', 'label').
+                   $this->colorize(number_format($player->credits, 2), 'trade'));
+        $this->newLine();
+    }
+
+    /**
+     * Display installed components grouped by slot type.
+     *
+     * @return array [upgradeableComponents, maxIndex]
+     */
+    private function displayInstalledComponents($ship, ComponentUpgradeService $upgradeService): array
+    {
+        $components = $ship->components->sortBy('slot_index');
+        $upgradeableComponents = [];
+        $displayIndex = 1;
+
+        $this->line($this->colorize('  INSTALLED COMPONENTS:', 'header'));
+        $this->newLine();
+
+        foreach (SlotType::cases() as $slotType) {
+            $slotComponents = $components->filter(
+                fn ($c) => ($c->slot_type instanceof SlotType ? $c->slot_type : SlotType::tryFrom($c->slot_type)) === $slotType
+            );
+
+            if ($slotComponents->isEmpty()) {
+                continue;
+            }
+
+            $this->line($this->colorize('  '.$slotType->label().':', 'dim'));
+
+            foreach ($slotComponents as $installed) {
+                $info = $upgradeService->getUpgradeInfo($installed);
+                $upgradeableComponents[$displayIndex] = $installed;
+                $this->displayComponentLine($displayIndex, $installed, $info);
+                $displayIndex++;
+            }
+
+            $this->newLine();
+        }
+
+        return [$upgradeableComponents, $displayIndex - 1];
+    }
+
+    /**
+     * Display a single component listing line.
+     */
+    private function displayComponentLine(int $index, PlayerShipComponent $installed, array $info): void
+    {
+        $line = '    '.$this->colorize("[$index]", 'label').' '.
+                $this->colorize($installed->component->name, $info['can_upgrade'] ? 'header' : 'dim');
+
+        $line .= '  '.$this->colorize('Lvl ', 'dim').
+                 $this->colorize($info['current_level'], 'highlight').
+                 $this->colorize('/'.$info['max_level'], 'dim');
+
+        if ($info['can_upgrade']) {
+            $line .= '  '.$this->colorize('Cost: ', 'dim').
+                     $this->colorize(number_format($info['upgrade_cost']), 'trade').' credits';
+        } else {
+            $line .= '  '.$this->colorize('[MAX]', 'dim');
+        }
+
+        $this->line($line);
+    }
+
+    /**
+     * Display component selection prompt.
+     */
+    private function displayPrompt(int $maxIndex): void
+    {
+        $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+        $this->newLine();
+        $this->line($this->colorize('  [1-'.$maxIndex.']', 'label').' - Upgrade component    '.
+                   $this->colorize('[ESC/q]', 'label').' - Back to main interface');
+        $this->newLine();
+        $this->renderBorder();
     }
 
     /**

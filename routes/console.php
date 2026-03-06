@@ -24,6 +24,19 @@ Artisan::command('inspire', function () {
 |
 */
 
+// Economy Tick - Every 5 minutes
+// Processes mining extraction, shock decay, and refreshes stats cache
+Schedule::command('economy:tick')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->onSuccess(function () {
+        \Log::info('Economy tick completed successfully');
+    })
+    ->onFailure(function () {
+        \Log::error('Economy tick failed');
+    });
+
 // Fuel Regeneration - Every 5 minutes
 // Regenerates fuel for all player ships based on time elapsed
 Schedule::command('fuel:regenerate')

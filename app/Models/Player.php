@@ -97,6 +97,11 @@ class Player extends Model
         return $this->hasMany(CombatParticipant::class);
     }
 
+    public function constructionJobs(): HasMany
+    {
+        return $this->hasMany(ConstructionJob::class);
+    }
+
     public function cargos(): HasMany
     {
         // Get cargo from all player ships (primarily the active ship)

@@ -41,124 +41,177 @@ class ShipShopHandler extends BaseShopHandler
 
             $this->clearScreen();
 
-            // Header
-            $this->renderShopHeader('SHIPYARD - NEW VESSEL SALES');
-
-            // Location and player info
-            $this->line($this->colorize('  Trading Hub: ', 'label').$this->colorize($tradingHub->name, 'trade'));
-
-            if ($currentShip) {
-                $this->line($this->colorize('  Current Ship: ', 'label').$currentShip->name.
-                           ' ('.$this->colorize($currentShip->ship->name, 'dim').')');
-                $this->line($this->colorize('  Trade-In Value: ', 'label').
-                           $this->colorize(number_format($this->getTradeInValue($currentShip), 2), 'trade').' credits');
-            } else {
-                $this->line($this->colorize('  Current Ship: ', 'label').$this->colorize('NONE', 'pirate'));
-                $this->line($this->colorize('  ⚠ You must purchase a ship to continue!', 'pirate'));
-            }
-
-            $this->line($this->colorize('  Credits Available: ', 'label').
-                       $this->colorize(number_format($player->credits, 2), 'trade'));
-            $this->newLine();
-
+            // Check if shipyard is empty
             if ($availableShips->isEmpty()) {
-                $this->line($this->colorize('  This trading hub does not have a shipyard.', 'dim'));
-                $this->newLine();
-                $this->waitForAnyKey('Press any key to return...');
-
+                $this->displayEmptyShipyard();
                 return;
             }
 
-            // Display available ships
-            $this->line($this->colorize('  AVAILABLE SHIPS:', 'header'));
-            $this->newLine();
-
-            foreach ($availableShips as $index => $inventory) {
-                $ship = $inventory->ship;
-                $number = $index + 1;
-                $tradeInValue = $currentShip ? $this->getTradeInValue($currentShip) : 0;
-                $netCost = $inventory->current_price - $tradeInValue;
-                $canAfford = $player->credits >= $netCost;
-
-                $line = '  '.$this->colorize("[$number]", 'label').' '.
-                        $this->colorize($ship->name, 'header').' ';
-
-                // Ship stats in compact format
-                $stats = sprintf(
-                    'Hull:%d Weapons:%d Speed:%d Cargo:%d',
-                    $ship->hull_strength,
-                    $ship->weapon_slots * 15, // Approximate weapons value
-                    $ship->speed,
-                    $ship->cargo_capacity
-                );
-
-                $line .= $this->colorize($stats, 'dim');
-                $this->line($line);
-
-                // Second line with pricing
-                $priceLine = '      '.
-                            $this->colorize('Price: ', 'dim').
-                            $this->colorize(number_format($inventory->current_price, 2), 'trade').' credits';
-
-                if ($currentShip) {
-                    $priceLine .= '  '.
-                                $this->colorize('With Trade-In: ', 'dim').
-                                $this->colorize(number_format($netCost, 2), $canAfford ? 'trade' : 'pirate').' credits';
-                }
-
-                $priceLine .= '  ';
-
-                if (! $canAfford) {
-                    $priceLine .= $this->colorize('[INSUFFICIENT FUNDS]', 'pirate');
-                }
-
-                $priceLine .= '  '.$this->colorize('Stock: '.$inventory->quantity, 'dim');
-
-                $this->line($priceLine);
-
-                // Special attributes
-                if ($ship->attributes['is_carrier'] ?? false) {
-                    $this->line('      '.$this->colorize('✈ CARRIER: Can dock '.
-                               ($ship->attributes['fighter_capacity'] ?? 0).' fighters', 'highlight'));
-                }
-
-                if (! empty($ship->requirements)) {
-                    $reqText = $this->formatRequirements($ship->requirements, $player);
-                    $this->line('      '.$reqText);
-                }
-
-                // Shipyard owner commentary: hand-written overrides dynamic
-                $pitch = ! empty($ship->sales_pitches)
-                    ? $ship->getSalesPitch($currentShip !== null)
-                    : $this->commentaryService->generateShipCommentary(
-                        $ship,
-                        (float) $inventory->current_price,
-                        $player
-                    );
-                if ($pitch) {
-                    $this->line('      '.$this->colorize('"'.$this->wrapText($pitch, $this->termWidth - 8).'"', 'dim'));
-                }
-
-                $this->newLine();
-            }
-
-            $this->renderSeparator();
-            $this->newLine();
-            $this->line($this->colorize('  Select ship [1-'.$availableShips->count().'] to purchase, or [q] to exit: ', 'label'));
-
+            // Render UI and get user input
+            $this->renderShopInterface($tradingHub, $currentShip, $player, $availableShips);
             $input = trim(fgets(STDIN));
 
+            // Handle user input
             if (strtolower($input) === 'q') {
                 $running = false;
-
-                continue;
-            }
-
-            if (is_numeric($input) && $input >= 1 && $input <= $availableShips->count()) {
+            } elseif (is_numeric($input) && $input >= 1 && $input <= $availableShips->count()) {
                 $selectedInventory = $availableShips[$input - 1];
                 $this->purchaseShip($player, $currentShip, $selectedInventory, $tradingHub);
             }
         }
+    }
+
+    /**
+     * Display message when shipyard is empty.
+     */
+    private function displayEmptyShipyard(): void
+    {
+        $this->renderShopHeader('SHIPYARD - NEW VESSEL SALES');
+        $this->line($this->colorize('  This trading hub does not have a shipyard.', 'dim'));
+        $this->newLine();
+        $this->waitForAnyKey('Press any key to return...');
+    }
+
+    /**
+     * Render the complete shop interface.
+     */
+    private function renderShopInterface($tradingHub, ?$currentShip, Player $player, $availableShips): void
+    {
+        $this->renderShopHeader('SHIPYARD - NEW VESSEL SALES');
+        $this->displayPlayerInfo($tradingHub, $currentShip, $player);
+        $this->displayAvailableShips($availableShips, $currentShip, $player);
+        $this->renderPrompt($availableShips);
+    }
+
+    /**
+     * Display player location and current ship information.
+     */
+    private function displayPlayerInfo($tradingHub, ?$currentShip, Player $player): void
+    {
+        $this->line($this->colorize('  Trading Hub: ', 'label').$this->colorize($tradingHub->name, 'trade'));
+
+        if ($currentShip) {
+            $this->line($this->colorize('  Current Ship: ', 'label').$currentShip->name.
+                       ' ('.$this->colorize($currentShip->ship->name, 'dim').')');
+            $this->line($this->colorize('  Trade-In Value: ', 'label').
+                       $this->colorize(number_format($this->getTradeInValue($currentShip), 2), 'trade').' credits');
+        } else {
+            $this->line($this->colorize('  Current Ship: ', 'label').$this->colorize('NONE', 'pirate'));
+            $this->line($this->colorize('  ⚠ You must purchase a ship to continue!', 'pirate'));
+        }
+
+        $this->line($this->colorize('  Credits Available: ', 'label').
+                   $this->colorize(number_format($player->credits, 2), 'trade'));
+        $this->newLine();
+    }
+
+    /**
+     * Display list of available ships for purchase.
+     */
+    private function displayAvailableShips($availableShips, ?$currentShip, Player $player): void
+    {
+        $this->line($this->colorize('  AVAILABLE SHIPS:', 'header'));
+        $this->newLine();
+
+        foreach ($availableShips as $index => $inventory) {
+            $this->displayShipListing($inventory, $index, $currentShip, $player);
+        }
+    }
+
+    /**
+     * Display a single ship listing.
+     */
+    private function displayShipListing($inventory, int $index, ?$currentShip, Player $player): void
+    {
+        $ship = $inventory->ship;
+        $number = $index + 1;
+        $tradeInValue = $currentShip ? $this->getTradeInValue($currentShip) : 0;
+        $netCost = $inventory->current_price - $tradeInValue;
+        $canAfford = $player->credits >= $netCost;
+
+        // Ship name and stats
+        $line = '  '.$this->colorize("[$number]", 'label').' '.$this->colorize($ship->name, 'header').' ';
+        $stats = sprintf('Hull:%d Weapons:%d Speed:%d Cargo:%d',
+            $ship->hull_strength,
+            $ship->weapon_slots * 15,
+            $ship->speed,
+            $ship->cargo_capacity
+        );
+        $this->line($line.$this->colorize($stats, 'dim'));
+
+        // Pricing information
+        $this->displayShipPricing($inventory, $currentShip, $netCost, $canAfford);
+
+        // Special attributes
+        $this->displayShipAttributes($ship);
+
+        // Ship commentary
+        $this->displayShipCommentary($ship, $inventory->current_price, $currentShip !== null, $player);
+
+        $this->newLine();
+    }
+
+    /**
+     * Display ship pricing information.
+     */
+    private function displayShipPricing($inventory, ?$currentShip, float $netCost, bool $canAfford): void
+    {
+        $priceLine = '      '.$this->colorize('Price: ', 'dim').
+                    $this->colorize(number_format($inventory->current_price, 2), 'trade').' credits';
+
+        if ($currentShip) {
+            $priceLine .= '  '.$this->colorize('With Trade-In: ', 'dim').
+                        $this->colorize(number_format($netCost, 2), $canAfford ? 'trade' : 'pirate').' credits';
+        }
+
+        $priceLine .= '  ';
+
+        if (! $canAfford) {
+            $priceLine .= $this->colorize('[INSUFFICIENT FUNDS]', 'pirate');
+        }
+
+        $priceLine .= '  '.$this->colorize('Stock: '.$inventory->quantity, 'dim');
+        $this->line($priceLine);
+    }
+
+    /**
+     * Display special attributes for a ship.
+     */
+    private function displayShipAttributes($ship): void
+    {
+        if ($ship->attributes['is_carrier'] ?? false) {
+            $this->line('      '.$this->colorize('✈ CARRIER: Can dock '.
+                       ($ship->attributes['fighter_capacity'] ?? 0).' fighters', 'highlight'));
+        }
+
+        if (! empty($ship->requirements)) {
+            $reqText = $this->formatRequirements($ship->requirements, $player ?? null);
+            $this->line('      '.$reqText);
+        }
+    }
+
+    /**
+     * Display ship sales commentary.
+     */
+    private function displayShipCommentary($ship, float $price, bool $hasCurrentShip, Player $player): void
+    {
+        $pitch = ! empty($ship->sales_pitches)
+            ? $ship->getSalesPitch($hasCurrentShip)
+            : $this->commentaryService->generateShipCommentary($ship, $price, $player);
+
+        if ($pitch) {
+            $this->line('      '.$this->colorize('"'.$this->wrapText($pitch, $this->termWidth - 8).'"', 'dim'));
+        }
+    }
+
+    /**
+     * Render input prompt.
+     */
+    private function renderPrompt($availableShips): void
+    {
+        $this->renderSeparator();
+        $this->newLine();
+        $this->line($this->colorize('  Select ship [1-'.$availableShips->count().'] to purchase, or [q] to exit: ', 'label'));
     }
 
     /**
