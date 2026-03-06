@@ -250,103 +250,108 @@ class LocationController extends BaseApiController
     private function getFacilitiesInfo(Player $player, PointOfInterest $poi, int $scanLevel, ?\Illuminate\Support\Collection $children = null, ?\Illuminate\Support\Collection $gates = null): array
     {
         $facilities = [];
+        $gates = $gates ?? $this->loadGates($poi);
+        $children = $children ?? $poi->children()->get();
 
-        // Use pre-loaded gates or load both directions
-        if ($gates === null) {
-            $outgoing = $poi->outgoingGates()
-                ->where('is_hidden', false)
-                ->where('status', 'active')
-                ->with('destinationPoi')
-                ->get();
-
-            $incoming = $poi->incomingGates()
-                ->where('is_hidden', false)
-                ->where('status', 'active')
-                ->with('sourcePoi')
-                ->get();
-
-            $gates = $outgoing->merge($incoming);
-        }
-
-        // Use bulk check instead of N individual queries
-        $gateIds = $gates->pluck('id')->toArray();
-        $knownLanes = $this->laneKnowledgeService->bulkKnowsLane($player, $gateIds);
-
-        $knownGates = [];
-        foreach ($gates as $gate) {
-            $knowsLane = $knownLanes[$gate->id] ?? false;
-
-            // For outgoing gates the other end is destinationPoi;
-            // for incoming gates the other end is sourcePoi
-            $isOutgoing = $gate->source_poi_id === $poi->id;
-            $otherEnd = $isOutgoing ? $gate->destinationPoi : $gate->sourcePoi;
-
-            if ($knowsLane || $poi->is_inhabited) {
-                $knownGates[$gate->uuid] = [
-                    'destination_uuid' => $otherEnd?->uuid,
-                    'destination_name' => $otherEnd?->name ?? 'Unknown',
-                    'distance' => round($gate->distance ?? $gate->calculateDistance(), 1),
-                ];
-            } else {
-                // Show gate exists but destination unknown
-                $knownGates[$gate->uuid] = [
-                    'destination_uuid' => null,
-                    'destination_name' => 'Unknown destination',
-                    'distance' => null,
-                ];
-            }
-        }
-
+        $knownGates = $this->buildGatesInfo($player, $poi, $gates);
         if (! empty($knownGates)) {
             $facilities['gates'] = $knownGates;
             $facilities['gate_count'] = count($knownGates);
         }
 
-        // Services available at this location
-        $services = [];
-
-        // Trading hub
-        if ($poi->tradingHub && $poi->tradingHub->is_active) {
-            $services[] = 'trading_hub';
-        }
-
-        // Stellar cartographer
-        if ($poi->stellarCartographer) {
-            $services[] = 'cartography';
-        }
-
-        // Ship shop
-        if ($poi->shipShop && $poi->shipShop->is_active) {
-            $services[] = 'ship_shop';
-        }
-
-        // Repair shop
-        if ($poi->repairShop && $poi->repairShop->is_active) {
-            $services[] = 'repair_yard';
-        }
-
-        // Plans shop
-        if ($poi->plansShop && $poi->plansShop->is_active) {
-            $services[] = 'plans_shop';
-        }
-
-        // Salvage yard (check children for derelicts - use pre-loaded collection)
-        $children = $children ?? $poi->children()->get();
-        $hasDerelicts = $children->contains(fn ($c) => $c->type === PointOfInterestType::DERELICT);
-        if ($hasDerelicts) {
-            $services[] = 'salvage_yard';
-        }
-
+        $services = $this->buildServicesInfo($poi, $children);
         if (! empty($services)) {
             $facilities['services'] = $services;
         }
 
-        // Orbital defenses (if scan level high enough)
         if ($scanLevel >= 4 && $poi->is_fortified) {
             $facilities['orbital_defenses'] = $this->getOrbitalDefenses($poi, $children);
         }
 
         return $facilities;
+    }
+
+    private function loadGates(PointOfInterest $poi): \Illuminate\Support\Collection
+    {
+        $outgoing = $poi->outgoingGates()
+            ->where('is_hidden', false)
+            ->where('status', 'active')
+            ->with('destinationPoi')
+            ->get();
+
+        $incoming = $poi->incomingGates()
+            ->where('is_hidden', false)
+            ->where('status', 'active')
+            ->with('sourcePoi')
+            ->get();
+
+        return $outgoing->merge($incoming);
+    }
+
+    private function buildGatesInfo(Player $player, PointOfInterest $poi, \Illuminate\Support\Collection $gates): array
+    {
+        if ($gates->isEmpty()) {
+            return [];
+        }
+
+        $gateIds = $gates->pluck('id')->toArray();
+        $knownLanes = $this->laneKnowledgeService->bulkKnowsLane($player, $gateIds);
+
+        $knownGates = [];
+        foreach ($gates as $gate) {
+            $knownGates[$gate->uuid] = $this->buildGateEntry($gate, $poi, $knownLanes);
+        }
+
+        return $knownGates;
+    }
+
+    private function buildGateEntry($gate, PointOfInterest $poi, array $knownLanes): array
+    {
+        $knowsLane = $knownLanes[$gate->id] ?? false;
+        $isOutgoing = $gate->source_poi_id === $poi->id;
+        $otherEnd = $isOutgoing ? $gate->destinationPoi : $gate->sourcePoi;
+
+        if ($knowsLane || $poi->is_inhabited) {
+            return [
+                'destination_uuid' => $otherEnd?->uuid,
+                'destination_name' => $otherEnd?->name ?? 'Unknown',
+                'distance' => round($gate->distance ?? $gate->calculateDistance(), 1),
+            ];
+        }
+
+        return [
+            'destination_uuid' => null,
+            'destination_name' => 'Unknown destination',
+            'distance' => null,
+        ];
+    }
+
+    private function buildServicesInfo(PointOfInterest $poi, \Illuminate\Support\Collection $children): array
+    {
+        $services = [];
+
+        if ($poi->tradingHub && $poi->tradingHub->is_active) {
+            $services[] = 'trading_hub';
+        }
+        if ($poi->stellarCartographer) {
+            $services[] = 'cartography';
+        }
+        if ($poi->shipShop && $poi->shipShop->is_active) {
+            $services[] = 'ship_shop';
+        }
+        if ($poi->repairShop && $poi->repairShop->is_active) {
+            $services[] = 'repair_yard';
+        }
+        if ($poi->plansShop && $poi->plansShop->is_active) {
+            $services[] = 'plans_shop';
+        }
+
+        $hasDerelicts = $children->contains(fn ($c) => $c->type === PointOfInterestType::DERELICT);
+        if ($hasDerelicts) {
+            $services[] = 'salvage_yard';
+        }
+
+        return $services;
     }
 
     /**

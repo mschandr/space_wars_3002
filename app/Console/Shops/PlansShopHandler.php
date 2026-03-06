@@ -14,80 +14,123 @@ class PlansShopHandler extends BaseShopHandler
     public function show(Player $player, TradingHub $tradingHub): void
     {
         $this->resetTerminal();
-
-        // Load available plans for this hub
         $plans = $tradingHub->plans;
 
         if ($plans->isEmpty()) {
-            $this->clearScreen();
-            $this->error('No plans available at this trading hub.');
-            $this->newLine();
-            $this->waitForAnyKey();
-
+            $this->displayNoPlansAvailable();
             return;
         }
 
         $running = true;
         while ($running) {
-            // Reload player data to get latest values
             $player->refresh();
             $player->load('plans');
 
             $this->clearScreen();
-
-            // Header
             $this->renderShopHeader('UPGRADE PLANS SHOP');
+            $this->displayPlayerInfo($tradingHub, $player);
 
-            $this->line('  Trading Hub: '.$this->colorize($tradingHub->name, 'trade'));
-            $this->line('  Credits Available: '.$this->colorize(number_format($player->credits, 2), 'highlight'));
-            $this->newLine();
-
-            $this->line($this->colorize('  AVAILABLE PLANS:', 'header'));
-            $this->newLine();
-
-            // Display plans (limit to first 9 for keyboard selection)
             $displayPlans = $plans->take(9);
-            foreach ($displayPlans as $index => $plan) {
-                $number = $index + 1;
-                $ownedCount = $player->getPlanCount($plan->id);
-                $currentBonus = $ownedCount * $plan->additional_levels;
-                $projectedBonus = $currentBonus + $plan->additional_levels;
+            $this->displayAvailablePlans($player, $displayPlans);
+            $running = $this->handlePlanSelection($player, $displayPlans, $tradingHub);
+        }
+    }
 
-                $this->line($this->colorize("  [{$number}] ", 'label').$this->colorize(strtoupper($plan->getFullName()), 'trade'));
-                $this->line('      '.$plan->description);
-                $this->line('      '.$this->colorize('Grants: +'.$plan->additional_levels.' '.$plan->getComponentDisplayName().' upgrade levels', 'highlight'));
-                $this->line('      '.$this->colorize('Price: '.number_format($plan->price, 2).' credits', 'dim'));
+    /**
+     * Display message when no plans available.
+     */
+    private function displayNoPlansAvailable(): void
+    {
+        $this->clearScreen();
+        $this->error('No plans available at this trading hub.');
+        $this->newLine();
+        $this->waitForAnyKey();
+    }
 
-                if ($plan->requirements && isset($plan->requirements['min_level'])) {
-                    $this->line('      '.$this->colorize('Requires: Level '.$plan->requirements['min_level'], 'dim'));
-                }
+    /**
+     * Display player and hub info.
+     */
+    private function displayPlayerInfo(TradingHub $tradingHub, Player $player): void
+    {
+        $this->line('  Trading Hub: '.$this->colorize($tradingHub->name, 'trade'));
+        $this->line('  Credits Available: '.$this->colorize(number_format($player->credits, 2), 'highlight'));
+        $this->newLine();
+    }
 
-                if ($ownedCount > 0) {
-                    $this->line('      '.$this->colorize("You own: {$ownedCount}x (Total bonus: +{$currentBonus}, becomes +{$projectedBonus})", 'highlight'));
-                } else {
-                    $this->line('      '.$this->colorize("You own: 0 (Total bonus: +0, becomes +{$projectedBonus})", 'dim'));
-                }
+    /**
+     * Display available plans.
+     */
+    private function displayAvailablePlans(Player $player, $displayPlans): void
+    {
+        $this->line($this->colorize('  AVAILABLE PLANS:', 'header'));
+        $this->newLine();
 
-                $this->newLine();
-            }
+        foreach ($displayPlans as $index => $plan) {
+            $this->displayPlanEntry($index, $plan, $player);
+        }
+    }
 
-            $this->renderSeparator();
-            $this->line('  '.$this->colorize('[1-9]', 'label').' Select plan  |  '.$this->colorize('[q]', 'label').' Return to interface');
-            $this->renderBorder();
+    /**
+     * Display a single plan entry.
+     */
+    private function displayPlanEntry(int $index, Plan $plan, Player $player): void
+    {
+        $number = $index + 1;
+        $ownedCount = $player->getPlanCount($plan->id);
+        $currentBonus = $ownedCount * $plan->additional_levels;
+        $projectedBonus = $currentBonus + $plan->additional_levels;
 
-            // Get input
-            $char = $this->readChar();
+        $this->line($this->colorize("  [{$number}] ", 'label').$this->colorize(strtoupper($plan->getFullName()), 'trade'));
+        $this->line('      '.$plan->description);
+        $this->line('      '.$this->colorize('Grants: +'.$plan->additional_levels.' '.$plan->getComponentDisplayName().' upgrade levels', 'highlight'));
+        $this->line('      '.$this->colorize('Price: '.number_format($plan->price, 2).' credits', 'dim'));
 
-            if ($this->isQuitKey($char)) {
-                $running = false;
-            } elseif (is_numeric($char) && $char >= '1' && $char <= '9') {
-                $selectedIndex = (int) $char - 1;
-                if ($selectedIndex < $displayPlans->count()) {
-                    $selectedPlan = $displayPlans[$selectedIndex];
-                    $this->purchasePlanFlow($player, $selectedPlan, $tradingHub);
-                }
+        if ($plan->requirements && isset($plan->requirements['min_level'])) {
+            $this->line('      '.$this->colorize('Requires: Level '.$plan->requirements['min_level'], 'dim'));
+        }
+
+        $this->displayPlanOwnership($ownedCount, $currentBonus, $projectedBonus);
+        $this->newLine();
+    }
+
+    /**
+     * Display plan ownership info.
+     */
+    private function displayPlanOwnership(int $ownedCount, int $currentBonus, int $projectedBonus): void
+    {
+        if ($ownedCount > 0) {
+            $this->line('      '.$this->colorize("You own: {$ownedCount}x (Total bonus: +{$currentBonus}, becomes +{$projectedBonus})", 'highlight'));
+        } else {
+            $this->line('      '.$this->colorize("You own: 0 (Total bonus: +0, becomes +{$projectedBonus})", 'dim'));
+        }
+    }
+
+    /**
+     * Handle plan selection input.
+     *
+     * @return bool Whether to continue running
+     */
+    private function handlePlanSelection(Player $player, $displayPlans, TradingHub $tradingHub): bool
+    {
+        $this->renderSeparator();
+        $this->line('  '.$this->colorize('[1-9]', 'label').' Select plan  |  '.$this->colorize('[q]', 'label').' Return to interface');
+        $this->renderBorder();
+
+        $char = $this->readChar();
+
+        if ($this->isQuitKey($char)) {
+            return false;
+        }
+
+        if (is_numeric($char) && $char >= '1' && $char <= '9') {
+            $selectedIndex = (int) $char - 1;
+            if ($selectedIndex < $displayPlans->count()) {
+                $selectedPlan = $displayPlans[$selectedIndex];
+                $this->purchasePlanFlow($player, $selectedPlan, $tradingHub);
             }
         }
+
+        return true;
     }
 
     /**

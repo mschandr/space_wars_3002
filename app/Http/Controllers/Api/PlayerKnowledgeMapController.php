@@ -28,6 +28,57 @@ class PlayerKnowledgeMapController extends BaseApiController
      */
     public function index(Request $request, string $playerUuid): JsonResponse
     {
+        // Validate and authorize player
+        $player = $this->validatePlayer($playerUuid, $request);
+        if ($player instanceof JsonResponse) {
+            return $player;
+        }
+
+        $currentLocation = $player->currentLocation;
+
+        // Load all required data
+        $sectorId = $this->resolveSectorId($request);
+        $knowledgeMap = $this->knowledgeService->getKnowledgeMap($player, $sectorId);
+        $pois = $this->loadPoiData(array_keys($knowledgeMap));
+        $knownLanes = $this->laneKnowledgeService->getKnownLanesInGalaxy($player, $currentLocation->galaxy_id);
+        $scanLevels = $this->loadScanLevels($player, array_keys($knowledgeMap));
+
+        // Build response components
+        $sensorLevel = $player->activeShip?->sensors ?? 1;
+        $sensorRange = SensorRangeCalculator::getRangeLY($sensorLevel);
+        $laneConnectedPoiIds = $this->getLaneConnectedPoiIds($currentLocation, $knownLanes, $player->activeShip);
+
+        $knownSystems = [];
+        $statistics = ['total_known' => 0, 'by_level' => [], 'known_lanes' => 0, 'pirate_warnings' => 0];
+
+        // Build system entries
+        foreach ($knowledgeMap as $poiId => $entry) {
+            $poi = $pois->get($poiId);
+            if (! $poi) {
+                continue;
+            }
+
+            $system = $this->buildSystemEntry($poi, $entry, $laneConnectedPoiIds, $scanLevels, $sensorLevel);
+            $knownSystems[] = $system;
+            $statistics['total_known']++;
+            $statistics['by_level'][$entry['knowledge_level']] = ($statistics['by_level'][$entry['knowledge_level']] ?? 0) + 1;
+            if (isset($system['pirate_warning'])) {
+                $statistics['pirate_warnings']++;
+            }
+        }
+
+        // Build lanes response
+        $knownLanesResponse = $this->buildLanesResponse($currentLocation, $knownLanes, $player->activeShip);
+        $statistics['known_lanes'] = count($knownLanesResponse);
+
+        // Build danger zones
+        $dangerZones = $this->buildDangerZones($knownSystems);
+
+        return $this->success($this->buildFinalResponse($player, $currentLocation, $sensorLevel, $sensorRange, $knownSystems, $knownLanesResponse, $dangerZones, $statistics));
+    }
+
+    private function validatePlayer(string $playerUuid, Request $request): Player|JsonResponse
+    {
         $player = Player::where('uuid', $playerUuid)
             ->with(['currentLocation.galaxy', 'currentLocation.sector', 'activeShip'])
             ->first();
@@ -36,144 +87,118 @@ class PlayerKnowledgeMapController extends BaseApiController
             return $this->notFound('Player not found');
         }
 
-        // Authorize
         $user = $request->user();
         if ($user && $player->user_id !== $user->id) {
             return $this->forbidden();
         }
 
-        $currentLocation = $player->currentLocation;
-        if (! $currentLocation) {
+        if (! $player->currentLocation) {
             return $this->error('Player has no current location', 'NO_LOCATION');
         }
 
-        // Optional sector filter
-        $sectorId = null;
-        if ($request->has('sector_uuid')) {
-            $sector = \App\Models\Sector::where('uuid', $request->query('sector_uuid'))->first();
-            $sectorId = $sector?->id;
+        return $player;
+    }
+
+    private function resolveSectorId(Request $request): ?int
+    {
+        if (! $request->has('sector_uuid')) {
+            return null;
         }
 
-        // 1. Get merged knowledge map
-        $knowledgeMap = $this->knowledgeService->getKnowledgeMap($player, $sectorId);
+        return \App\Models\Sector::where('uuid', $request->query('sector_uuid'))->first()?->id;
+    }
 
-        // 2. Load POI data for all known systems
-        $knownPoiIds = array_keys($knowledgeMap);
-        $pois = PointOfInterest::whereIn('id', $knownPoiIds)
+    private function loadPoiData(array $poiIds): \Illuminate\Support\Collection
+    {
+        return PointOfInterest::whereIn('id', $poiIds)
             ->with(['tradingHub', 'sector'])
             ->get()
             ->keyBy('id');
+    }
 
-        // 3. Load known lanes
-        $knownLanes = $this->laneKnowledgeService->getKnownLanesInGalaxy(
-            $player,
-            $currentLocation->galaxy_id
-        );
-
-        // 4. Load scan levels for known POIs
-        $scanLevels = [];
-        if (! empty($knownPoiIds)) {
-            $scanLevels = $player->systemScans()
-                ->whereIn('poi_id', $knownPoiIds)
-                ->pluck('scan_level', 'poi_id')
-                ->toArray();
+    private function loadScanLevels(Player $player, array $poiIds): array
+    {
+        if (empty($poiIds)) {
+            return [];
         }
 
-        // 5. Build response
-        $sensorLevel = $player->activeShip?->sensors ?? 1;
-        $sensorRange = SensorRangeCalculator::getRangeLY($sensorLevel);
+        return $player->systemScans()
+            ->whereIn('poi_id', $poiIds)
+            ->pluck('scan_level', 'poi_id')
+            ->toArray();
+    }
 
-        // Collect POI IDs connected to the player's current location via warp lanes
-        // These systems get their name revealed (you can read it on the gate nav display)
-        $laneConnectedPoiIds = $this->getLaneConnectedPoiIds($currentLocation, $knownLanes, $player->activeShip);
+    private function buildSystemEntry(PointOfInterest $poi, array $entry, array $laneConnectedPoiIds, array $scanLevels, int $sensorLevel): array
+    {
+        $level = $entry['knowledge_level'];
+        $isLaneConnected = in_array($poi->id, $laneConnectedPoiIds);
+        $attrs = $poi->attributes ?? [];
 
-        $knownSystems = [];
-        $statistics = ['total_known' => 0, 'by_level' => [], 'known_lanes' => 0, 'pirate_warnings' => 0];
+        $system = [
+            'uuid' => $poi->uuid,
+            'x' => (float) $poi->x,
+            'y' => (float) $poi->y,
+            'knowledge_level' => $level,
+            'knowledge_label' => KnowledgeLevel::from($level)->label(),
+            'freshness' => $entry['freshness'],
+            'source' => $entry['source'],
+            'star' => $this->buildStarInfo($poi, $attrs['stellar_class'] ?? null, $level),
+        ];
 
-        foreach ($knowledgeMap as $poiId => $entry) {
-            $poi = $pois->get($poiId);
-            if (! $poi) {
-                continue;
-            }
+        if ($level >= KnowledgeLevel::BASIC->value || $isLaneConnected) {
+            $system['name'] = $poi->name;
+            $system['is_inhabited'] = $poi->is_inhabited;
+            $system['planet_count'] = $poi->children()->count();
+        }
 
-            $level = $entry['knowledge_level'];
-            $levelEnum = KnowledgeLevel::from($level);
+        if ($level >= KnowledgeLevel::SURVEYED->value && $poi->is_inhabited) {
+            $system['services'] = $this->buildServices($poi, $entry);
+        }
 
-            $attrs = $poi->attributes ?? [];
-            $stellarClass = $attrs['stellar_class'] ?? null;
-
-            $system = [
-                'uuid' => $poi->uuid,
-                'x' => (float) $poi->x,
-                'y' => (float) $poi->y,
-                'knowledge_level' => $level,
-                'knowledge_label' => $levelEnum->label(),
-                'freshness' => $entry['freshness'],
-                'source' => $entry['source'],
-                // Stellar class is observable from any distance (DETECTED+)
-                'star' => $this->buildStarInfo($poi, $stellarClass, $level),
+        if ($entry['has_pirate_warning']) {
+            $system['pirate_warning'] = [
+                'active' => true,
+                'danger_radius_ly' => config('game_config.knowledge.pirate_danger_radius_ly', 5),
+                'confidence' => $this->getPirateConfidence($sensorLevel),
             ];
-
-            // Systems connected via warp lane to current location get name revealed
-            $isLaneConnected = in_array($poiId, $laneConnectedPoiIds);
-
-            // BASIC+ fields (level 2+) OR lane-connected systems get name
-            if ($level >= KnowledgeLevel::BASIC->value || $isLaneConnected) {
-                $system['name'] = $poi->name;
-                $system['is_inhabited'] = $poi->is_inhabited;
-            }
-
-            // Full detail (planet count) only at BASIC+
-            if ($level >= KnowledgeLevel::BASIC->value) {
-                $system['planet_count'] = $poi->children()->count();
-            }
-
-            // SURVEYED+ fields (level 3+, inhabited only)
-            if ($level >= KnowledgeLevel::SURVEYED->value && $poi->is_inhabited) {
-                $servicesData = $entry['services_data'];
-                if ($servicesData) {
-                    $system['services'] = $servicesData;
-                } else {
-                    $tradingHub = $poi->tradingHub;
-                    $system['services'] = [
-                        'trading_hub' => $tradingHub !== null && $tradingHub->is_active,
-                        'shipyard' => $tradingHub?->has_shipyard ?? false,
-                        'salvage_yard' => $tradingHub?->has_salvage_yard ?? false,
-                        'cartographer' => $tradingHub?->stellarCartographer !== null,
-                    ];
-                }
-            }
-
-            // Pirate warning (any level)
-            if ($entry['has_pirate_warning']) {
-                $system['pirate_warning'] = [
-                    'active' => true,
-                    'danger_radius_ly' => config('game_config.knowledge.pirate_danger_radius_ly', 5),
-                    'confidence' => $this->getPirateConfidence($sensorLevel),
-                ];
-                $statistics['pirate_warnings']++;
-            }
-
-            // Scan data reference
-            if (isset($scanLevels[$poiId])) {
-                $system['scan_level'] = $scanLevels[$poiId];
-                $system['has_scan_data'] = true;
-            }
-
-            $knownSystems[] = $system;
-            $statistics['total_known']++;
-            $statistics['by_level'][$level] = ($statistics['by_level'][$level] ?? 0) + 1;
         }
 
-        // Build known lanes response
-        $knownLanesResponse = [];
+        if (isset($scanLevels[$poi->id])) {
+            $system['scan_level'] = $scanLevels[$poi->id];
+            $system['has_scan_data'] = true;
+        }
+
+        return $system;
+    }
+
+    private function buildServices(PointOfInterest $poi, array $entry): array
+    {
+        $servicesData = $entry['services_data'];
+        if ($servicesData) {
+            return $servicesData;
+        }
+
+        $tradingHub = $poi->tradingHub;
+        return [
+            'trading_hub' => $tradingHub !== null && $tradingHub->is_active,
+            'shipyard' => $tradingHub?->has_shipyard ?? false,
+            'salvage_yard' => $tradingHub?->has_salvage_yard ?? false,
+            'cartographer' => $tradingHub?->stellarCartographer !== null,
+        ];
+    }
+
+    private function buildLanesResponse(PointOfInterest $currentLocation, $knownLanes, ?PlayerShip $activeShip): array
+    {
+        $lanesResponse = [];
+
+        // Build known lanes
         foreach ($knownLanes as $laneKnowledge) {
             $gate = $laneKnowledge->warpGate;
             if (! $gate) {
                 continue;
             }
 
-            $knownLanesResponse[] = $this->formatLaneResponse($gate, [
+            $lanesResponse[] = $this->formatLaneResponse($gate, [
                 'has_pirate' => $laneKnowledge->pirate_risk_known,
                 'pirate_freshness' => $laneKnowledge->last_pirate_check
                     ? max(0.1, 1.0 - ($laneKnowledge->last_pirate_check->diffInHours(now()) / 168))
@@ -182,11 +207,8 @@ class PlayerKnowledgeMapController extends BaseApiController
             ]);
         }
 
-        // Merge warp gates at player's current location (not already in known lanes)
-        // Only include gates the player's sensors can detect
-        $knownGateUuids = collect($knownLanesResponse)->pluck('gate_uuid')->toArray();
-        $activeShip = $player->activeShip;
-
+        // Add current location gates
+        $knownGateUuids = collect($lanesResponse)->pluck('gate_uuid')->toArray();
         $currentLocationGates = WarpGate::where(function ($q) use ($currentLocation) {
             $q->where('source_poi_id', $currentLocation->id)
                 ->orWhere('destination_poi_id', $currentLocation->id);
@@ -197,34 +219,42 @@ class PlayerKnowledgeMapController extends BaseApiController
             ->get();
 
         foreach ($currentLocationGates as $gate) {
-            // Skip gates the player's sensors can't detect
             if ($activeShip && ! $gate->canPlayerDetect($activeShip)) {
                 continue;
             }
 
-            $knownLanesResponse[] = $this->formatLaneResponse($gate, [
+            $lanesResponse[] = $this->formatLaneResponse($gate, [
                 'has_pirate' => false,
                 'pirate_freshness' => null,
                 'discovery_method' => 'current_location',
             ]);
         }
 
-        $statistics['known_lanes'] = count($knownLanesResponse);
+        return $lanesResponse;
+    }
 
-        // Build danger zones from pirate warnings
+    private function buildDangerZones(array $knownSystems): array
+    {
         $dangerZones = [];
         foreach ($knownSystems as $system) {
-            if (isset($system['pirate_warning']) && $system['pirate_warning']['active']) {
-                $dangerZones[] = [
-                    'center' => ['x' => $system['x'], 'y' => $system['y']],
-                    'radius_ly' => $system['pirate_warning']['danger_radius_ly'],
-                    'source' => 'pirate_warning',
-                    'confidence' => $system['pirate_warning']['confidence'],
-                ];
+            if (! isset($system['pirate_warning']) || ! $system['pirate_warning']['active']) {
+                continue;
             }
+
+            $dangerZones[] = [
+                'center' => ['x' => $system['x'], 'y' => $system['y']],
+                'radius_ly' => $system['pirate_warning']['danger_radius_ly'],
+                'source' => 'pirate_warning',
+                'confidence' => $system['pirate_warning']['confidence'],
+            ];
         }
 
-        return $this->success([
+        return $dangerZones;
+    }
+
+    private function buildFinalResponse(Player $player, PointOfInterest $currentLocation, int $sensorLevel, float $sensorRange, array $knownSystems, array $knownLanesResponse, array $dangerZones, array $statistics): array
+    {
+        return [
             'galaxy' => [
                 'uuid' => $currentLocation->galaxy->uuid,
                 'name' => $currentLocation->galaxy->name,
@@ -244,7 +274,7 @@ class PlayerKnowledgeMapController extends BaseApiController
             'known_lanes' => $knownLanesResponse,
             'danger_zones' => $dangerZones,
             'statistics' => $statistics,
-        ]);
+        ];
     }
 
     /**

@@ -277,8 +277,6 @@ class StarSystemResponseBuilder
      */
     protected function buildBodyData(PointOfInterest $body): array
     {
-        $attrs = $body->attributes ?? [];
-
         $data = [
             'uuid' => $body->uuid,
             'name' => $body->name,
@@ -287,68 +285,113 @@ class StarSystemResponseBuilder
             'orbital_index' => $body->orbital_index,
         ];
 
-        // Basic attributes (always visible for inhabited, level 1+ otherwise)
-        if ($this->isFullyVisible || $this->visibilityLevel >= 1) {
-            $data['is_inhabited'] = $body->is_inhabited ?? false;
-            $data['has_colony'] = ($attrs['has_colony'] ?? false) ||
-                Colony::where('poi_id', $body->id)->exists();
+        // Add visibility-tiered data
+        $this->addLevel1Data($data, $body);
+        $this->addLevel2Data($data, $body);
+        $this->addLevel3Data($data, $body);
+        $this->addLevel6Data($data, $body);
+        $this->addLevel7Data($data, $body);
 
-            if (isset($attrs['in_goldilocks_zone'])) {
-                $data['in_goldilocks_zone'] = $attrs['in_goldilocks_zone'];
-            }
+        return $data;
+    }
 
-            if (isset($attrs['temperature'])) {
-                $data['temperature'] = $attrs['temperature'];
-            }
-            if (isset($attrs['atmosphere'])) {
-                $data['atmosphere'] = $attrs['atmosphere'];
-            }
-            if (isset($attrs['has_rings'])) {
-                $data['has_rings'] = $attrs['has_rings'];
-            }
+    private function canSeeLevel(int $level): bool
+    {
+        return $this->isFullyVisible || $this->visibilityLevel >= $level;
+    }
 
-            $data['habitable'] = $attrs['habitable'] ?? false;
+    private function addLevel1Data(array &$data, PointOfInterest $body): void
+    {
+        if (! $this->canSeeLevel(1)) {
+            return;
         }
 
-        // Mining potential (level 3+)
-        if ($this->isFullyVisible || $this->visibilityLevel >= 3) {
-            if (isset($attrs['mineral_richness'])) {
-                $data['mineral_richness'] = $attrs['mineral_richness'];
-            }
+        $attrs = $body->attributes ?? [];
+        $data['is_inhabited'] = $body->is_inhabited ?? false;
+        $data['has_colony'] = ($attrs['has_colony'] ?? false) || Colony::where('poi_id', $body->id)->exists();
+        $data['habitable'] = $attrs['habitable'] ?? false;
 
-            $deposits = array_merge(
-                $attrs['mineral_deposits'] ?? [],
-                $body->mineral_deposits ?? []
-            );
+        if (isset($attrs['in_goldilocks_zone'])) {
+            $data['in_goldilocks_zone'] = $attrs['in_goldilocks_zone'];
+        }
+        if (isset($attrs['temperature'])) {
+            $data['temperature'] = $attrs['temperature'];
+        }
+        if (isset($attrs['atmosphere'])) {
+            $data['atmosphere'] = $attrs['atmosphere'];
+        }
+        if (isset($attrs['has_rings'])) {
+            $data['has_rings'] = $attrs['has_rings'];
+        }
+    }
 
-            if (! empty($deposits)) {
-                if ($this->visibilityLevel >= 4 || $this->isFullyVisible) {
-                    $data['mineral_deposits'] = array_values(array_unique($deposits));
-                } else {
-                    $commonMinerals = ['iron', 'copper', 'titanium', 'nickel', 'cobalt', 'Fe', 'Cu', 'Ti', 'Ni', 'Co'];
-                    $data['mineral_deposits'] = array_values(array_filter(
-                        $deposits,
-                        fn ($m) => in_array(strtolower($m), array_map('strtolower', $commonMinerals))
-                    ));
-                }
-            }
+    private function addLevel2Data(array &$data, PointOfInterest $body): void
+    {
+        if (! $this->canSeeLevel(2)) {
+            return;
         }
 
-        // Deep scan data (level 7+)
-        if ($this->isFullyVisible || $this->visibilityLevel >= 7) {
-            if (isset($attrs['core_composition'])) {
-                $data['core_composition'] = $attrs['core_composition'];
-            }
-            if (isset($attrs['terraformable'])) {
-                $data['terraformable'] = $attrs['terraformable'];
-                if (isset($attrs['terraform_difficulty'])) {
-                    $data['terraform_difficulty'] = $attrs['terraform_difficulty'];
-                }
-            }
+        if ($body->tradingHub) {
+            $data['trading_hub'] = [
+                'uuid' => $body->tradingHub->uuid,
+                'name' => $body->tradingHub->name,
+            ];
+        }
+    }
+
+    private function addLevel3Data(array &$data, PointOfInterest $body): void
+    {
+        if (! $this->canSeeLevel(3)) {
+            return;
         }
 
-        // Anomaly data (level 6+)
-        if (($this->isFullyVisible || $this->visibilityLevel >= 6) && $body->type === PointOfInterestType::ANOMALY) {
+        $attrs = $body->attributes ?? [];
+
+        if (isset($attrs['mineral_richness'])) {
+            $data['mineral_richness'] = $attrs['mineral_richness'];
+        }
+
+        if ($attrs['has_mining_facility'] ?? false) {
+            $data['mining_facility'] = $attrs['mining_facility'];
+        }
+
+        $this->addMineralDeposits($data, $body);
+    }
+
+    private function addMineralDeposits(array &$data, PointOfInterest $body): void
+    {
+        $attrs = $body->attributes ?? [];
+        $deposits = array_merge($attrs['mineral_deposits'] ?? [], $body->mineral_deposits ?? []);
+
+        if (empty($deposits)) {
+            return;
+        }
+
+        if ($this->canSeeLevel(4)) {
+            $data['mineral_deposits'] = array_values(array_unique($deposits));
+        } else {
+            $data['mineral_deposits'] = $this->filterCommonMinerals($deposits);
+        }
+    }
+
+    private function filterCommonMinerals(array $deposits): array
+    {
+        $commonMinerals = ['iron', 'copper', 'titanium', 'nickel', 'cobalt', 'Fe', 'Cu', 'Ti', 'Ni', 'Co'];
+        return array_values(array_filter(
+            $deposits,
+            fn ($m) => in_array(strtolower($m), array_map('strtolower', $commonMinerals))
+        ));
+    }
+
+    private function addLevel6Data(array &$data, PointOfInterest $body): void
+    {
+        if (! $this->canSeeLevel(6)) {
+            return;
+        }
+
+        $attrs = $body->attributes ?? [];
+
+        if ($body->type === PointOfInterestType::ANOMALY) {
             if (isset($attrs['anomaly_type'])) {
                 $data['anomaly_type'] = $attrs['anomaly_type'];
             }
@@ -357,28 +400,29 @@ class StarSystemResponseBuilder
             }
         }
 
-        // Ruins/ancient sites (level 6+)
-        if ($this->isFullyVisible || $this->visibilityLevel >= 6) {
-            if ($attrs['has_ruins'] ?? false) {
-                $data['has_ruins'] = true;
-                $data['ruin_type'] = $attrs['ruin_type'] ?? 'ancient';
+        if ($attrs['has_ruins'] ?? false) {
+            $data['has_ruins'] = true;
+            $data['ruin_type'] = $attrs['ruin_type'] ?? 'ancient';
+        }
+    }
+
+    private function addLevel7Data(array &$data, PointOfInterest $body): void
+    {
+        if (! $this->canSeeLevel(7)) {
+            return;
+        }
+
+        $attrs = $body->attributes ?? [];
+
+        if (isset($attrs['core_composition'])) {
+            $data['core_composition'] = $attrs['core_composition'];
+        }
+        if (isset($attrs['terraformable'])) {
+            $data['terraformable'] = $attrs['terraformable'];
+            if (isset($attrs['terraform_difficulty'])) {
+                $data['terraform_difficulty'] = $attrs['terraform_difficulty'];
             }
         }
-
-        // Mining facilities (visible for inhabited systems or level 3+)
-        if (($this->isFullyVisible || $this->visibilityLevel >= 3) && ($attrs['has_mining_facility'] ?? false)) {
-            $data['mining_facility'] = $attrs['mining_facility'];
-        }
-
-        // Trading hub
-        if ($body->tradingHub && ($this->isFullyVisible || $this->visibilityLevel >= 2)) {
-            $data['trading_hub'] = [
-                'uuid' => $body->tradingHub->uuid,
-                'name' => $body->tradingHub->name,
-            ];
-        }
-
-        return $data;
     }
 
     /**
