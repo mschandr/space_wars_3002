@@ -172,7 +172,7 @@ class ConstructionService
     /**
      * Complete a matured construction job
      *
-     * Phase 3 stub: logs completion, actual item delivery deferred to Phase N+
+     * Delivers the constructed item to the player via PlayerItem record
      */
     public function completeJob(ConstructionJob $job): void
     {
@@ -188,9 +188,15 @@ class ConstructionService
         $job->completed_at = now();
         $job->save();
 
-        // TODO: Future phases - implement item delivery
-        // - Create player_items table
-        // - Call ItemDeliveryService::deliver($job)
-        // - Log "Construction complete: {output_item_code} ready for pickup at {hub->name}"
+        // Deliver the constructed item to player
+        $deliveryService = app(ItemDeliveryService::class);
+        $playerItem = $deliveryService->deliver($job);
+
+        // Log completion
+        \Log::info("Construction complete: {$job->output_item_code} ready for pickup at {$job->tradingHub->name}", [
+            'job_uuid' => $job->uuid,
+            'player_id' => $job->player_id,
+            'item_uuid' => $playerItem->uuid,
+        ]);
     }
 }

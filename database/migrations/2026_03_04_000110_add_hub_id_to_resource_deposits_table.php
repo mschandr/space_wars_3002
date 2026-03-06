@@ -26,9 +26,11 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('resource_deposits', function (Blueprint $table) {
-            $table->dropIndex(['galaxy_id', 'trading_hub_id']);
-            $table->dropForeignKeyIfExists(['trading_hub_id']);
-            $table->dropColumn('trading_hub_id');
+            if (Schema::hasColumn('resource_deposits', 'trading_hub_id')) {
+                $table->dropForeign(['trading_hub_id']);
+                $table->dropIndex(['galaxy_id', 'trading_hub_id']);
+                $table->dropColumn('trading_hub_id');
+            }
         });
     }
 };
