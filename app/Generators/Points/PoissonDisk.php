@@ -28,9 +28,9 @@ final class PoissonDisk extends AbstractPointGenerator implements PointGenerator
         $gh = max(1, (int) ceil($this->height / $cell));
         $grid = array_fill(0, $gw * $gh, -1);
 
-        $attempts = (int) config('game_config.generator_options.attempts') ?? $this->options['attempts'];
-        $margin = (int) config('game_config.generator_options.margin') ?? $this->options['margin'];
-        $floats = (bool) config('game_config.generator_options.floats') ?? $this->options['returnFloats'];
+        $attempts = (int) (config('game_config.generator_options.attempts') ?? $this->options['attempts']);
+        $margin = (int) (config('game_config.generator_options.margin') ?? $this->options['margin']);
+        $floats = (bool) (config('game_config.generator_options.floats') ?? $this->options['returnFloats']);
 
         $pts = [];
         $active = [];
