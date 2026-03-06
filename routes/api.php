@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ColonyCombatController;
 use App\Http\Controllers\Api\ColonyController;
 use App\Http\Controllers\Api\CombatController;
 use App\Http\Controllers\Api\ComponentUpgradeController;
+use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\ConstructionController;
 use App\Http\Controllers\Api\FacilitiesController;
 use App\Http\Controllers\Api\GalaxyController;
@@ -264,6 +265,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('trading-hubs/{uuid}/blueprints', [ConstructionController::class, 'listAvailableBlueprints']);
     Route::post('trading-hubs/{uuid}/build', [ConstructionController::class, 'startConstruction']);
     Route::get('players/{uuid}/construction-jobs', [ConstructionController::class, 'listJobs']);
+
+    // Contract (job board) routes
+    Route::get('trading-hubs/{uuid}/contracts', [ContractController::class, 'listContracts']);
+    Route::post('contracts/{uuid}/accept', [ContractController::class, 'acceptContract']);
+    Route::post('contracts/{uuid}/deliver', [ContractController::class, 'deliverCargo']);
+    Route::get('players/{uuid}/contracts', [ContractController::class, 'getMyContracts']);
+    Route::get('players/{uuid}/reputation', [ContractController::class, 'getReputation']);
 
     // Upgrade routes (legacy stat-bump system — deprecated)
     Route::get('ships/{uuid}/upgrade-options', [UpgradeController::class, 'listUpgradeOptions']);

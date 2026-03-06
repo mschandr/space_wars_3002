@@ -154,6 +154,30 @@ class Player extends Model
     }
 
     /**
+     * Get all contracts accepted by this player
+     */
+    public function contracts(): HasMany
+    {
+        return $this->hasMany(Contract::class, 'accepted_by_player_id');
+    }
+
+    /**
+     * Get all active contracts (POSTED or ACCEPTED status)
+     */
+    public function activeContracts(): HasMany
+    {
+        return $this->contracts()->whereIn('status', ['POSTED', 'ACCEPTED']);
+    }
+
+    /**
+     * Get contract reputation record for this player
+     */
+    public function contractReputation(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PlayerContractReputation::class);
+    }
+
+    /**
      * Check if player knows about a specific warp gate.
      */
     public function knowsLane(WarpGate $gate): bool

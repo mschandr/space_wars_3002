@@ -75,3 +75,17 @@ Schedule::command('market:process-events')
     ->onFailure(function () {
         \Log::error('Market event processing failed');
     });
+
+// Contract Expiry - Every hour
+// Expires POSTED contracts past their expiration date
+// Fails ACCEPTED contracts that exceeded their deadline
+Schedule::command('contracts:expire')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->onSuccess(function () {
+        \Log::info('Contract expiry processing completed successfully');
+    })
+    ->onFailure(function () {
+        \Log::error('Contract expiry processing failed');
+    });

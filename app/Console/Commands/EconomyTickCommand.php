@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\Galaxy;
+use App\Models\TradingHub;
+use App\Services\Contracts\ContractGenerationService;
 use App\Services\Economy\ConstructionTickService;
 use App\Services\Economy\HubCommodityStatsService;
 use App\Services\Economy\MiningTickService;
@@ -15,12 +17,13 @@ class EconomyTickCommand extends Command
                             {--galaxy= : Limit to one galaxy UUID}
                             {--dry-run : Preview without writing}';
 
-    protected $description = 'Process mining extraction, construction jobs, shock decay for this tick, then refresh stats cache';
+    protected $description = 'Process mining extraction, construction jobs, shock decay, contract generation for this tick, then refresh stats cache';
 
     public function __construct(
         private readonly MiningTickService $miningService,
         private readonly ConstructionTickService $constructionService,
         private readonly ShockDecayTickService $shockService,
+        private readonly ContractGenerationService $contractGenerationService,
         private readonly HubCommodityStatsService $statsService,
     ) {
         parent::__construct();
@@ -46,6 +49,12 @@ class EconomyTickCommand extends Command
         $constructionResults = $this->constructionService->processTick($galaxy, $dryRun);
         $shockResults = $this->shockService->processTick($galaxy, $dryRun);
 
+        // Generate contracts (only if not dry-run)
+        $contractResults = ['generated' => 0];
+        if (!$dryRun) {
+            $contractResults = $this->generateContracts($galaxy);
+        }
+
         // Refresh stats cache (only if not dry-run)
         $statsResults = null;
         if (!$dryRun) {
@@ -57,15 +66,55 @@ class EconomyTickCommand extends Command
         }
 
         // Display results
-        $this->displayResults($miningResults, $constructionResults, $shockResults, $statsResults, $dryRun, $galaxy);
+        $this->displayResults($miningResults, $constructionResults, $shockResults, $contractResults, $statsResults, $dryRun, $galaxy);
 
         return Command::SUCCESS;
+    }
+
+    private function generateContracts(?Galaxy $galaxy): array
+    {
+        $generated = 0;
+        $errors = [];
+
+        try {
+            // Get all trading hubs to generate contracts for
+            $hubsQuery = TradingHub::query();
+
+            if ($galaxy) {
+                // Only hubs in this galaxy
+                $hubsQuery->whereHas('pointOfInterest', function ($q) use ($galaxy) {
+                    $q->where('galaxy_id', $galaxy->id);
+                });
+            }
+
+            $hubs = $hubsQuery->get();
+
+            foreach ($hubs as $hub) {
+                try {
+                    $newContracts = $this->contractGenerationService->generateContractsForHub($hub, 2);
+                    $generated += count($newContracts);
+                } catch (\Exception $e) {
+                    $errors[] = [
+                        'hub_id' => $hub->id,
+                        'message' => $e->getMessage(),
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            $errors[] = ['message' => $e->getMessage()];
+        }
+
+        return [
+            'generated' => $generated,
+            'errors' => $errors,
+        ];
     }
 
     private function displayResults(
         array $miningResults,
         array $constructionResults,
         array $shockResults,
+        array $contractResults,
         ?array $statsResults,
         bool $dryRun,
         ?Galaxy $galaxy
@@ -125,6 +174,18 @@ class EconomyTickCommand extends Command
             }
         }
 
+        // Contract generation results
+        $this->newLine();
+        $this->line("<fg=green>Contract Generation:</>");
+        $this->line("  Contracts generated: <fg=cyan>{$contractResults['generated']}</>");
+
+        if (!empty($contractResults['errors'])) {
+            $this->line("  <fg=red>Errors: " . count($contractResults['errors']) . "</>");
+            foreach ($contractResults['errors'] as $error) {
+                $this->line("    - {$error['message']}");
+            }
+        }
+
         // Stats refresh results
         if ($statsResults) {
             $this->newLine();
@@ -142,7 +203,7 @@ class EconomyTickCommand extends Command
         // Summary
         $this->newLine();
         $this->line("<fg=cyan>{$border}</>");
-        $totalErrors = count($miningResults['errors']) + count($constructionResults['errors']) + count($shockResults['errors']);
+        $totalErrors = count($miningResults['errors'] ?? []) + count($constructionResults['errors'] ?? []) + count($shockResults['errors'] ?? []) + count($contractResults['errors'] ?? []);
         if ($totalErrors === 0) {
             $this->line("<fg=green>✓ Tick processed successfully</>");
         } else {

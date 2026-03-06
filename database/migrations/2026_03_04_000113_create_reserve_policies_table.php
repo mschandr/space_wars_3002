@@ -14,10 +14,10 @@ return new class extends Migration
             $table->foreignId('galaxy_id')->constrained()->cascadeOnDelete();
             $table->foreignId('commodity_id')->nullable()->constrained()->nullOnDelete();
 
-            // Unsigned: quantities and multipliers cannot be negative
-            $table->unsignedDecimal('min_qty_on_hand', 14, 4);
+            // Reserve quantities and NPC pricing multiplier
+            $table->decimal('min_qty_on_hand', 14, 4);
             $table->boolean('npc_fallback_enabled')->default(true);
-            $table->unsignedDecimal('npc_price_multiplier', 5, 2)->default(1.5);
+            $table->decimal('npc_price_multiplier', 5, 2)->default(1.5);
 
             $table->text('description')->nullable();
 

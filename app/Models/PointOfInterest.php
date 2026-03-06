@@ -247,6 +247,22 @@ class PointOfInterest extends Model
     }
 
     /**
+     * Contracts posted at the bar of this POI
+     */
+    public function postedContracts(): HasMany
+    {
+        return $this->hasMany(Contract::class, 'bar_location_id')->where('status', 'POSTED');
+    }
+
+    /**
+     * All contracts associated with this POI (posted at bar)
+     */
+    public function allContracts(): HasMany
+    {
+        return $this->hasMany(Contract::class, 'bar_location_id');
+    }
+
+    /**
      * Check if inventory has been generated for this POI.
      */
     public function isInventoryGenerated(): bool
