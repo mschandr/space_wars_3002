@@ -154,143 +154,29 @@ class ColonyCombatService
         $attackers = $session->attackers()->with(['player', 'playerShip'])->get();
         $defenders = $session->defenders()->get();
 
-        $combatLog = [];
+        $combatLog = $this->initializeCombatLog($colony, $attackers, $defenders, $npcDefenders);
         $round = 1;
 
-        $combatLog[] = ['type' => 'header', 'message' => '⚔️  COLONY SIEGE INITIATED  ⚔️'];
-        $combatLog[] = ['type' => 'info', 'message' => "Target: {$colony->name} (Owned by {$colony->player->call_sign})"];
-        $combatLog[] = ['type' => 'info', 'message' => 'ATTACKERS:'];
-        foreach ($attackers as $attacker) {
-            $combatLog[] = [
-                'type' => 'info',
-                'message' => "  • {$attacker->player->call_sign}: {$attacker->playerShip->name} (Hull: {$attacker->current_hull})",
-            ];
-        }
-        $combatLog[] = ['type' => 'info', 'message' => 'DEFENDERS:'];
-        foreach ($defenders as $index => $defender) {
-            $defenderData = $npcDefenders[$index];
-            $combatLog[] = [
-                'type' => 'info',
-                'message' => "  • {$defenderData['name']} (Hull: {$defender->current_hull})",
-            ];
-        }
-        $combatLog[] = ['type' => 'divider', 'message' => str_repeat('─', 50)];
-
         // Combat loop
-        while ($attackers->where('current_hull', '>', 0)->count() > 0 &&
-               $defenders->where('current_hull', '>', 0)->count() > 0 &&
-               $round <= 100) {
-
+        while ($this->shouldContinueCombat($attackers, $defenders, $round)) {
             $combatLog[] = ['type' => 'round', 'message' => "\n🔹 ROUND {$round}"];
+            $this->executeAttackersTurn($attackers, $defenders, $npcDefenders, $combatLog);
 
-            // Attackers' turn
-            foreach ($attackers->where('current_hull', '>', 0) as $attacker) {
-                $target = $defenders->where('current_hull', '>', 0)->sortBy('current_hull')->first();
-
-                if (! $target) {
-                    break;
-                }
-
-                $damage = $this->calculateDamage($attacker->playerShip->weapons);
-                $target->takeDamage($damage);
-                $attacker->recordDamageDealt($damage);
-
-                $targetIndex = $defenders->search(fn ($d) => $d->id === $target->id);
-                $targetName = $npcDefenders[$targetIndex]['name'] ?? 'Defense Drone';
-
-                $combatLog[] = [
-                    'type' => 'attack',
-                    'message' => "  ➜ {$attacker->player->call_sign} fires at {$targetName} for {$damage} damage! (Hull: {$target->current_hull})",
-                ];
-
-                if (! $target->isAlive()) {
-                    $combatLog[] = [
-                        'type' => 'destroyed',
-                        'message' => "  💥 {$targetName} DESTROYED!",
-                    ];
-                }
-            }
-
-            if ($defenders->where('current_hull', '>', 0)->count() === 0) {
+            if ($this->allDefendersDefeated($defenders)) {
                 break;
             }
 
-            // Defenders' turn (NPC)
-            foreach ($defenders->where('current_hull', '>', 0) as $defenderIndex => $defender) {
-                $target = $attackers->where('current_hull', '>', 0)->sortBy('current_hull')->first();
-
-                if (! $target) {
-                    break;
-                }
-
-                $defenderData = $npcDefenders[$defenderIndex];
-                $damage = $this->calculateDamage($defenderData['weapons']);
-                $target->takeDamage($damage);
-                $defender->recordDamageDealt($damage);
-
-                $combatLog[] = [
-                    'type' => 'attack',
-                    'message' => "  ⬅ {$defenderData['name']} fires at {$target->player->call_sign} for {$damage} damage! (Hull: {$target->current_hull})",
-                ];
-
-                if (! $target->isAlive()) {
-                    $combatLog[] = [
-                        'type' => 'destroyed',
-                        'message' => "  💥 {$target->player->call_sign}'s ship DESTROYED!",
-                    ];
-                }
-            }
-
+            $this->executeDefendersTurn($attackers, $defenders, $npcDefenders, $combatLog);
             $round++;
         }
 
         $combatLog[] = ['type' => 'divider', 'message' => str_repeat('─', 50)];
 
-        // Determine outcome
-        $attackersWon = $attackers->where('current_hull', '>', 0)->count() > 0;
-
-        if ($attackersWon) {
-            $combatLog[] = [
-                'type' => 'victory',
-                'message' => '🏆 ATTACKERS BREACHED THE DEFENSES!',
-            ];
-
-            // Apply damage to colony
-            $buildingDamageResult = $this->applyColonyDamage($colony, $attackers);
-            $combatLog = array_merge($combatLog, $buildingDamageResult['log']);
-
-            // Transfer ownership if colony was captured
-            $captureResult = $this->attemptColonyCapture($colony, $attackers->first()->player);
-            $combatLog = array_merge($combatLog, $captureResult['log']);
-
-            // Update ship hulls for survivors
-            foreach ($attackers->where('current_hull', '>', 0) as $attacker) {
-                $attacker->playerShip->update(['hull' => $attacker->current_hull]);
-            }
-
-            // Award rewards to attackers
-            $baseXP = 200; // Colony siege XP
-            $xpPerAttacker = (int) ceil($baseXP / $attackers->where('current_hull', '>', 0)->count());
-
-            foreach ($attackers->where('current_hull', '>', 0) as $attacker) {
-                $attacker->awardRewards($xpPerAttacker, 0);
-            }
-
-            $combatLog[] = [
-                'type' => 'rewards',
-                'message' => "⭐ Each surviving attacker earned: {$xpPerAttacker} XP",
-            ];
-        } else {
-            $combatLog[] = [
-                'type' => 'defeat',
-                'message' => '🛡️ DEFENSES HELD! Attackers repelled!',
-            ];
-
-            // Update defense rating
-            $colony->defense_rating += 10;
-            $colony->last_attacked_at = now();
-            $colony->save();
-        }
+        // Determine outcome and process results
+        $captureResult = [];
+        $buildingDamageResult = [];
+        $attackersWon = $this->attackersWon($attackers);
+        $this->processCombatOutcome($attackersWon, $colony, $attackers, $combatLog, $captureResult, $buildingDamageResult);
 
         // Complete combat session
         $session->update([
@@ -314,6 +200,170 @@ class ColonyCombatService
             'colony_captured' => $captureResult['captured'] ?? false,
             'buildings_damaged' => $buildingDamageResult['buildings_damaged'] ?? 0,
         ];
+    }
+
+    /**
+     * Initialize combat log with header and participant lists
+     */
+    private function initializeCombatLog($colony, $attackers, $defenders, array $npcDefenders): array
+    {
+        $log = [];
+        $log[] = ['type' => 'header', 'message' => '⚔️  COLONY SIEGE INITIATED  ⚔️'];
+        $log[] = ['type' => 'info', 'message' => "Target: {$colony->name} (Owned by {$colony->player->call_sign})"];
+        $log[] = ['type' => 'info', 'message' => 'ATTACKERS:'];
+
+        foreach ($attackers as $attacker) {
+            $log[] = [
+                'type' => 'info',
+                'message' => "  • {$attacker->player->call_sign}: {$attacker->playerShip->name} (Hull: {$attacker->current_hull})",
+            ];
+        }
+
+        $log[] = ['type' => 'info', 'message' => 'DEFENDERS:'];
+        foreach ($defenders as $index => $defender) {
+            $defenderData = $npcDefenders[$index];
+            $log[] = [
+                'type' => 'info',
+                'message' => "  • {$defenderData['name']} (Hull: {$defender->current_hull})",
+            ];
+        }
+
+        $log[] = ['type' => 'divider', 'message' => str_repeat('─', 50)];
+        return $log;
+    }
+
+    /**
+     * Check if combat should continue
+     */
+    private function shouldContinueCombat($attackers, $defenders, int $round): bool
+    {
+        return $attackers->where('current_hull', '>', 0)->count() > 0 &&
+               $defenders->where('current_hull', '>', 0)->count() > 0 &&
+               $round <= 100;
+    }
+
+    /**
+     * Check if all defenders have been defeated
+     */
+    private function allDefendersDefeated($defenders): bool
+    {
+        return $defenders->where('current_hull', '>', 0)->count() === 0;
+    }
+
+    /**
+     * Check if attackers have won
+     */
+    private function attackersWon($attackers): bool
+    {
+        return $attackers->where('current_hull', '>', 0)->count() > 0;
+    }
+
+    /**
+     * Execute attackers' turn in combat
+     */
+    private function executeAttackersTurn($attackers, $defenders, array $npcDefenders, &$combatLog): void
+    {
+        foreach ($attackers->where('current_hull', '>', 0) as $attacker) {
+            $target = $defenders->where('current_hull', '>', 0)->sortBy('current_hull')->first();
+
+            if (! $target) {
+                break;
+            }
+
+            $damage = $this->calculateDamage($attacker->playerShip->weapons);
+            $target->takeDamage($damage);
+            $attacker->recordDamageDealt($damage);
+
+            $targetIndex = $defenders->search(fn ($d) => $d->id === $target->id);
+            $targetName = $npcDefenders[$targetIndex]['name'] ?? 'Defense Drone';
+
+            $combatLog[] = [
+                'type' => 'attack',
+                'message' => "  ➜ {$attacker->player->call_sign} fires at {$targetName} for {$damage} damage! (Hull: {$target->current_hull})",
+            ];
+
+            if (! $target->isAlive()) {
+                $combatLog[] = [
+                    'type' => 'destroyed',
+                    'message' => "  💥 {$targetName} DESTROYED!",
+                ];
+            }
+        }
+    }
+
+    /**
+     * Execute defenders' turn in combat
+     */
+    private function executeDefendersTurn($attackers, $defenders, array $npcDefenders, &$combatLog): void
+    {
+        foreach ($defenders->where('current_hull', '>', 0) as $defenderIndex => $defender) {
+            $target = $attackers->where('current_hull', '>', 0)->sortBy('current_hull')->first();
+
+            if (! $target) {
+                break;
+            }
+
+            $defenderData = $npcDefenders[$defenderIndex];
+            $damage = $this->calculateDamage($defenderData['weapons']);
+            $target->takeDamage($damage);
+            $defender->recordDamageDealt($damage);
+
+            $combatLog[] = [
+                'type' => 'attack',
+                'message' => "  ⬅ {$defenderData['name']} fires at {$target->player->call_sign} for {$damage} damage! (Hull: {$target->current_hull})",
+            ];
+
+            if (! $target->isAlive()) {
+                $combatLog[] = [
+                    'type' => 'destroyed',
+                    'message' => "  💥 {$target->player->call_sign}'s ship DESTROYED!",
+                ];
+            }
+        }
+    }
+
+    /**
+     * Process combat outcome (victory/defeat handling)
+     */
+    private function processCombatOutcome(bool $attackersWon, Colony $colony, $attackers, &$combatLog, &$captureResult, &$buildingDamageResult): void
+    {
+        if ($attackersWon) {
+            $combatLog[] = [
+                'type' => 'victory',
+                'message' => '🏆 ATTACKERS BREACHED THE DEFENSES!',
+            ];
+
+            $buildingDamageResult = $this->applyColonyDamage($colony, $attackers);
+            $combatLog = array_merge($combatLog, $buildingDamageResult['log']);
+
+            $captureResult = $this->attemptColonyCapture($colony, $attackers->first()->player);
+            $combatLog = array_merge($combatLog, $captureResult['log']);
+
+            foreach ($attackers->where('current_hull', '>', 0) as $attacker) {
+                $attacker->playerShip->update(['hull' => $attacker->current_hull]);
+            }
+
+            $baseXP = 200;
+            $xpPerAttacker = (int) ceil($baseXP / $attackers->where('current_hull', '>', 0)->count());
+
+            foreach ($attackers->where('current_hull', '>', 0) as $attacker) {
+                $attacker->awardRewards($xpPerAttacker, 0);
+            }
+
+            $combatLog[] = [
+                'type' => 'rewards',
+                'message' => "⭐ Each surviving attacker earned: {$xpPerAttacker} XP",
+            ];
+        } else {
+            $combatLog[] = [
+                'type' => 'defeat',
+                'message' => '🛡️ DEFENSES HELD! Attackers repelled!',
+            ];
+
+            $colony->defense_rating += 10;
+            $colony->last_attacked_at = now();
+            $colony->save();
+        }
     }
 
     /**

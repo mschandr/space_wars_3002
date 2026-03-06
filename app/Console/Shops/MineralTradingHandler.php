@@ -18,146 +18,176 @@ class MineralTradingHandler extends BaseShopHandler
     public function show(Player $player, TradingHub $tradingHub): void
     {
         $this->resetTerminal();
-
         $running = true;
+
         while ($running) {
-            // Reload data
             $player->refresh();
             $player->load('activeShip.cargo.mineral');
             $ship = $player->activeShip;
 
-            // Lazy population: stock the hub on first access
             app(\App\Services\TradingService::class)->ensureInventoryPopulated($tradingHub);
-
-            // Load hub inventory
             $hubInventories = $tradingHub->inventories()->with('mineral')->where('quantity', '>', 0)->get();
             $playerCargo = $ship->cargo;
 
             $this->clearScreen();
+            $this->displayHeader($player, $ship, $tradingHub);
+            $this->displayMarketEvents($tradingHub);
+            $this->displayBuySection($hubInventories);
+            $this->displaySellSection($playerCargo, $hubInventories);
+            $this->displayFooter();
 
-            // Header
-            $this->renderShopHeader('MINERAL TRADING');
-
-            $this->line('  Trading Hub: '.$this->colorize($tradingHub->name, 'trade'));
-            $this->line('  Credits: '.$this->colorize(number_format($player->credits, 2), 'highlight'));
-
-            $cargoUsed = $ship->current_cargo;
-            $cargoTotal = $ship->cargo_hold;
-            $this->line('  Cargo Space: '.$this->colorize("{$cargoUsed}/{$cargoTotal} units", 'highlight'));
-            $this->newLine();
-
-            // Market Events (Drug Wars style!)
-            $eventService = app(\App\Services\MarketEventService::class);
-            $activeEvents = $eventService->getActiveEventsForHub($tradingHub);
-            if ($activeEvents->isNotEmpty()) {
-                $this->line($this->colorize('  📢 ACTIVE MARKET EVENTS:', 'highlight'));
-                foreach ($activeEvents->take(3) as $event) { // Show max 3 events
-                    $mineralName = $event->mineral ? $event->mineral->name : 'All Minerals';
-                    $multiplierPercent = (int) (($event->price_multiplier - 1) * 100);
-                    $indicator = $event->event_type->isPriceIncrease() ? '📈' : '📉';
-                    $color = $event->event_type->isPriceIncrease() ? 'pirate' : 'trade';
-
-                    $this->line('     '.$indicator.' '.
-                               $this->colorize($event->description, $color).
-                               ' '.$this->colorize('['.$event->getTimeRemainingString().']', 'dim'));
-                }
-                $this->newLine();
-            }
-
-            // BUY section
-            $this->line($this->colorize('  BUY FROM HUB (Hub sells to you):', 'header'));
-            $this->newLine();
-
-            if ($hubInventories->isEmpty()) {
-                $this->line($this->colorize('  No minerals available for purchase', 'dim'));
-            } else {
-                // Header row
-                $headerLine = sprintf('  %4s  %-30s %15s %12s', '', 'Mineral', 'Price', 'Stock');
-                $this->line($this->colorize($headerLine, 'dim'));
-                $this->line($this->colorize('  '.str_repeat('─', 65), 'dim'));
-
-                $displayInventories = $hubInventories->take(9);
-                foreach ($displayInventories as $index => $inventory) {
-                    $number = $index + 1;
-                    $mineral = $inventory->mineral;
-
-                    // Format with proper column alignment
-                    $dataLine = sprintf(
-                        '  %4s  %-30s %15s %12s',
-                        "[b{$number}]",
-                        $mineral->name,
-                        number_format($inventory->sell_price, 2),
-                        number_format($inventory->quantity, 0)
-                    );
-                    $this->line($dataLine);
-                }
-            }
-            $this->newLine();
-
-            // SELL section
-            $this->line($this->colorize('  SELL TO HUB (Hub buys from you):', 'header'));
-            $this->newLine();
-
-            if ($playerCargo->isEmpty()) {
-                $this->line($this->colorize('  No minerals in cargo', 'dim'));
-            } else {
-                // Header row
-                $headerLine = sprintf('  %4s  %-30s %15s %12s', '', 'Mineral', 'Price', 'Quantity');
-                $this->line($this->colorize($headerLine, 'dim'));
-                $this->line($this->colorize('  '.str_repeat('─', 65), 'dim'));
-
-                $displayCargo = $playerCargo->take(9);
-                foreach ($displayCargo as $index => $cargo) {
-                    $number = $index + 1;
-                    $mineral = $cargo->mineral;
-
-                    // Find hub's buy price for this mineral
-                    $hubInventory = $hubInventories->where('mineral_id', $mineral->id)->first();
-                    $buyPrice = $hubInventory ? $hubInventory->buy_price : $mineral->getMarketValue() * 0.85;
-
-                    // Format with proper column alignment
-                    $dataLine = sprintf(
-                        '  %4s  %-30s %15s %12s',
-                        "[s{$number}]",
-                        $mineral->name,
-                        number_format($buyPrice, 2),
-                        number_format($cargo->quantity, 0)
-                    );
-                    $this->line($dataLine);
-                }
-            }
-
-            $this->newLine();
-            $this->renderSeparator();
-            $this->line('  '.$this->colorize('[b1-b9]', 'label').' Buy mineral  |  '.$this->colorize('[s1-s9]', 'label').' Sell mineral  |  '.$this->colorize('[q]', 'label').' Exit');
-            $this->renderBorder();
-
-            // Get input
             $char = $this->readChar();
+            $running = $this->handleInput($char, $player, $hubInventories, $playerCargo, $tradingHub);
+        }
+    }
 
-            if ($this->isQuitKey($char)) {
-                $running = false;
-            } elseif ($char === 'b') {
-                // Buy mode - read next char for number
-                $num = fgetc(STDIN);
-                if (is_numeric($num) && $num >= '1' && $num <= '9') {
-                    $selectedIndex = (int) $num - 1;
-                    if ($selectedIndex < $hubInventories->count()) {
-                        $selectedInventory = $hubInventories->values()->get($selectedIndex);
-                        $this->buyMineralFlow($player, $selectedInventory, $tradingHub);
-                    }
-                }
-            } elseif ($char === 's') {
-                // Sell mode - read next char for number
-                $num = fgetc(STDIN);
-                if (is_numeric($num) && $num >= '1' && $num <= '9') {
-                    $selectedIndex = (int) $num - 1;
-                    if ($selectedIndex < $playerCargo->count()) {
-                        $selectedCargo = $playerCargo->values()->get($selectedIndex);
-                        $this->sellMineralFlow($player, $selectedCargo, $tradingHub);
-                    }
-                }
-            }
+    private function displayHeader(Player $player, $ship, TradingHub $tradingHub): void
+    {
+        $this->renderShopHeader('MINERAL TRADING');
+        $this->line('  Trading Hub: '.$this->colorize($tradingHub->name, 'trade'));
+        $this->line('  Credits: '.$this->colorize(number_format($player->credits, 2), 'highlight'));
+
+        $cargoUsed = $ship->current_cargo;
+        $cargoTotal = $ship->cargo_hold;
+        $this->line('  Cargo Space: '.$this->colorize("{$cargoUsed}/{$cargoTotal} units", 'highlight'));
+        $this->newLine();
+    }
+
+    private function displayMarketEvents(TradingHub $tradingHub): void
+    {
+        $eventService = app(\App\Services\MarketEventService::class);
+        $activeEvents = $eventService->getActiveEventsForHub($tradingHub);
+
+        if ($activeEvents->isEmpty()) {
+            return;
+        }
+
+        $this->line($this->colorize('  📢 ACTIVE MARKET EVENTS:', 'highlight'));
+        foreach ($activeEvents->take(3) as $event) {
+            $indicator = $event->event_type->isPriceIncrease() ? '📈' : '📉';
+            $color = $event->event_type->isPriceIncrease() ? 'pirate' : 'trade';
+
+            $this->line('     '.$indicator.' '.
+                       $this->colorize($event->description, $color).
+                       ' '.$this->colorize('['.$event->getTimeRemainingString().']', 'dim'));
+        }
+        $this->newLine();
+    }
+
+    private function displayBuySection($hubInventories): void
+    {
+        $this->line($this->colorize('  BUY FROM HUB (Hub sells to you):', 'header'));
+        $this->newLine();
+
+        if ($hubInventories->isEmpty()) {
+            $this->line($this->colorize('  No minerals available for purchase', 'dim'));
+            return;
+        }
+
+        $this->displayTableHeader('Mineral', 'Price', 'Stock');
+        $displayInventories = $hubInventories->take(9);
+
+        foreach ($displayInventories as $index => $inventory) {
+            $number = $index + 1;
+            $mineral = $inventory->mineral;
+
+            $dataLine = sprintf(
+                '  %4s  %-30s %15s %12s',
+                "[b{$number}]",
+                $mineral->name,
+                number_format($inventory->sell_price, 2),
+                number_format($inventory->quantity, 0)
+            );
+            $this->line($dataLine);
+        }
+        $this->newLine();
+    }
+
+    private function displaySellSection($playerCargo, $hubInventories): void
+    {
+        $this->line($this->colorize('  SELL TO HUB (Hub buys from you):', 'header'));
+        $this->newLine();
+
+        if ($playerCargo->isEmpty()) {
+            $this->line($this->colorize('  No minerals in cargo', 'dim'));
+            return;
+        }
+
+        $this->displayTableHeader('Mineral', 'Price', 'Quantity');
+        $displayCargo = $playerCargo->take(9);
+
+        foreach ($displayCargo as $index => $cargo) {
+            $number = $index + 1;
+            $mineral = $cargo->mineral;
+            $hubInventory = $hubInventories->where('mineral_id', $mineral->id)->first();
+            $buyPrice = $hubInventory ? $hubInventory->buy_price : $mineral->getMarketValue() * 0.85;
+
+            $dataLine = sprintf(
+                '  %4s  %-30s %15s %12s',
+                "[s{$number}]",
+                $mineral->name,
+                number_format($buyPrice, 2),
+                number_format($cargo->quantity, 0)
+            );
+            $this->line($dataLine);
+        }
+        $this->newLine();
+    }
+
+    private function displayTableHeader(string $col1, string $col2, string $col3): void
+    {
+        $headerLine = sprintf('  %4s  %-30s %15s %12s', '', $col1, $col2, $col3);
+        $this->line($this->colorize($headerLine, 'dim'));
+        $this->line($this->colorize('  '.str_repeat('─', 65), 'dim'));
+    }
+
+    private function displayFooter(): void
+    {
+        $this->renderSeparator();
+        $this->line('  '.$this->colorize('[b1-b9]', 'label').' Buy mineral  |  '.$this->colorize('[s1-s9]', 'label').' Sell mineral  |  '.$this->colorize('[q]', 'label').' Exit');
+        $this->renderBorder();
+    }
+
+    private function handleInput(string $char, Player $player, $hubInventories, $playerCargo, TradingHub $tradingHub): bool
+    {
+        if ($this->isQuitKey($char)) {
+            return false;
+        }
+
+        if ($char === 'b') {
+            $this->handleBuyInput($player, $hubInventories, $tradingHub);
+        } elseif ($char === 's') {
+            $this->handleSellInput($player, $playerCargo, $tradingHub);
+        }
+
+        return true;
+    }
+
+    private function handleBuyInput(Player $player, $hubInventories, TradingHub $tradingHub): void
+    {
+        $num = fgetc(STDIN);
+        if (! is_numeric($num) || $num < '1' || $num > '9') {
+            return;
+        }
+
+        $selectedIndex = (int) $num - 1;
+        if ($selectedIndex < $hubInventories->count()) {
+            $selectedInventory = $hubInventories->values()->get($selectedIndex);
+            $this->buyMineralFlow($player, $selectedInventory, $tradingHub);
+        }
+    }
+
+    private function handleSellInput(Player $player, $playerCargo, TradingHub $tradingHub): void
+    {
+        $num = fgetc(STDIN);
+        if (! is_numeric($num) || $num < '1' || $num > '9') {
+            return;
+        }
+
+        $selectedIndex = (int) $num - 1;
+        if ($selectedIndex < $playerCargo->count()) {
+            $selectedCargo = $playerCargo->values()->get($selectedIndex);
+            $this->sellMineralFlow($player, $selectedCargo, $tradingHub);
         }
     }
 
@@ -169,6 +199,31 @@ class MineralTradingHandler extends BaseShopHandler
         $mineral = $inventory->mineral;
         $ship = $player->activeShip;
 
+        $this->displayMineralInfo($mineral, $inventory, $player, $ship);
+        $quantity = $this->getQuantityFromUser();
+
+        if ($quantity <= 0) {
+            return;
+        }
+
+        if (! $this->validateBuyPurchase($player, $inventory, $quantity, $ship)) {
+            return;
+        }
+
+        $totalCost = $inventory->sell_price * $quantity;
+        if (! $this->confirmPurchase($mineral, $inventory, $quantity, $totalCost, $ship, $player)) {
+            return;
+        }
+
+        $result = $this->executeBuyTransaction($player, $inventory, $ship, $mineral, $quantity, $totalCost);
+        $this->displayBuySuccess($mineral, $quantity, $totalCost, $result);
+    }
+
+    /**
+     * Display mineral info and current state.
+     */
+    private function displayMineralInfo($mineral, TradingHubInventory $inventory, Player $player, $ship): void
+    {
         $this->clearScreen();
         $this->renderShopHeader('BUY MINERAL - '.strtoupper($mineral->name));
 
@@ -177,30 +232,35 @@ class MineralTradingHandler extends BaseShopHandler
         $this->line('  Your Credits: '.$this->colorize(number_format($player->credits, 2), 'dim'));
         $this->line('  Cargo Space: '.$this->colorize("{$ship->current_cargo}/{$ship->cargo_hold} units", 'dim'));
         $this->newLine();
+    }
 
+    /**
+     * Get quantity input from user.
+     */
+    private function getQuantityFromUser(): int
+    {
         $this->line($this->colorize('  How many units to buy? (0 to cancel): ', 'label'));
         $this->resetTerminal();
-        $quantity = (int) trim(fgets(STDIN));
+        return (int) trim(fgets(STDIN));
+    }
 
-        if ($quantity <= 0) {
-            return;
-        }
-
-        // Validations
+    /**
+     * Validate purchase prerequisites (stock, credits, cargo).
+     */
+    private function validateBuyPurchase(Player $player, TradingHubInventory $inventory, int $quantity, $ship): bool
+    {
         if (! $inventory->hasStock($quantity)) {
             $this->clearScreen();
             $this->error('  Insufficient stock available');
             $this->newLine();
             $this->waitForAnyKey();
-
-            return;
+            return false;
         }
 
         $totalCost = $inventory->sell_price * $quantity;
         if ($player->credits < $totalCost) {
             $this->showInsufficientCredits($totalCost, $player->credits);
-
-            return;
+            return false;
         }
 
         $availableSpace = $ship->cargo_hold - $ship->current_cargo;
@@ -212,11 +272,17 @@ class MineralTradingHandler extends BaseShopHandler
             $this->line('  Available: '.$availableSpace.' units');
             $this->newLine();
             $this->waitForAnyKey();
-
-            return;
+            return false;
         }
 
-        // Confirmation
+        return true;
+    }
+
+    /**
+     * Display purchase confirmation screen.
+     */
+    private function confirmPurchase($mineral, TradingHubInventory $inventory, int $quantity, float $totalCost, $ship, Player $player): bool
+    {
         $this->clearScreen();
         $this->renderShopHeader('CONFIRM PURCHASE');
         $this->line('  Mineral: '.$this->colorize($mineral->name, 'trade'));
@@ -230,13 +296,15 @@ class MineralTradingHandler extends BaseShopHandler
         $this->line($this->colorize('  Confirm purchase? [y/n]: ', 'label'));
 
         $confirm = $this->readChar();
+        return $confirm === 'y' || $confirm === 'Y';
+    }
 
-        if ($confirm !== 'y' && $confirm !== 'Y') {
-            return;
-        }
-
-        // Execute atomically
-        $result = DB::transaction(function () use ($player, $inventory, $ship, $mineral, $quantity, $totalCost) {
+    /**
+     * Execute purchase transaction with locking.
+     */
+    private function executeBuyTransaction(Player $player, TradingHubInventory $inventory, $ship, $mineral, int $quantity, float $totalCost): array
+    {
+        return DB::transaction(function () use ($player, $inventory, $ship, $mineral, $quantity, $totalCost) {
             // Re-fetch all mutable rows with locks inside transaction (prevent TOCTOU race)
             $player = Player::where('id', $player->id)->lockForUpdate()->firstOrFail();
             $ship = $player->activeShip()->lockForUpdate()->firstOrFail();
@@ -276,16 +344,21 @@ class MineralTradingHandler extends BaseShopHandler
             $ship->current_cargo += $quantity;
             $ship->save();
 
-            // Award XP for trading (small amount for purchases)
-            $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
+            // Award XP for trading
+            $xpEarned = (int) max(5, $quantity / 10);
             $oldLevel = $player->level;
             $player->addExperience($xpEarned);
             $newLevel = $player->level;
 
             return compact('xpEarned', 'oldLevel', 'newLevel');
         });
+    }
 
-        // Success message
+    /**
+     * Display purchase success message.
+     */
+    private function displayBuySuccess($mineral, int $quantity, float $totalCost, array $result): void
+    {
         $this->clearScreen();
         $this->showSuccess('✓ PURCHASE SUCCESSFUL');
         $this->line('  Purchased: '.number_format($quantity).' units of '.$mineral->name);

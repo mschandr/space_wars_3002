@@ -223,16 +223,42 @@ class PlayerCommand extends Command
 
     private function renderStarSystem(): void
     {
-        if (! $this->currentStar) {
-            $this->viewMode = 'space';
-            $this->render();
-
+        if ($this->handleNoStarSelected()) {
             return;
         }
 
         $this->renderHeader(sprintf('Star System: %s', $this->currentStar->name));
+        $this->displayStarInfo();
 
-        // Star info
+        $planets = $this->currentStar->children()->orderBy('orbital_index')->get();
+        if ($planets->isEmpty()) {
+            $this->line('  No planets in this system');
+        } else {
+            $this->displayOrbitalBodies($planets);
+        }
+
+        $dividerX = $this->displayShipStatusPanel();
+        $this->renderVerticalDivider($dividerX);
+    }
+
+    /**
+     * Handle case where no star is selected.
+     */
+    private function handleNoStarSelected(): bool
+    {
+        if (! $this->currentStar) {
+            $this->viewMode = 'space';
+            $this->render();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Display stellar class and coordinates.
+     */
+    private function displayStarInfo(): void
+    {
         $stellarClass = $this->currentStar->attributes['stellar_class'] ?? 'Unknown';
         $this->line(sprintf('  Stellar Class: %s | Coordinates: (%d, %d)',
             $this->colorize($stellarClass, 'star_yellow'),
@@ -240,61 +266,90 @@ class PlayerCommand extends Command
             $this->currentStar->y
         ));
         $this->newLine();
+    }
 
-        // List planets
-        $planets = $this->currentStar->children()->orderBy('orbital_index')->get();
+    /**
+     * Display orbital bodies (planets).
+     */
+    private function displayOrbitalBodies($planets): void
+    {
+        $this->line('  '.$this->colorize('Orbital Bodies:', 'header'));
+        $this->newLine();
 
-        if ($planets->isEmpty()) {
-            $this->line('  No planets in this system');
-        } else {
-            $this->line('  '.$this->colorize('Orbital Bodies:', 'header'));
-            $this->newLine();
+        foreach ($planets as $index => $planet) {
+            $this->displayPlanetEntry($index, $planet);
+        }
+    }
 
-            foreach ($planets as $index => $planet) {
-                $icon = $planet->getDisplayIcon();
+    /**
+     * Display a single planet entry.
+     */
+    private function displayPlanetEntry(int $index, $planet): void
+    {
+        $icon = $planet->getDisplayIcon();
+        $info = $this->buildPlanetInfo($planet);
+        $infoStr = ! empty($info) ? ' '.implode(' ', $info) : '';
 
-                // Build info string
-                $info = [];
+        $this->line(sprintf('  [%d] %s %s - %s%s',
+            $index + 1,
+            $icon,
+            $this->colorize($planet->name, 'label'),
+            $planet->type->label(),
+            $infoStr
+        ));
+    }
 
-                // Inhabited status with population
-                if ($planet->is_inhabited) {
-                    $population = $planet->attributes['population'] ?? 0;
-                    if ($population > 0) {
-                        $popFormatted = $population >= 1_000_000_000
-                            ? number_format($population / 1_000_000_000, 1).'B'
-                            : ($population >= 1_000_000
-                                ? number_format($population / 1_000_000, 1).'M'
-                                : ($population >= 1_000
-                                    ? number_format($population / 1_000, 1).'K'
-                                    : number_format($population)));
-                        $info[] = $this->colorize("Pop: {$popFormatted}", 'highlight');
-                    } else {
-                        $info[] = $this->colorize('[INHABITED]', 'highlight');
-                    }
-                }
+    /**
+     * Build planet information array.
+     */
+    private function buildPlanetInfo($planet): array
+    {
+        $info = [];
 
-                // Trading hub indicator
-                if ($planet->tradingHub) {
-                    $info[] = $this->colorize('[TRADING HUB]', 'success');
-                }
-
-                $infoStr = ! empty($info) ? ' '.implode(' ', $info) : '';
-
-                $this->line(sprintf('  [%d] %s %s - %s%s',
-                    $index + 1,
-                    $icon,
-                    $this->colorize($planet->name, 'label'),
-                    $planet->type->label(),
-                    $infoStr
-                ));
-            }
+        if ($planet->is_inhabited) {
+            $population = $planet->attributes['population'] ?? 0;
+            $info[] = $population > 0
+                ? $this->colorize("Pop: ".$this->formatPopulation($population), 'highlight')
+                : $this->colorize('[INHABITED]', 'highlight');
         }
 
+        if ($planet->tradingHub) {
+            $info[] = $this->colorize('[TRADING HUB]', 'success');
+        }
+
+        return $info;
+    }
+
+    /**
+     * Format population number with suffix.
+     */
+    private function formatPopulation(int $population): string
+    {
+        return $population >= 1_000_000_000
+            ? number_format($population / 1_000_000_000, 1).'B'
+            : ($population >= 1_000_000
+                ? number_format($population / 1_000_000, 1).'M'
+                : ($population >= 1_000
+                    ? number_format($population / 1_000, 1).'K'
+                    : number_format($population)));
+    }
+
+    /**
+     * Display ship status panel.
+     */
+    private function displayShipStatusPanel(): int
+    {
         $this->newLine();
         $dividerX = (int) ($this->termWidth * 0.65);
         $this->renderShipStatusOverlay($dividerX, 8);
+        return $dividerX;
+    }
 
-        // Vertical divider
+    /**
+     * Render vertical divider.
+     */
+    private function renderVerticalDivider(int $dividerX): void
+    {
         for ($y = 3; $y < $this->termHeight - 4; $y++) {
             echo sprintf("\033[%d;%dH│", $y, $dividerX);
         }
@@ -359,16 +414,36 @@ class PlayerCommand extends Command
     private function renderSpatialCanvas(int $width, int $height): void
     {
         $canvas = array_fill(0, $height, array_fill(0, $width - 2, ' '));
-
         $pois = collect($this->nearbyPOIs);
-        if ($pois->isEmpty()) {
-            $this->line('  No stars within sensor range (radius: '.$this->scanRadius.' units)');
-            $this->line('  Press (S) to increase sensor range');
 
+        if ($pois->isEmpty()) {
+            $this->displayNoStarsInRange();
             return;
         }
 
-        // Calculate bounds
+        [$minX, $maxX, $minY, $maxY] = $this->calculateBounds($pois);
+        [$scaleX, $scaleY] = $this->calculateScale($minX, $maxX, $minY, $maxY, $width, $height);
+
+        $starIndex = $this->plotPois($canvas, $pois, $minX, $minY, $scaleX, $scaleY, $width, $height);
+
+        $this->renderCanvas($canvas);
+        $this->displayScanLegend($starIndex);
+    }
+
+    /**
+     * Display message when no stars in range.
+     */
+    private function displayNoStarsInRange(): void
+    {
+        $this->line('  No stars within sensor range (radius: '.$this->scanRadius.' units)');
+        $this->line('  Press (S) to increase sensor range');
+    }
+
+    /**
+     * Calculate coordinate bounds for scaling.
+     */
+    private function calculateBounds($pois): array
+    {
         $minX = $pois->min('x');
         $maxX = $pois->max('x');
         $minY = $pois->min('y');
@@ -382,15 +457,30 @@ class PlayerCommand extends Command
         $minY -= $rangeY * 0.15;
         $maxY += $rangeY * 0.15;
 
+        return [$minX, $maxX, $minY, $maxY];
+    }
+
+    /**
+     * Calculate scale factors for canvas.
+     */
+    private function calculateScale(float $minX, float $maxX, float $minY, float $maxY, int $width, int $height): array
+    {
         $rangeX = $maxX - $minX;
         $rangeY = $maxY - $minY;
-
         $scaleX = ($width - 4) / max($rangeX, 1);
         $scaleY = ($height - 2) / max($rangeY, 1);
 
-        // Plot POIs
+        return [$scaleX, $scaleY];
+    }
+
+    /**
+     * Plot all POIs on canvas.
+     */
+    private function plotPois(&$canvas, $pois, float $minX, float $minY, float $scaleX, float $scaleY, int $width, int $height): int
+    {
         $starIndex = 0;
-        $this->poiMap = []; // Reset map
+        $this->poiMap = [];
+
         foreach ($pois as $poi) {
             $x = (int) round(($poi['x'] - $minX) * $scaleX);
             $y = (int) round(($poi['y'] - $minY) * $scaleY);
@@ -398,35 +488,72 @@ class PlayerCommand extends Command
             $x = max(0, min($width - 4, $x));
             $y = max(0, min($height - 1, $y));
 
-            $isCurrent = $poi['id'] === $this->player->current_poi_id;
-
-            if ($isCurrent) {
-                $canvas[$y][$x] = $this->colorize('@', 'player');
-            } elseif ($poi['type'] === PointOfInterestType::STAR->value && $starIndex < 30) {
-                $char = $this->indexToChar($starIndex);
-                $this->poiMap[$starIndex] = $poi;
-                $stellarClass = $poi['attributes']['stellar_class'] ?? null;
-                $color = $this->getStarColor($stellarClass);
-
-                // Check if star or its children have trading hub
-                $hasTradingHub = ! empty($poi['trading_hub']) || collect($poi['children'] ?? [])->some(fn ($child) => ! empty($child['trading_hub']));
-                if ($hasTradingHub && $x + 1 < $width - 2) {
-                    // Show star with [T] indicator for trading hub
-                    $canvas[$y][$x] = $this->colorize($char, $color);
-                    $canvas[$y][$x + 1] = $this->colorize('T', 'success');
-                } else {
-                    $canvas[$y][$x] = $this->colorize($char, $color);
-                }
-                $starIndex++;
-            }
+            $this->plotPoiOnCanvas($canvas, $poi, $x, $y, $width, $starIndex);
         }
 
-        // Render canvas
+        return $starIndex;
+    }
+
+    /**
+     * Plot a single POI on the canvas.
+     */
+    private function plotPoiOnCanvas(&$canvas, array $poi, int $x, int $y, int $width, &$starIndex): void
+    {
+        if ($poi['id'] === $this->player->current_poi_id) {
+            $canvas[$y][$x] = $this->colorize('@', 'player');
+            return;
+        }
+
+        if ($poi['type'] === PointOfInterestType::STAR->value && $starIndex < 30) {
+            $this->plotStarOnCanvas($canvas, $poi, $x, $y, $width, $starIndex);
+        }
+    }
+
+    /**
+     * Plot a star on the canvas with optional trading hub indicator.
+     */
+    private function plotStarOnCanvas(&$canvas, array $poi, int $x, int $y, int $width, &$starIndex): void
+    {
+        $char = $this->indexToChar($starIndex);
+        $this->poiMap[$starIndex] = $poi;
+        $stellarClass = $poi['attributes']['stellar_class'] ?? null;
+        $color = $this->getStarColor($stellarClass);
+
+        $hasTradingHub = $this->checkHasTradingHub($poi);
+
+        if ($hasTradingHub && $x + 1 < $width - 2) {
+            $canvas[$y][$x] = $this->colorize($char, $color);
+            $canvas[$y][$x + 1] = $this->colorize('T', 'success');
+        } else {
+            $canvas[$y][$x] = $this->colorize($char, $color);
+        }
+
+        $starIndex++;
+    }
+
+    /**
+     * Check if POI has a trading hub.
+     */
+    private function checkHasTradingHub(array $poi): bool
+    {
+        return ! empty($poi['trading_hub']) || collect($poi['children'] ?? [])->some(fn ($child) => ! empty($child['trading_hub']));
+    }
+
+    /**
+     * Render the canvas to output.
+     */
+    private function renderCanvas($canvas): void
+    {
         foreach ($canvas as $row) {
             $this->line('  '.implode('', $row));
         }
+    }
 
-        // Legend
+    /**
+     * Display scan results legend.
+     */
+    private function displayScanLegend(int $starIndex): void
+    {
         $this->newLine();
         $this->line('  '.$this->colorize('@', 'player').' = You | '.$this->colorize('T', 'success').' = Trading Hub | Scan radius: '.$this->scanRadius.' units | Stars: '.$starIndex);
     }

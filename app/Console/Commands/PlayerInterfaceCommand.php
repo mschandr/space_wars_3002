@@ -461,75 +461,127 @@ class PlayerInterfaceCommand extends Command
 
     private function getSystemViewColumn(): string
     {
-        $output = '';
         $location = $this->player->currentLocation;
 
         if (! $location) {
             return $this->colorize('  LOCATION: Unknown', 'dim');
         }
 
-        // Header
-        $headerText = 'CURRENT LOCATION';
-        $headerPadding = 57 - mb_strlen($headerText);
+        $output = '';
+        $output .= $this->buildBoxHeader('CURRENT LOCATION');
 
-        $output .= $this->colorize('╔'.str_repeat('═', 58).'╗', 'border')."\n";
-        $output .= $this->colorize('║', 'border').' '.
-                   $this->colorize($headerText, 'header').
-                   str_repeat(' ', $headerPadding).
-                   $this->colorize('║', 'border')."\n";
-        $output .= $this->colorize('╠'.str_repeat('═', 58).'╣', 'border')."\n";
-
-        // Get root star
         $star = $location->type === PointOfInterestType::STAR
             ? $location
             : $location->getRootStar();
 
         if ($star) {
-            $output .= $this->formatBoxLine('System: '.$star->name);
-            $output .= $this->formatBoxLine('Coordinates: ('.$star->x.', '.$star->y.')');
-
-            if (isset($star->attributes['stellar_class'])) {
-                $output .= $this->formatBoxLine('Class: '.$star->attributes['stellar_class']);
-            }
-
-            // Show inhabited status
-            $inhabitedStatus = $star->is_inhabited
-                ? $this->colorize('INHABITED', 'trade')
-                : $this->colorize('UNINHABITED', 'dim');
-            $output .= $this->formatBoxLine('Status: '.$inhabitedStatus);
-
-            // Show warp gate count
-            $gateCount = $star->outgoingGates()->where('is_hidden', false)->count();
-            if ($gateCount > 0) {
-                $output .= $this->formatBoxLine('Warp Gates: '.$this->colorize($gateCount, 'highlight'));
-            } else {
-                $output .= $this->formatBoxLine('Warp Gates: '.$this->colorize('None (Isolated)', 'dim'));
-            }
-
-            $output .= $this->colorize('╟'.str_repeat('─', 58).'╢', 'border')."\n";
-
-            // Show planets
-            $planets = $star->children;
-            if ($planets->isNotEmpty()) {
-                $output .= $this->formatBoxLine('ORBITAL BODIES:', true);
-                $output .= $this->formatBoxLine('');
-
-                foreach ($planets as $planet) {
-                    $icon = $planet->getDisplayIcon();
-                    $current = ($planet->id === $location->id) ? ' ◄' : '';
-                    $output .= $this->formatBoxLine("  {$icon} [{$planet->orbital_index}] {$planet->name}{$current}");
-                }
-            } else {
-                $output .= $this->formatBoxLine('No orbital bodies');
-            }
+            $output .= $this->formatStarInfo($star);
+            $output .= $this->formatOrbitalInfo($star, $location);
         } else {
-            $output .= $this->formatBoxLine('System: '.$location->name);
-            $output .= $this->formatBoxLine('Type: '.$location->type->name);
-            $output .= $this->formatBoxLine('Coordinates: ('.$location->x.', '.$location->y.')');
+            $output .= $this->formatNonStarLocation($location);
         }
 
         $output .= $this->colorize('╚'.str_repeat('═', 58).'╝', 'border')."\n";
+        return $output;
+    }
 
+    /**
+     * Build box header.
+     */
+    private function buildBoxHeader(string $title): string
+    {
+        $headerPadding = 57 - mb_strlen($title);
+        return $this->colorize('╔'.str_repeat('═', 58).'╗', 'border')."\n" .
+               $this->colorize('║', 'border').' '.
+               $this->colorize($title, 'header').
+               str_repeat(' ', $headerPadding).
+               $this->colorize('║', 'border')."\n" .
+               $this->colorize('╠'.str_repeat('═', 58).'╣', 'border')."\n";
+    }
+
+    /**
+     * Format star system information.
+     */
+    private function formatStarInfo($star): string
+    {
+        $output = '';
+        $output .= $this->formatBoxLine('System: '.$star->name);
+        $output .= $this->formatBoxLine('Coordinates: ('.$star->x.', '.$star->y.')');
+
+        if (isset($star->attributes['stellar_class'])) {
+            $output .= $this->formatBoxLine('Class: '.$star->attributes['stellar_class']);
+        }
+
+        $output .= $this->formatBoxLine('Status: '.$this->getInhabitedStatus($star));
+        $output .= $this->formatBoxLine('Warp Gates: '.$this->getWarpGateDisplay($star));
+
+        return $output;
+    }
+
+    /**
+     * Get inhabited status display.
+     */
+    private function getInhabitedStatus($star): string
+    {
+        return $star->is_inhabited
+            ? $this->colorize('INHABITED', 'trade')
+            : $this->colorize('UNINHABITED', 'dim');
+    }
+
+    /**
+     * Get warp gate display.
+     */
+    private function getWarpGateDisplay($star): string
+    {
+        $gateCount = $star->outgoingGates()->where('is_hidden', false)->count();
+        return $gateCount > 0
+            ? $this->colorize($gateCount, 'highlight')
+            : $this->colorize('None (Isolated)', 'dim');
+    }
+
+    /**
+     * Format orbital bodies information.
+     */
+    private function formatOrbitalInfo($star, $location): string
+    {
+        $output = '';
+        $output .= $this->colorize('╟'.str_repeat('─', 58).'╢', 'border')."\n";
+
+        $planets = $star->children;
+        if ($planets->isNotEmpty()) {
+            $output .= $this->formatBoxLine('ORBITAL BODIES:', true);
+            $output .= $this->formatBoxLine('');
+            $output .= $this->formatPlanetsList($planets, $location);
+        } else {
+            $output .= $this->formatBoxLine('No orbital bodies');
+        }
+
+        return $output;
+    }
+
+    /**
+     * Format planets list.
+     */
+    private function formatPlanetsList($planets, $location): string
+    {
+        $output = '';
+        foreach ($planets as $planet) {
+            $icon = $planet->getDisplayIcon();
+            $current = ($planet->id === $location->id) ? ' ◄' : '';
+            $output .= $this->formatBoxLine("  {$icon} [{$planet->orbital_index}] {$planet->name}{$current}");
+        }
+        return $output;
+    }
+
+    /**
+     * Format non-star location information.
+     */
+    private function formatNonStarLocation($location): string
+    {
+        $output = '';
+        $output .= $this->formatBoxLine('System: '.$location->name);
+        $output .= $this->formatBoxLine('Type: '.$location->type->name);
+        $output .= $this->formatBoxLine('Coordinates: ('.$location->x.', '.$location->y.')');
         return $output;
     }
 
@@ -774,15 +826,7 @@ class PlayerInterfaceCommand extends Command
         system('stty sane');
 
         $location = $this->player->currentLocation;
-        if (! $location) {
-            $this->clearScreen();
-            $this->error('You must be at a location to travel.');
-            $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
-            $this->refreshInterface();
-
+        if (! $this->validateLocationExists($location)) {
             return;
         }
 
@@ -793,15 +837,7 @@ class PlayerInterfaceCommand extends Command
             ->where('status', 'active')
             ->get();
 
-        if ($gates->isEmpty()) {
-            $this->clearScreen();
-            $this->error('No warp gates available from this location.');
-            $this->newLine();
-            $this->line($this->colorize('  Press any key to continue...', 'dim'));
-            system('stty -icanon -echo');
-            fgetc(STDIN);
-            $this->refreshInterface();
-
+        if (! $this->validateGatesAvailable($gates)) {
             return;
         }
 
@@ -815,83 +851,171 @@ class PlayerInterfaceCommand extends Command
 
             $this->clearScreen();
 
-            // Header
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->line($this->colorize('  WARP GATE TRAVEL', 'header'));
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-            $this->newLine();
-
-            $this->line($this->colorize('  Current Location: ', 'label').$location->name);
-            $this->line($this->colorize('  Fuel: ', 'label').
-                       $this->colorize($ship->current_fuel.'/'.$ship->max_fuel, 'highlight'));
-            $this->newLine();
-
-            $this->line($this->colorize('  AVAILABLE DESTINATIONS:', 'header'));
-            $this->newLine();
-
-            // Display available gates (limit to first 9)
+            // Render interface
+            $this->renderTravelHeader($location, $ship);
             $displayGates = $gates->take(9);
-            foreach ($displayGates as $index => $gate) {
-                $number = $index + 1;
-                $destination = $gate->destinationPoi;
-                $distance = $gate->distance ?? $gate->calculateDistance();
+            $this->displayAvailableDestinations($displayGates, $ship);
+            $this->renderTravelPrompt($displayGates);
 
-                // Calculate fuel cost (distance affects fuel consumption)
-                $fuelCost = $this->calculateFuelCost($distance, $ship);
-
-                $canAfford = $ship->current_fuel >= $fuelCost;
-                $statusColor = $canAfford ? 'highlight' : 'dim';
-                $status = $canAfford ? '' : ' '.$this->colorize('[INSUFFICIENT FUEL]', 'dim');
-
-                $this->line(
-                    $this->colorize("  [{$number}] ", 'label').
-                    $this->colorize($destination->name, $statusColor).
-                    $this->colorize(' - Distance: '.round($distance, 1), 'dim').
-                    $this->colorize(' - Fuel Cost: '.$fuelCost, $statusColor).
-                    $status
-                );
-
-                // Show destination type and status
-                $typeInfo = '      Type: '.$destination->type->name;
-                if ($destination->type === PointOfInterestType::STAR) {
-                    $tradingHub = $destination->tradingHub;
-                    if ($tradingHub && $tradingHub->is_active) {
-                        $typeInfo .= $this->colorize(' [Trading Hub]', 'trade');
-                    }
-
-                    // Show inhabited status
-                    if ($destination->is_inhabited) {
-                        $typeInfo .= $this->colorize(' [Inhabited]', 'trade');
-                    } else {
-                        $typeInfo .= $this->colorize(' [Uninhabited]', 'dim');
-                    }
-                }
-                $this->line($this->colorize($typeInfo, 'dim'));
-                $this->newLine();
-            }
-
-            $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
-            $this->line('  '.$this->colorize('[1-9]', 'label').' Select destination  |  '.
-                       $this->colorize('[q]', 'label').' Cancel');
-            $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-
-            // Get input
+            // Handle user input
             system('stty -icanon -echo');
             $char = fgetc(STDIN);
-
-            if ($char === 'q' || $char === "\033") {
-                $running = false;
-            } elseif (is_numeric($char) && $char >= '1' && $char <= '9') {
-                $selectedIndex = (int) $char - 1;
-                if ($selectedIndex < $displayGates->count()) {
-                    $selectedGate = $displayGates[$selectedIndex];
-                    $this->executeTravel($selectedGate);
-                    $running = false;
-                }
-            }
+            $running = $this->handleTravelInput($char, $displayGates);
         }
 
         $this->refreshInterface();
+    }
+
+    /**
+     * Validate that player has a current location.
+     */
+    private function validateLocationExists($location): bool
+    {
+        if ($location) {
+            return true;
+        }
+
+        $this->clearScreen();
+        $this->error('You must be at a location to travel.');
+        $this->newLine();
+        $this->line($this->colorize('  Press any key to continue...', 'dim'));
+        system('stty -icanon -echo');
+        fgetc(STDIN);
+        $this->refreshInterface();
+
+        return false;
+    }
+
+    /**
+     * Validate that available gates exist.
+     */
+    private function validateGatesAvailable($gates): bool
+    {
+        if (! $gates->isEmpty()) {
+            return true;
+        }
+
+        $this->clearScreen();
+        $this->error('No warp gates available from this location.');
+        $this->newLine();
+        $this->line($this->colorize('  Press any key to continue...', 'dim'));
+        system('stty -icanon -echo');
+        fgetc(STDIN);
+        $this->refreshInterface();
+
+        return false;
+    }
+
+    /**
+     * Render travel interface header with location and fuel info.
+     */
+    private function renderTravelHeader($location, $ship): void
+    {
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line($this->colorize('  WARP GATE TRAVEL', 'header'));
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->newLine();
+
+        $this->line($this->colorize('  Current Location: ', 'label').$location->name);
+        $this->line($this->colorize('  Fuel: ', 'label').
+                   $this->colorize($ship->current_fuel.'/'.$ship->max_fuel, 'highlight'));
+        $this->newLine();
+
+        $this->line($this->colorize('  AVAILABLE DESTINATIONS:', 'header'));
+        $this->newLine();
+    }
+
+    /**
+     * Display list of available warp destinations.
+     */
+    private function displayAvailableDestinations($displayGates, $ship): void
+    {
+        foreach ($displayGates as $index => $gate) {
+            $number = $index + 1;
+            $destination = $gate->destinationPoi;
+            $distance = $gate->distance ?? $gate->calculateDistance();
+            $fuelCost = $this->calculateFuelCost($distance, $ship);
+
+            $this->displayGateListing($number, $destination, $distance, $fuelCost, $ship->current_fuel);
+            $this->displayDestinationInfo($destination);
+            $this->newLine();
+        }
+    }
+
+    /**
+     * Display a single warp gate listing.
+     */
+    private function displayGateListing(int $number, $destination, float $distance, int $fuelCost, int $currentFuel): void
+    {
+        $canAfford = $currentFuel >= $fuelCost;
+        $statusColor = $canAfford ? 'highlight' : 'dim';
+        $status = $canAfford ? '' : ' '.$this->colorize('[INSUFFICIENT FUEL]', 'dim');
+
+        $this->line(
+            $this->colorize("  [{$number}] ", 'label').
+            $this->colorize($destination->name, $statusColor).
+            $this->colorize(' - Distance: '.round($distance, 1), 'dim').
+            $this->colorize(' - Fuel Cost: '.$fuelCost, $statusColor).
+            $status
+        );
+    }
+
+    /**
+     * Display destination type and status information.
+     */
+    private function displayDestinationInfo($destination): void
+    {
+        $typeInfo = '      Type: '.$destination->type->name;
+
+        if ($destination->type === PointOfInterestType::STAR) {
+            $tradingHub = $destination->tradingHub;
+            if ($tradingHub && $tradingHub->is_active) {
+                $typeInfo .= $this->colorize(' [Trading Hub]', 'trade');
+            }
+
+            // Show inhabited status
+            if ($destination->is_inhabited) {
+                $typeInfo .= $this->colorize(' [Inhabited]', 'trade');
+            } else {
+                $typeInfo .= $this->colorize(' [Uninhabited]', 'dim');
+            }
+        }
+
+        $this->line($this->colorize($typeInfo, 'dim'));
+    }
+
+    /**
+     * Render travel selection prompt.
+     */
+    private function renderTravelPrompt($displayGates): void
+    {
+        $this->line($this->colorize(str_repeat('─', $this->termWidth), 'border'));
+        $this->line('  '.$this->colorize('[1-9]', 'label').' Select destination  |  '.
+                   $this->colorize('[q]', 'label').' Cancel');
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+    }
+
+    /**
+     * Handle user input for travel selection.
+     *
+     * @return bool Whether the interface should continue running
+     */
+    private function handleTravelInput(string $char, $displayGates): bool
+    {
+        if ($char === 'q' || $char === "\033") {
+            return false;
+        }
+
+        if (is_numeric($char) && $char >= '1' && $char <= '9') {
+            $selectedIndex = (int) $char - 1;
+            if ($selectedIndex < $displayGates->count()) {
+                $selectedGate = $displayGates[$selectedIndex];
+                $this->executeTravel($selectedGate);
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function calculateFuelCost(float $distance, $ship): int
@@ -915,6 +1039,25 @@ class PlayerInterfaceCommand extends Command
         $distance = $gate->distance ?? $gate->calculateDistance();
         $fuelCost = $this->calculateFuelCost($distance, $ship);
 
+        $this->displayTravelConfirmation($destination, $distance, $fuelCost, $ship);
+
+        if (! $this->checkFuelAvailable($ship, $fuelCost)) {
+            return;
+        }
+
+        if (! $this->handlePirateEncounter($gate)) {
+            return;
+        }
+
+        [$xpEarned, $oldLevel, $newLevel] = $this->completeTravelFlow($destination, $distance, $ship);
+        $this->displayTravelSuccess($destination, $ship, $xpEarned, $oldLevel, $newLevel);
+    }
+
+    /**
+     * Display travel confirmation screen.
+     */
+    private function displayTravelConfirmation($destination, float $distance, int $fuelCost, $ship): void
+    {
         $this->clearScreen();
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->line($this->colorize('  CONFIRM TRAVEL', 'header'));
@@ -929,7 +1072,13 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize('  Fuel After Travel: ', 'label').
                    $this->colorize($ship->current_fuel - $fuelCost, 'highlight'));
         $this->newLine();
+    }
 
+    /**
+     * Check if ship has enough fuel and consume it.
+     */
+    private function checkFuelAvailable($ship, int $fuelCost): bool
+    {
         if (! $ship->consumeFuel($fuelCost)) {
             $this->error('  INSUFFICIENT FUEL!');
             $this->newLine();
@@ -938,57 +1087,93 @@ class PlayerInterfaceCommand extends Command
             $this->line($this->colorize('  Press any key to continue...', 'dim'));
             fgetc(STDIN);
 
-            return;
+            return false;
         }
 
-        // Check for pirate encounters
+        return true;
+    }
+
+    /**
+     * Handle pirate encounter if present.
+     *
+     * @return bool True if travel should continue, false if aborted
+     */
+    private function handlePirateEncounter($gate): bool
+    {
         $pirateService = app(PirateEncounterService::class);
-        if ($pirateService->hasPiratePresence($gate)) {
-            $encounter = $pirateService->getEncounter($gate);
+        if (! $pirateService->hasPiratePresence($gate)) {
+            return true;
+        }
 
-            if ($encounter) {
-                $pirateHandler = new PirateEncounterHandler($this, $this->termWidth);
-                $outcome = $pirateHandler->handleEncounter($this->player, $encounter);
+        $encounter = $pirateService->getEncounter($gate);
+        if (! $encounter) {
+            return true;
+        }
 
-                // Handle outcomes
-                if ($outcome === 'dead') {
-                    // Player died - ship destroyed, respawned at trading hub
-                    // Reload player data
-                    $this->player->refresh();
-                    $this->player->load('currentLocation.children', 'currentLocation.parent');
+        $pirateHandler = new PirateEncounterHandler($this, $this->termWidth);
+        $outcome = $pirateHandler->handleEncounter($this->player, $encounter);
 
-                    // Don't update location - PlayerDeathService already did that
-                    // Show message and return to main interface
-                    $this->clearScreen();
-                    $this->line($this->colorize('  You have respawned at '.$this->player->currentLocation->name, 'highlight'));
-                    $this->newLine();
-                    $this->line($this->colorize('  Press any key to continue...', 'dim'));
-                    fgetc(STDIN);
+        return $this->processEncounterOutcome($outcome);
+    }
 
-                    return;
-                } elseif ($outcome === 'escaped') {
-                    // Successfully escaped - refund some fuel? Or just continue
-                    $this->clearScreen();
-                    $this->line($this->colorize('  ✓ You escaped the pirates!', 'highlight'));
-                    $this->newLine();
-                    $this->line($this->colorize('  Press any key to continue...', 'dim'));
-                    fgetc(STDIN);
+    /**
+     * Process the outcome of a pirate encounter.
+     *
+     * @return bool True if travel should continue, false otherwise
+     */
+    private function processEncounterOutcome(string $outcome): bool
+    {
+        return match ($outcome) {
+            'dead' => $this->handlePlayerDeath(),
+            'escaped' => $this->handleEscape(),
+            'surrendered' => true, // Continue with travel
+            'victory' => true,     // Continue with travel
+            default => true,
+        };
+    }
 
-                    // Don't proceed with travel - stay at current location
-                    return;
-                } elseif ($outcome === 'surrendered') {
-                    // Surrendered - cargo/upgrades lost but can continue
-                    // Reload player and ship data
-                    $this->player->refresh();
-                    $this->player->load('activeShip');
-                    // Continue with travel
-                } elseif ($outcome === 'victory') {
-                    // Won the fight - reload data and continue
-                    $this->player->refresh();
-                    $this->player->load('activeShip');
-                    // Continue with travel
-                }
-            }
+    /**
+     * Handle player death outcome.
+     */
+    private function handlePlayerDeath(): bool
+    {
+        $this->player->refresh();
+        $this->player->load('currentLocation.children', 'currentLocation.parent');
+
+        $this->clearScreen();
+        $this->line($this->colorize('  You have respawned at '.$this->player->currentLocation->name, 'highlight'));
+        $this->newLine();
+        $this->line($this->colorize('  Press any key to continue...', 'dim'));
+        fgetc(STDIN);
+
+        return false;
+    }
+
+    /**
+     * Handle escape outcome.
+     */
+    private function handleEscape(): bool
+    {
+        $this->clearScreen();
+        $this->line($this->colorize('  ✓ You escaped the pirates!', 'highlight'));
+        $this->newLine();
+        $this->line($this->colorize('  Press any key to continue...', 'dim'));
+        fgetc(STDIN);
+
+        return false;
+    }
+
+    /**
+     * Complete travel flow: update location and award XP.
+     *
+     * @return array [xpEarned, oldLevel, newLevel]
+     */
+    private function completeTravelFlow($destination, float $distance, $ship): array
+    {
+        // Reload for continued travel
+        if ($this->player->current_poi_id !== $destination->id) {
+            $this->player->refresh();
+            $this->player->load('activeShip');
         }
 
         // Track last trading hub for respawn
@@ -1001,7 +1186,7 @@ class PlayerInterfaceCommand extends Command
         $this->player->save();
 
         // Award XP for exploration/travel
-        $xpEarned = (int) max(10, $distance * 5); // 5 XP per unit distance, min 10
+        $xpEarned = (int) max(10, $distance * 5);
         $oldLevel = $this->player->level;
         $this->player->addExperience($xpEarned);
         $newLevel = $this->player->level;
@@ -1009,7 +1194,14 @@ class PlayerInterfaceCommand extends Command
         // Reload location relationship
         $this->player->load('currentLocation.children', 'currentLocation.parent');
 
-        // Success message
+        return [$xpEarned, $oldLevel, $newLevel];
+    }
+
+    /**
+     * Display travel success message.
+     */
+    private function displayTravelSuccess($destination, $ship, int $xpEarned, int $oldLevel, int $newLevel): void
+    {
         $this->line($this->colorize('  ✓ TRAVEL SUCCESSFUL!', 'highlight'));
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
@@ -1254,11 +1446,54 @@ class PlayerInterfaceCommand extends Command
         system('stty sane');
         $this->clearScreen();
 
-        $location = $this->player->currentLocation;
-        $star = $location->type === PointOfInterestType::STAR
+        $star = $this->resolveStar($this->player->currentLocation);
+        $this->displayCoordinateJumpHeader($star);
+        [$targetX, $targetY] = $this->getCoordinatesFromUser();
+
+        $targetStar = $this->findStarAtCoordinates($star->galaxy, $targetX, $targetY);
+        if (! $targetStar) {
+            $this->displayStarNotFound($targetX, $targetY);
+            return;
+        }
+
+        $distance = $this->calculateDistance($targetStar, $star);
+        $ship = $this->player->activeShip;
+        $fuelCost = $this->calculateFuelCost($distance, $ship);
+
+        $this->displayTargetStarInfo($targetStar, $distance, $fuelCost, $ship);
+
+        if (! $this->checkFuelForCoordinateJump($ship, $fuelCost)) {
+            return;
+        }
+
+        if (! $this->confirmCoordinateJump()) {
+            return;
+        }
+
+        if (! $ship->consumeFuel($fuelCost)) {
+            $this->displayFuelConsumptionError();
+            return;
+        }
+
+        [$xpEarned, $oldLevel, $newLevel] = $this->executeCoordinateJump($targetStar, $distance);
+        $this->displayCoordinateJumpSuccess($targetStar, $ship, $xpEarned, $oldLevel, $newLevel);
+    }
+
+    /**
+     * Resolve current star location.
+     */
+    private function resolveStar($location)
+    {
+        return $location->type === PointOfInterestType::STAR
             ? $location
             : $location->getRootStar();
+    }
 
+    /**
+     * Display coordinate jump screen header.
+     */
+    private function displayCoordinateJumpHeader($star): void
+    {
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->line($this->colorize('  COORDINATE JUMP', 'header'));
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
@@ -1267,8 +1502,13 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize('  Current Position: ', 'label').$star->name);
         $this->line($this->colorize('  Coordinates: ', 'label')."({$star->x}, {$star->y})");
         $this->newLine();
+    }
 
-        // Get target coordinates
+    /**
+     * Get target coordinates from user input.
+     */
+    private function getCoordinatesFromUser(): array
+    {
         $this->line($this->colorize('  Enter target coordinates:', 'header'));
         $this->line($this->colorize('  X coordinate: ', 'label'));
         $targetX = (int) trim(fgets(STDIN));
@@ -1277,12 +1517,17 @@ class PlayerInterfaceCommand extends Command
         $targetY = (int) trim(fgets(STDIN));
 
         $this->newLine();
+        return [$targetX, $targetY];
+    }
 
-        // Find star at those coordinates (within 5 unit tolerance)
-        $galaxy = $star->galaxy;
+    /**
+     * Find star at given coordinates.
+     */
+    private function findStarAtCoordinates($galaxy, int $targetX, int $targetY)
+    {
         $tolerance = 5;
 
-        $targetStar = $galaxy->pointsOfInterest()
+        return $galaxy->pointsOfInterest()
             ->where('type', PointOfInterestType::STAR)
             ->get()
             ->first(function ($poi) use ($targetX, $targetY, $tolerance) {
@@ -1293,28 +1538,38 @@ class PlayerInterfaceCommand extends Command
 
                 return $distance <= $tolerance;
             });
+    }
 
-        if (! $targetStar) {
-            $this->error('  No star system found at coordinates ('.$targetX.', '.$targetY.')');
-            $this->newLine();
-            $this->line($this->colorize('  Searching within 5 unit radius...', 'dim'));
-            $this->newLine();
-            $this->line($this->colorize('  Press any key to return...', 'dim'));
-            fgetc(STDIN);
-            $this->refreshInterface();
+    /**
+     * Display star not found message.
+     */
+    private function displayStarNotFound(int $targetX, int $targetY): void
+    {
+        $this->error('  No star system found at coordinates ('.$targetX.', '.$targetY.')');
+        $this->newLine();
+        $this->line($this->colorize('  Searching within 5 unit radius...', 'dim'));
+        $this->newLine();
+        $this->line($this->colorize('  Press any key to return...', 'dim'));
+        fgetc(STDIN);
+        $this->refreshInterface();
+    }
 
-            return;
-        }
-
-        // Calculate distance and fuel cost
-        $distance = sqrt(
+    /**
+     * Calculate distance between two POIs.
+     */
+    private function calculateDistance($targetStar, $star): float
+    {
+        return sqrt(
             pow($targetStar->x - $star->x, 2) +
             pow($targetStar->y - $star->y, 2)
         );
+    }
 
-        $ship = $this->player->activeShip;
-        $fuelCost = $this->calculateFuelCost($distance, $ship);
-
+    /**
+     * Display target star information.
+     */
+    private function displayTargetStarInfo($targetStar, float $distance, int $fuelCost, $ship): void
+    {
         $this->line($this->colorize('  Target Found: ', 'label').$this->colorize($targetStar->name, 'highlight'));
         $this->line($this->colorize('  Exact Coordinates: ', 'label')."({$targetStar->x}, {$targetStar->y})");
         $this->line($this->colorize('  Distance: ', 'label').round($distance, 1).' units');
@@ -1322,7 +1577,6 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize('  Current Fuel: ', 'label').$ship->current_fuel);
         $this->newLine();
 
-        // Show status
         $statusInfo = $targetStar->is_inhabited
             ? $this->colorize('Inhabited System', 'trade')
             : $this->colorize('Uninhabited System', 'dim');
@@ -1331,7 +1585,13 @@ class PlayerInterfaceCommand extends Command
         $gateCount = $targetStar->outgoingGates()->where('is_hidden', false)->count();
         $this->line($this->colorize('  Warp Gates: ', 'label').$gateCount);
         $this->newLine();
+    }
 
+    /**
+     * Check if ship has fuel for coordinate jump.
+     */
+    private function checkFuelForCoordinateJump($ship, int $fuelCost): bool
+    {
         if ($ship->current_fuel < $fuelCost) {
             $this->error('  INSUFFICIENT FUEL!');
             $this->newLine();
@@ -1341,9 +1601,17 @@ class PlayerInterfaceCommand extends Command
             fgetc(STDIN);
             $this->refreshInterface();
 
-            return;
+            return false;
         }
 
+        return true;
+    }
+
+    /**
+     * Confirm coordinate jump with user.
+     */
+    private function confirmCoordinateJump(): bool
+    {
         $this->line($this->colorize('  Proceed with jump? [y/n]: ', 'label'));
         $confirm = strtolower(trim(fgets(STDIN)));
 
@@ -1354,20 +1622,31 @@ class PlayerInterfaceCommand extends Command
             fgetc(STDIN);
             $this->refreshInterface();
 
-            return;
+            return false;
         }
 
-        // Execute jump
-        if (! $ship->consumeFuel($fuelCost)) {
-            $this->error('  ERROR: Failed to consume fuel!');
-            $this->newLine();
-            $this->line($this->colorize('  Press any key to return...', 'dim'));
-            fgetc(STDIN);
-            $this->refreshInterface();
+        return true;
+    }
 
-            return;
-        }
+    /**
+     * Display fuel consumption error.
+     */
+    private function displayFuelConsumptionError(): void
+    {
+        $this->error('  ERROR: Failed to consume fuel!');
+        $this->newLine();
+        $this->line($this->colorize('  Press any key to return...', 'dim'));
+        fgetc(STDIN);
+        $this->refreshInterface();
+    }
 
+    /**
+     * Execute coordinate jump and award XP.
+     *
+     * @return array [xpEarned, oldLevel, newLevel]
+     */
+    private function executeCoordinateJump($targetStar, float $distance): array
+    {
         // Update player location
         $this->player->current_poi_id = $targetStar->id;
 
@@ -1387,6 +1666,14 @@ class PlayerInterfaceCommand extends Command
         // Reload location
         $this->player->load('currentLocation.children', 'currentLocation.parent');
 
+        return [$xpEarned, $oldLevel, $newLevel];
+    }
+
+    /**
+     * Display coordinate jump success message.
+     */
+    private function displayCoordinateJumpSuccess($targetStar, $ship, int $xpEarned, int $oldLevel, int $newLevel): void
+    {
         $this->newLine();
         $this->line($this->colorize('  ✓ JUMP SUCCESSFUL!', 'highlight'));
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
@@ -1412,24 +1699,68 @@ class PlayerInterfaceCommand extends Command
         $this->clearScreen();
 
         $galaxy = $this->player->currentLocation->galaxy;
-        $playerLocation = $this->player->currentLocation->type === PointOfInterestType::STAR
+        $playerLocation = $this->resolveScanLocation();
+        $sensorRange = $this->getSensorRange();
+
+        $this->displayScanHeader($playerLocation, $sensorRange);
+
+        $nearbyPois = $this->getScanData($galaxy, $playerLocation, $sensorRange);
+
+        if ($nearbyPois->isEmpty()) {
+            $this->displayNoObjectsFound();
+        } else {
+            $this->displayDetectedObjects($nearbyPois);
+        }
+
+        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
+        $this->line($this->colorize('  Press any key to return...', 'dim'));
+
+        system('stty -icanon -echo');
+        fgetc(STDIN);
+
+        $this->refreshInterface();
+    }
+
+    /**
+     * Resolve player location for scan.
+     */
+    private function resolveScanLocation()
+    {
+        return $this->player->currentLocation->type === PointOfInterestType::STAR
             ? $this->player->currentLocation
             : $this->player->currentLocation->getRootStar();
+    }
 
+    /**
+     * Get sensor range in units.
+     */
+    private function getSensorRange(): int
+    {
+        return ($this->player->activeShip->sensors ?? 1) * 100;
+    }
+
+    /**
+     * Display scan header with position and sensor info.
+     */
+    private function displayScanHeader($playerLocation, int $sensorRange): void
+    {
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->line($this->colorize('  LOCAL SPACE SCAN - DETAILED REPORT', 'header'));
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
 
-        // Get sensor range
-        $sensorRange = ($this->player->activeShip->sensors ?? 1) * 100;
         $this->line($this->colorize('  Current Position: ', 'label').$playerLocation->name);
         $this->line($this->colorize('  Coordinates: ', 'label')."({$playerLocation->x}, {$playerLocation->y})");
         $this->line($this->colorize('  Sensor Range: ', 'label').$this->colorize($sensorRange.' units', 'highlight'));
         $this->newLine();
+    }
 
-        // Find all POIs in range (not just stars)
-        $nearbyPois = $galaxy->pointsOfInterest()
+    /**
+     * Get POIs within sensor range and sorted by distance.
+     */
+    private function getScanData($galaxy, $playerLocation, int $sensorRange)
+    {
+        return $galaxy->pointsOfInterest()
             ->get()
             ->map(function ($poi) use ($playerLocation) {
                 $distance = sqrt(
@@ -1445,51 +1776,77 @@ class PlayerInterfaceCommand extends Command
             ->filter(fn ($item) => $item['distance'] <= $sensorRange && $item['distance'] > 0)
             ->sortBy('distance')
             ->take(30);
+    }
 
-        if ($nearbyPois->isEmpty()) {
-            $this->line($this->colorize('  No objects detected within sensor range.', 'dim'));
+    /**
+     * Display message when no objects found.
+     */
+    private function displayNoObjectsFound(): void
+    {
+        $this->line($this->colorize('  No objects detected within sensor range.', 'dim'));
+        $this->newLine();
+        $this->line($this->colorize('  Upgrade your sensors to scan further.', 'dim'));
+    }
+
+    /**
+     * Display detected objects grouped by type.
+     */
+    private function displayDetectedObjects($nearbyPois): void
+    {
+        $this->line($this->colorize('  DETECTED OBJECTS ('.$nearbyPois->count().'):', 'header'));
+        $this->newLine();
+
+        // Group by type
+        $byType = $nearbyPois->groupBy(fn ($item) => $item['poi']->type->name);
+
+        foreach ($byType as $typeName => $items) {
+            $this->line($this->colorize("  {$typeName}s:", 'trade'));
+            $this->displayObjectsInType($items);
             $this->newLine();
-            $this->line($this->colorize('  Upgrade your sensors to scan further.', 'dim'));
-        } else {
-            $this->line($this->colorize('  DETECTED OBJECTS ('.$nearbyPois->count().'):', 'header'));
-            $this->newLine();
+        }
+    }
 
-            // Group by type
-            $byType = $nearbyPois->groupBy(fn ($item) => $item['poi']->type->name);
-
-            foreach ($byType as $typeName => $items) {
-                $this->line($this->colorize("  {$typeName}s:", 'trade'));
-                foreach ($items->take(10) as $item) {
-                    $poi = $item['poi'];
-                    $distance = round($item['distance'], 1);
-
-                    $details = "    • {$poi->name} - {$distance} units";
-
-                    // Add extra info based on type
-                    if ($poi->type === PointOfInterestType::STAR) {
-                        $status = $poi->is_inhabited ? '[Inhabited]' : '[Uninhabited]';
-                        $gates = $poi->outgoingGates()->where('is_hidden', false)->count();
-                        $hub = $poi->tradingHub && $poi->tradingHub->is_active ? ' [Trading Hub]' : '';
-                        $details .= " {$status} Gates:{$gates}{$hub}";
-                    }
-
-                    $this->line($this->colorize($details, 'dim'));
-                }
-
-                if ($items->count() > 10) {
-                    $this->line($this->colorize('    ... and '.($items->count() - 10).' more', 'dim'));
-                }
-                $this->newLine();
-            }
+    /**
+     * Display objects of a specific type.
+     */
+    private function displayObjectsInType($items): void
+    {
+        foreach ($items->take(10) as $item) {
+            $this->displayScanPoi($item);
         }
 
-        $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
-        $this->line($this->colorize('  Press any key to return...', 'dim'));
+        if ($items->count() > 10) {
+            $this->line($this->colorize('    ... and '.($items->count() - 10).' more', 'dim'));
+        }
+    }
 
-        system('stty -icanon -echo');
-        fgetc(STDIN);
+    /**
+     * Display a single POI in scan results.
+     */
+    private function displayScanPoi(array $item): void
+    {
+        $poi = $item['poi'];
+        $distance = round($item['distance'], 1);
+        $details = "    • {$poi->name} - {$distance} units";
 
-        $this->refreshInterface();
+        // Add extra info based on type
+        if ($poi->type === PointOfInterestType::STAR) {
+            $details .= $this->getScanPoiExtraInfo($poi);
+        }
+
+        $this->line($this->colorize($details, 'dim'));
+    }
+
+    /**
+     * Get extra scan info for a POI.
+     */
+    private function getScanPoiExtraInfo($poi): string
+    {
+        $status = $poi->is_inhabited ? '[Inhabited]' : '[Uninhabited]';
+        $gates = $poi->outgoingGates()->where('is_hidden', false)->count();
+        $hub = $poi->tradingHub && $poi->tradingHub->is_active ? ' [Trading Hub]' : '';
+
+        return " {$status} Gates:{$gates}{$hub}";
     }
 
     private function findNearestTradingHub(): void
@@ -1497,26 +1854,54 @@ class PlayerInterfaceCommand extends Command
         system('stty sane');
         $this->clearScreen();
 
-        $galaxy = $this->player->currentLocation->galaxy;
-        $playerLocation = $this->player->currentLocation->type === PointOfInterestType::STAR
-            ? $this->player->currentLocation
-            : $this->player->currentLocation->getRootStar();
+        $this->renderSearchHeader();
+        $playerLocation = $this->resolvePlayerLocationForSearch();
+        $tradingHubs = $this->scanForTradingHubs($playerLocation);
 
+        if ($tradingHubs->isEmpty()) {
+            $this->displayNoHubsFound();
+            return;
+        }
+
+        $this->displayTradingHubsList($tradingHubs);
+        $this->handleHubSelection($tradingHubs);
+        $this->refreshInterface();
+    }
+
+    /**
+     * Render the search screen header.
+     */
+    private function renderSearchHeader(): void
+    {
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->line($this->colorize('  FIND NEAREST TRADING HUB', 'header'));
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->newLine();
-
         $this->line($this->colorize('  Scanning for trading hubs...', 'dim'));
         $this->newLine();
+    }
 
-        // Find all active trading hubs
-        $tradingHubs = $galaxy->pointsOfInterest()
+    /**
+     * Resolve player's current location for search.
+     */
+    private function resolvePlayerLocationForSearch()
+    {
+        return $this->player->currentLocation->type === PointOfInterestType::STAR
+            ? $this->player->currentLocation
+            : $this->player->currentLocation->getRootStar();
+    }
+
+    /**
+     * Scan galaxy for trading hubs and calculate distances.
+     */
+    private function scanForTradingHubs($playerLocation)
+    {
+        $galaxy = $this->player->currentLocation->galaxy;
+
+        return $galaxy->pointsOfInterest()
             ->where('type', PointOfInterestType::STAR)
             ->get()
-            ->filter(function ($star) {
-                return $star->tradingHub && $star->tradingHub->is_active;
-            })
+            ->filter(fn ($star) => $star->tradingHub && $star->tradingHub->is_active)
             ->map(function ($star) use ($playerLocation) {
                 $distance = sqrt(
                     pow($star->x - $playerLocation->x, 2) +
@@ -1531,22 +1916,29 @@ class PlayerInterfaceCommand extends Command
             })
             ->sortBy('distance')
             ->take(10)
-            ->values(); // Reindex from 0
+            ->values();
+    }
 
-        if ($tradingHubs->isEmpty()) {
-            $this->error('  No trading hubs found in galaxy!');
-            $this->newLine();
-            $this->line($this->colorize('  Press any key to return...', 'dim'));
-            fgetc(STDIN);
-            $this->refreshInterface();
+    /**
+     * Display message when no trading hubs found.
+     */
+    private function displayNoHubsFound(): void
+    {
+        $this->error('  No trading hubs found in galaxy!');
+        $this->newLine();
+        $this->line($this->colorize('  Press any key to return...', 'dim'));
+        fgetc(STDIN);
+        $this->refreshInterface();
+    }
 
-            return;
-        }
-
+    /**
+     * Display the list of trading hubs.
+     */
+    private function displayTradingHubsList($tradingHubs): void
+    {
         $this->line($this->colorize('  NEAREST TRADING HUBS:', 'header'));
         $this->newLine();
 
-        // Display top 10 nearest trading hubs
         $this->line(sprintf(
             '  %-4s %-35s %-18s %-12s %s',
             '#',
@@ -1558,46 +1950,56 @@ class PlayerInterfaceCommand extends Command
         $this->line($this->colorize('  '.str_repeat('─', 115), 'border'));
 
         foreach ($tradingHubs as $index => $item) {
-            $number = $index + 1;
-            $star = $item['star'];
-            $distance = round($item['distance'], 1);
-
-            $ship = $this->player->activeShip;
-            $fuelCost = $this->calculateFuelCost($distance, $ship);
-            $canAfford = $ship->current_fuel >= $fuelCost;
-
-            $statusText = $canAfford
-                ? $this->colorize('Can Reach', 'highlight')
-                : $this->colorize('Low Fuel', 'dim');
-
-            $inhabited = $star->is_inhabited
-                ? $this->colorize('[Inhabited]', 'trade')
-                : $this->colorize('[Uninhabited]', 'dim');
-
-            $this->line(sprintf(
-                '  %-4s %-35s %-18s %-12s %s',
-                "[{$number}]",
-                substr($star->name, 0, 33),
-                "({$star->x}, {$star->y})",
-                $distance.' units',
-                $statusText
-            ));
-            $this->line($this->colorize("        Fuel cost: {$fuelCost} | {$inhabited}", 'dim'));
+            $this->displayHubRow($index, $item);
         }
 
         $this->newLine();
+    }
+
+    /**
+     * Display a single hub entry in the list.
+     */
+    private function displayHubRow(int $index, array $item): void
+    {
+        $number = $index + 1;
+        $star = $item['star'];
+        $distance = round($item['distance'], 1);
+        $ship = $this->player->activeShip;
+        $fuelCost = $this->calculateFuelCost($distance, $ship);
+
+        $statusText = $ship->current_fuel >= $fuelCost
+            ? $this->colorize('Can Reach', 'highlight')
+            : $this->colorize('Low Fuel', 'dim');
+
+        $inhabited = $star->is_inhabited
+            ? $this->colorize('[Inhabited]', 'trade')
+            : $this->colorize('[Uninhabited]', 'dim');
+
+        $this->line(sprintf(
+            '  %-4s %-35s %-18s %-12s %s',
+            "[{$number}]",
+            substr($star->name, 0, 33),
+            "({$star->x}, {$star->y})",
+            $distance.' units',
+            $statusText
+        ));
+        $this->line($this->colorize("        Fuel cost: {$fuelCost} | {$inhabited}", 'dim'));
+    }
+
+    /**
+     * Handle user selection from hub list.
+     */
+    private function handleHubSelection($tradingHubs): void
+    {
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
         $this->line('  '.$this->colorize('[1-9]', 'label').' Jump to hub  |  '.
                    $this->colorize('[q]', 'label').' Cancel');
         $this->line($this->colorize(str_repeat('═', $this->termWidth), 'border'));
 
-        // Get input
         system('stty -icanon -echo');
         $char = fgetc(STDIN);
 
         if ($char === 'q' || $char === "\033") {
-            $this->refreshInterface();
-
             return;
         }
 
@@ -1608,8 +2010,6 @@ class PlayerInterfaceCommand extends Command
                 $this->executeDirectJump($selectedHub['star']);
             }
         }
-
-        $this->refreshInterface();
     }
 
     private function executeDirectJump($targetStar): void

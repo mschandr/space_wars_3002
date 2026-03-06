@@ -3,7 +3,11 @@
 namespace App\Services\Pricing;
 
 use App\DataObjects\PricingContext;
+use App\Models\Commodity;
+use App\Models\EconomicShock;
+use App\Models\HubCommodityStats;
 use App\Models\MarketEvent;
+use App\Models\TradingHub;
 use App\Models\TradingHubInventory;
 
 /**
@@ -12,16 +16,165 @@ use App\Models\TradingHubInventory;
  * All methods are deterministic and have no side effects:
  * - No database writes
  * - No lazy loading
- * - No service locator calls
+ * - Minimal queries (uses stats cache)
  *
  * Prices are computed as fixed-point integers (credits)
+ *
+ * Supports two pricing models:
+ * 1. Legacy (Phase 5-9): Abstract supply/demand scores (0-100)
+ * 2. Coverage-based (Phase 1+): Real stock/flow with scarcity curves
  */
 class PricingService
 {
     /**
-     * Compute the mid-price for a hub inventory item
+     * Compute price using coverage-based model
      *
-     * Formula:
+     * New formula (Phase 1+):
+     * - coverage_days = on_hand / (avg_daily_demand + epsilon)
+     * - scarcity_mult = f(coverage_days) [smooth curve]
+     * - shock_mult = ∏ (1 + shock_magnitude * decay_factor) [clamped]
+     * - raw_price = base_price * scarcity_mult * shock_mult
+     * - buy_price = raw_price * (1 + spread_buy + volume_fee)
+     * - sell_price = raw_price * (1 - spread_sell)
+     *
+     * @param TradingHub $hub Trading hub
+     * @param Commodity $commodity Commodity being priced
+     * @param ?HubCommodityStats $stats Hub commodity stats (fetched if null)
+     * @param float $onHandQty Current on-hand quantity
+     * @param ?float $requestedQty Optional: quantity for volume fee calculation (anti-cornering)
+     */
+    public function computePriceCoverageBased(
+        TradingHub $hub,
+        Commodity $commodity,
+        ?HubCommodityStats $stats = null,
+        float $onHandQty = 0,
+        ?float $requestedQty = null
+    ): array {
+        // Validate inputs are non-negative
+        if ($onHandQty < 0) {
+            throw new \InvalidArgumentException("onHandQty cannot be negative. Got: {$onHandQty}");
+        }
+
+        if ($requestedQty !== null && $requestedQty < 0) {
+            throw new \InvalidArgumentException("requestedQty cannot be negative. Got: {$requestedQty}");
+        }
+
+        // Get or create stats
+        if (!$stats) {
+            $stats = HubCommodityStats::firstOrCreate(
+                [
+                    'trading_hub_id' => $hub->id,
+                    'commodity_id' => $commodity->id,
+                ],
+                [
+                    'avg_daily_demand' => 1,
+                    'avg_daily_supply' => 1,
+                ]
+            );
+        }
+
+        // Calculate coverage days with fallback demand estimation
+        $avgDailyDemand = $this->estimateDailyDemand((float)$stats->avg_daily_demand, $commodity);
+        $coverageDays = $onHandQty / max(0.0001, $avgDailyDemand);
+
+        // Compute scarcity multiplier from coverage curve
+        $scarcityMult = $this->computeScarcityMultiplier(
+            $coverageDays,
+            config('economy.pricing.scarcity.min_coverage_days', 0.5),
+            config('economy.pricing.scarcity.max_coverage_days', 30),
+            config('economy.pricing.scarcity.neutral_coverage_days', 7)
+        );
+
+        // Compute shock multiplier
+        $shockMult = $this->computeShockMultiplier($hub->galaxy_id, $commodity->id, now());
+
+        // Base * multipliers
+        $basePrice = $commodity->base_price;
+        $rawPrice = $basePrice * $scarcityMult * $shockMult;
+
+        // Apply commodity-specific clamps
+        $minPrice = $basePrice * $commodity->price_min_multiplier;
+        $maxPrice = $basePrice * $commodity->price_max_multiplier;
+        $clampedPrice = max($minPrice, min($maxPrice, $rawPrice));
+
+        // Apply spreads
+        $spreadBuy = $hub->spread_buy ?? config('economy.pricing.spread_per_side', 0.08);
+        $spreadSell = $hub->spread_sell ?? config('economy.pricing.spread_per_side', 0.08);
+
+        // Apply anti-cornering volume fee (Phase 4) if purchase qty provided
+        $volumeFee = 0.0;
+        if ($requestedQty !== null) {
+            $antiCorneringService = app(\App\Services\Economy\AntiCorneringService::class);
+            // For volume fee calculation, we need the inventory object
+            // Pass it via the hub if available, otherwise just add to spread
+            $volumeFee = $antiCorneringService->computeVolumeAdjustment($requestedQty, null);
+        }
+
+        $finalSpreadBuy = $spreadBuy + $volumeFee;
+
+        $buyPrice = (int)round($clampedPrice * (1 + $finalSpreadBuy));
+        $sellPrice = (int)round($clampedPrice * (1 - $spreadSell));
+
+        return [
+            'buy_price' => $buyPrice,
+            'sell_price' => $sellPrice,
+            'mid_price' => (int)round($clampedPrice),
+            'components' => [
+                'base_price' => $basePrice,
+                'scarcity_mult' => $scarcityMult,
+                'shock_mult' => $shockMult,
+                'coverage_days' => $coverageDays,
+                'spread_buy' => $finalSpreadBuy,
+                'spread_sell' => $spreadSell,
+                'volume_fee' => $volumeFee,
+            ],
+        ];
+    }
+
+    /**
+     * Estimate daily demand when no historical data exists
+     *
+     * Handles edge case where new commodity or zero trading history
+     * would cause division by zero in scarcity calculations
+     *
+     * @param float $avgDailyDemand Actual average from stats, or 0
+     * @param Commodity $commodity Commodity for fallback estimation
+     * @return float Estimated or actual daily demand (guaranteed >= 0)
+     * @throws \InvalidArgumentException if avgDailyDemand is negative
+     */
+    private function estimateDailyDemand(float $avgDailyDemand, Commodity $commodity): float
+    {
+        // Validate input is non-negative
+        if ($avgDailyDemand < 0) {
+            throw new \InvalidArgumentException(
+                "avgDailyDemand cannot be negative. Got: {$avgDailyDemand}"
+            );
+        }
+
+        if ($avgDailyDemand > 0) {
+            return $avgDailyDemand;  // Use actual data
+        }
+
+        $method = config('economy.demand_estimation.fallback_method', 'base_price_ratio');
+
+        if ($method === 'base_price_ratio') {
+            // Assume 1% of base price per day in demand (e.g., 1000 credit item = 10 units/day demand)
+            $estimate = $commodity->base_price / 100;
+            // Ensure non-negative (in case base_price is somehow negative, use fallback)
+            if ($estimate >= 0) {
+                return $estimate;
+            }
+        }
+
+        // Fallback to static value, ensure non-negative
+        $fallback = (float) config('economy.demand_estimation.fallback_daily_demand', 100);
+        return max(0, $fallback);
+    }
+
+    /**
+     * Compute the mid-price for a hub inventory item (LEGACY)
+     *
+     * Legacy formula (Phase 5-9):
      * - demandMultiplier  = 1 + ((demand_level - 50) / 100)
      * - supplyMultiplier  = 1 - ((supply_level - 50) / 100)
      * - rawPrice          = mineral.base_value * demandMultiplier * supplyMultiplier
@@ -43,7 +196,7 @@ class PricingService
         $mineral = $inv->mineral;
         $baseValue = $mineral->base_value;
 
-        // Supply/demand multipliers
+        // Supply/demand multipliers (abstract 0-100 scores)
         $demandMultiplier = 1 + (($inv->demand_level - 50) / 100);
         $supplyMultiplier = 1 - (($inv->supply_level - 50) / 100);
 
@@ -75,7 +228,7 @@ class PricingService
     }
 
     /**
-     * Compute buy and sell prices for an inventory item
+     * Compute buy and sell prices for an inventory item (LEGACY)
      *
      * Returns [buy_price, sell_price] where:
      * - buy_price  = mid_price * (1 - spread)
@@ -97,5 +250,89 @@ class PricingService
         $sellPrice = (int) round($midPrice * (1 + $ctx->spread));
 
         return [$buyPrice, $sellPrice];
+    }
+
+    /**
+     * Compute scarcity multiplier from coverage curve
+     *
+     * Creates a smooth curve where:
+     * - coverage <= minCoverage => maxMult
+     * - coverage = neutral => 1.0
+     * - coverage >= maxCoverage => minMult
+     *
+     * Smooth interpolation between points using cosine curve.
+     */
+    private function computeScarcityMultiplier(
+        float $coverageDays,
+        float $minCoverageDays,
+        float $maxCoverageDays,
+        float $neutralCoverageDays
+    ): float {
+        // Clamp coverage to reasonable range
+        $coverage = max(0, min($maxCoverageDays * 2, $coverageDays));
+
+        if ($coverage <= $minCoverageDays) {
+            // High scarcity: max multiplier
+            return config('economy.pricing.price_max_multiplier', 3.0);
+        }
+
+        if ($coverage >= $maxCoverageDays) {
+            // Plenty in stock: min multiplier
+            return config('economy.pricing.price_min_multiplier', 0.5);
+        }
+
+        // Smooth curve using cosine interpolation
+        if ($coverage <= $neutralCoverageDays) {
+            // Low coverage (0 to neutral): interpolate from max to 1.0
+            $ratio = ($coverage - $minCoverageDays) / ($neutralCoverageDays - $minCoverageDays);
+            $maxMult = config('economy.pricing.price_max_multiplier', 3.0);
+            // Cosine curve: smooth easing
+            $eased = (1 - cos($ratio * M_PI)) / 2;
+            return $maxMult - ($maxMult - 1.0) * $eased;
+        } else {
+            // High coverage (neutral to max): interpolate from 1.0 to min
+            $ratio = ($coverage - $neutralCoverageDays) / ($maxCoverageDays - $neutralCoverageDays);
+            $minMult = config('economy.pricing.price_min_multiplier', 0.5);
+            // Cosine curve: smooth easing
+            $eased = (1 - cos($ratio * M_PI)) / 2;
+            return 1.0 - (1.0 - $minMult) * $eased;
+        }
+    }
+
+    /**
+     * Compute shock multiplier (product of all active shocks with decay)
+     */
+    private function computeShockMultiplier(
+        int $galaxyId,
+        int $commodityId,
+        \DateTimeInterface $atTime
+    ): float {
+        $shocks = EconomicShock::where('galaxy_id', $galaxyId)
+            ->where('is_active', true)
+            ->where(function ($q) use ($commodityId) {
+                // System-wide shocks (commodity_id = null) OR commodity-specific
+                $q->whereNull('commodity_id')
+                    ->orWhere('commodity_id', $commodityId);
+            })
+            ->get();
+
+        $mult = 1.0;
+        $tickNumber = (int)($atTime->timestamp / 60); // Rough tick approximation
+
+        foreach ($shocks as $shock) {
+            $effectiveMag = $shock->getEffectiveMagnitude($tickNumber);
+            $mult *= (1 + $effectiveMag);
+
+            // Check if fully decayed and deactivate
+            if ($shock->isFullyDecayed($tickNumber)) {
+                $shock->deactivate();
+            }
+        }
+
+        // Clamp shock multiplier to prevent extreme values
+        $minShockMult = 0.3; // Prices can't go below 30% with shocks
+        $maxShockMult = 3.0; // Prices can't go above 300% with shocks
+
+        return max($minShockMult, min($maxShockMult, $mult));
     }
 }

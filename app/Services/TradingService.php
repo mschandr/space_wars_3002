@@ -40,21 +40,12 @@ class TradingService
     {
         $mineral = $inventory->mineral;
         $isTutorial = ! $player->hasCompletedTutorial('first_mineral_buy');
-        $totalCost = $isTutorial ? 0 : $inventory->sell_price * $quantity;
 
         // Validations
         if (! $inventory->hasStock($quantity)) {
             return [
                 'success' => false,
                 'message' => 'Insufficient stock available',
-                'xp_earned' => 0,
-            ];
-        }
-
-        if (! $isTutorial && $player->credits < $totalCost) {
-            return [
-                'success' => false,
-                'message' => 'Insufficient credits',
                 'xp_earned' => 0,
             ];
         }
@@ -68,11 +59,36 @@ class TradingService
             ];
         }
 
-        // Execute transaction atomically
+        // Execute transaction atomically with volume fee computation
         $xpEarned = (int) max(5, $quantity / 10); // 1 XP per 10 units, min 5
-        $unitPrice = $inventory->sell_price; // Capture before mutation recalculates prices
 
-        return DB::transaction(function () use ($player, $ship, $inventory, $mineral, $quantity, $totalCost, $xpEarned, $unitPrice, $isTutorial) {
+        return DB::transaction(function () use ($player, $ship, $inventory, $mineral, $quantity, $xpEarned, $isTutorial) {
+            // Re-fetch inventory with lock inside transaction to prevent TOCTOU race condition
+            $inventory = TradingHubInventory::where('id', $inventory->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            // Validate stock again with locked inventory
+            if (! $inventory->hasStock($quantity)) {
+                throw new \Exception('Insufficient stock available (race condition)');
+            }
+
+            // Compute prices with quantity for volume fee integration (Phase 4)
+            $priceData = $this->pricingService->computePriceCoverageBased(
+                $inventory->tradingHub,
+                $inventory->mineral,
+                null,
+                (float) $inventory->on_hand_qty,
+                (float) $quantity
+            );
+            $unitPrice = $priceData['sell_price'];
+            $totalCost = $isTutorial ? 0 : $unitPrice * $quantity;
+
+            // Verify sufficient credits (with volume fees already included in price)
+            if (! $isTutorial && $player->credits < $totalCost) {
+                throw new \Exception('Insufficient credits (includes anti-cornering fees)');
+            }
+
             if (! $isTutorial) {
                 $player->deductCredits($totalCost);
             }
@@ -142,13 +158,27 @@ class TradingService
             ];
         }
 
-        $unitPrice = $hubInventory->buy_price; // Capture before mutation recalculates prices
-        $totalRevenue = $isTutorial ? 0 : $unitPrice * $quantity;
+        // Execute transaction atomically with volume fee computation
+        return DB::transaction(function () use ($player, $ship, $cargo, $hubInventory, $mineral, $quantity, $isTutorial) {
+            // Re-fetch inventory with lock inside transaction to prevent TOCTOU race condition
+            $hubInventory = TradingHubInventory::where('id', $hubInventory->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        // Execute transaction atomically
-        $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits, min 10
+            // Compute prices with quantity for volume fee integration (Phase 4)
+            $priceData = $this->pricingService->computePriceCoverageBased(
+                $hubInventory->tradingHub,
+                $hubInventory->mineral,
+                null,
+                (float) $hubInventory->on_hand_qty,
+                (float) $quantity
+            );
+            $unitPrice = $priceData['buy_price'];
+            $totalRevenue = $isTutorial ? 0 : $unitPrice * $quantity;
 
-        return DB::transaction(function () use ($player, $ship, $cargo, $hubInventory, $mineral, $quantity, $totalRevenue, $xpEarned, $unitPrice, $isTutorial) {
+            // Recalculate XP with actual total revenue
+            $xpEarned = (int) max(10, $totalRevenue / 100); // 1 XP per 100 credits, min 10
+
             if (! $isTutorial) {
                 $player->addCredits($totalRevenue);
             }

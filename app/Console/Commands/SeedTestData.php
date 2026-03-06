@@ -8,6 +8,7 @@ use Database\Seeders\CrewMemberSeeder;
 use Database\Seeders\CustomsOfficialSeeder;
 use Database\Seeders\GalaxyCustomsRecordSeeder;
 use Database\Seeders\GalaxyVendorStateSeeder;
+use Database\Seeders\ReservePolicySeeder;
 use Database\Seeders\TradingPostSeeder;
 use Database\Seeders\VendorProfileSeeder;
 use Illuminate\Console\Command;
@@ -64,6 +65,13 @@ class SeedTestData extends Command
         $seeder->setCommand($this);
         $seeder->run();
 
+        // Seed reserve policies (Phase 4)
+        $this->info('');
+        $this->info('--- Seeding Reserve Policies ---');
+        $seeder = new ReservePolicySeeder();
+        $seeder->setCommand($this);
+        $seeder->run();
+
         // Seed galaxy-specific states (for crew, vendors, and customs)
         $this->info('');
         $this->info('--- Seeding Galaxy Crew Assignments ---');
@@ -91,6 +99,7 @@ class SeedTestData extends Command
         $crewCount = \App\Models\CrewMember::count();
         $vendorCount = \App\Models\VendorProfile::count();
         $customsCount = \App\Models\CustomsOfficial::count();
+        $reservePolicyCount = \App\Models\ReservePolicy::count();
         $crewAssignmentCount = \App\Models\CrewAssignment::count();
         $vendorStateCount = \App\Models\GalaxyVendorState::count();
         $customsRecordCount = \App\Models\GalaxyCustomsRecord::count();
@@ -101,6 +110,7 @@ class SeedTestData extends Command
         $this->info("  ✓ Crew members (pool): {$crewCount}");
         $this->info("  ✓ Vendor profiles (templates): {$vendorCount}");
         $this->info("  ✓ Customs officials (templates): {$customsCount}");
+        $this->info("  ✓ Reserve policies: {$reservePolicyCount}");
 
         $this->info('');
         $this->info('Galaxy-Specific State:');
