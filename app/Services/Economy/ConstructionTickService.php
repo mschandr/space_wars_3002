@@ -26,7 +26,7 @@ class ConstructionTickService
     {
         // Query matured jobs: PENDING status and completes_at <= now()
         $query = ConstructionJob::pending()
-            ->whereDate('completes_at', '<=', now());
+            ->where('completes_at', '<=', now());
 
         if ($galaxy) {
             $query->byGalaxy($galaxy);
