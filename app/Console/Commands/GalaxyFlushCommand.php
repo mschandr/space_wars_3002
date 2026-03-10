@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class GalaxyFlushCommand extends Command
 {
@@ -14,7 +15,7 @@ class GalaxyFlushCommand extends Command
      */
     protected $signature = 'galaxy:flush
                             {--galaxy= : Flush a specific galaxy by ID or UUID (optional)}
-                            {--preserve-global : Preserve global seed data (minerals, ships, plans, pirate captains/factions)}
+                            {--destroy-global : Also destroy global seed data (minerals, ships, plans, pirate factions)}
                             {--dry-run : Show what would be deleted without actually deleting}
                             {--force : Skip confirmation prompt}';
 
@@ -32,6 +33,13 @@ class GalaxyFlushCommand extends Command
      * @var array<array{0: string, 1: string, 2: string|null}>
      */
     private const TABLES_TO_FLUSH = [
+        // Level 0: Ephemeral data (always flushed)
+        ['sessions', 'Session state', 'always flushed'],
+        ['cache', 'Cache store', 'always flushed'],
+        ['cache_locks', 'Cache locks', 'always flushed'],
+        ['failed_jobs', 'Failed queue jobs', 'always flushed'],
+        ['jobs', 'Queue jobs', 'always flushed'],
+
         // Level 6: Deepest children (through multiple relationships)
         ['npc_cargos', 'NPC cargo inventories', 'through npc_ships → npcs'],
         ['npc_ships', 'NPC ships', 'through npcs'],
@@ -91,15 +99,19 @@ class GalaxyFlushCommand extends Command
     ];
 
     /**
-     * Global seed tables that can optionally be preserved.
+     * Global seed tables that are preserved by default (use --destroy-global to delete).
+     * These are profile pools sampled when instantiating new galaxies.
      */
     private const GLOBAL_SEED_TABLES = [
-        'minerals' => 'Minerals',
+        'minerals' => 'Commodity definitions',
         'ships' => 'Ship blueprints',
-        'plans' => 'Upgrade plans',
-        'pirate_factions' => 'Pirate factions (global)',
-        'pirate_captains' => 'Pirate captains (global)',
-        'ship_components' => 'Ship components',
+        'plans' => 'Upgrade module plans',
+        'pirate_factions' => 'Pirate faction definitions',
+        'pirate_captains' => 'Pirate captain profiles (pool)',
+        'crew_members' => 'Crew member profiles (pool)',
+        'vendor_profiles' => 'Vendor profiles (pool)',
+        'trading_posts' => 'Vendor templates',
+        'ship_components' => 'Ship component types',
     ];
 
     /**
@@ -113,7 +125,7 @@ class GalaxyFlushCommand extends Command
         $this->newLine();
 
         $galaxyId = $this->option('galaxy');
-        $preserveGlobal = $this->option('preserve-global');
+        $destroyGlobal = $this->option('destroy-global');
         $dryRun = $this->option('dry-run');
 
         // Resolve galaxy if specified
@@ -133,7 +145,7 @@ class GalaxyFlushCommand extends Command
         $this->newLine();
 
         // Show what will be deleted
-        $this->displayTableList($targetGalaxy, $preserveGlobal);
+        $this->displayTableList($targetGalaxy, $destroyGlobal);
 
         if ($dryRun) {
             $this->newLine();
@@ -171,7 +183,7 @@ class GalaxyFlushCommand extends Command
         $this->info('Flushing data...');
         $this->newLine();
 
-        $stats = $this->performFlush($targetGalaxy, $preserveGlobal);
+        $stats = $this->performFlush($targetGalaxy, $destroyGlobal);
 
         // Display results
         $this->newLine();
@@ -202,15 +214,15 @@ class GalaxyFlushCommand extends Command
     /**
      * Display the list of tables that will be affected.
      */
-    private function displayTableList(?object $targetGalaxy, bool $preserveGlobal): void
+    private function displayTableList(?object $targetGalaxy, bool $destroyGlobal): void
     {
         $this->info('Tables to be flushed (in deletion order):');
         $this->newLine();
 
         $rows = [];
         foreach (self::TABLES_TO_FLUSH as [$table, $description, $joinInfo]) {
-            // Skip global tables if preserving
-            if ($preserveGlobal && isset(self::GLOBAL_SEED_TABLES[$table])) {
+            // Skip global tables unless destroying
+            if (!$destroyGlobal && isset(self::GLOBAL_SEED_TABLES[$table])) {
                 continue;
             }
 
@@ -231,17 +243,23 @@ class GalaxyFlushCommand extends Command
      */
     private function getRowCount(string $table, ?object $targetGalaxy): int
     {
+        // Ephemeral tables always count all rows regardless of galaxy
+        if (in_array($table, ['sessions', 'cache', 'cache_locks', 'jobs', 'failed_jobs'])) {
+            return DB::table($table)->count();
+        }
+
         if (! $targetGalaxy) {
             return DB::table($table)->count();
         }
 
         $galaxyId = $targetGalaxy->id;
 
-        // Get all galaxies affected (primary + mirrors) for tables that are deleted with mirror support
-        $allGalaxyIds = array_merge(
-            [$galaxyId],
-            DB::table('galaxies')->where('mirror_galaxy_id', $galaxyId)->pluck('id')->toArray()
-        );
+        // Get all galaxies affected (primary + mirrors) if mirror support exists
+        $mirrorGalaxyIds = [];
+        if (Schema::hasColumn('galaxies', 'mirror_galaxy_id')) {
+            $mirrorGalaxyIds = DB::table('galaxies')->where('mirror_galaxy_id', $galaxyId)->pluck('id')->toArray();
+        }
+        $allGalaxyIds = array_merge([$galaxyId], $mirrorGalaxyIds);
 
         return match ($table) {
             // Direct galaxy_id
@@ -394,7 +412,7 @@ class GalaxyFlushCommand extends Command
     /**
      * Perform the actual flush operation.
      */
-    private function performFlush(?object $targetGalaxy, bool $preserveGlobal): array
+    private function performFlush(?object $targetGalaxy, bool $destroyGlobal): array
     {
         $stats = [];
 
@@ -403,9 +421,9 @@ class GalaxyFlushCommand extends Command
 
         try {
             foreach (self::TABLES_TO_FLUSH as [$table, $description, $joinInfo]) {
-                // Skip global tables if preserving
-                if ($preserveGlobal && isset(self::GLOBAL_SEED_TABLES[$table])) {
-                    $this->line("  ⊘ Skipping {$table} (preserving global data)");
+                // Skip global tables unless destroying
+                if (!$destroyGlobal && isset(self::GLOBAL_SEED_TABLES[$table])) {
+                    $this->line("  ⊘ Skipping {$table} (preserving global seed data)");
 
                     continue;
                 }
@@ -439,15 +457,21 @@ class GalaxyFlushCommand extends Command
 
         $galaxyId = $targetGalaxy->id;
 
-        // Get IDs of mirror galaxies too
-        $mirrorGalaxyIds = DB::table('galaxies')
-            ->where('mirror_galaxy_id', $galaxyId)
-            ->pluck('id')
-            ->toArray();
+        // Get IDs of mirror galaxies if mirror support exists
+        $mirrorGalaxyIds = [];
+        if (Schema::hasColumn('galaxies', 'mirror_galaxy_id')) {
+            $mirrorGalaxyIds = DB::table('galaxies')
+                ->where('mirror_galaxy_id', $galaxyId)
+                ->pluck('id')
+                ->toArray();
+        }
 
         $allGalaxyIds = array_merge([$galaxyId], $mirrorGalaxyIds);
 
         return match ($table) {
+            // Ephemeral tables (always fully cleared)
+            'sessions', 'cache', 'cache_locks', 'jobs', 'failed_jobs' => DB::table($table)->delete(),
+
             // Direct galaxy_id - include mirror galaxies
             'galaxies' => DB::table('galaxies')
                 ->whereIn('id', $allGalaxyIds)
