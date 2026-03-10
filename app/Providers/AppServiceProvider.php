@@ -6,6 +6,11 @@ use App\Services\Contracts\ContractExpiryService;
 use App\Services\Contracts\ContractGenerationService;
 use App\Services\Contracts\ContractService;
 use App\Services\Contracts\ReputationService;
+use App\Services\Flotilla\FlotillaService;
+use App\Services\Flotilla\FlotillaMovementService;
+use App\Services\Flotilla\FlotillaCombatService;
+use App\Services\Flotilla\FlotillaSalvageService;
+use App\Services\Combat\CombatService;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -33,6 +38,30 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ContractExpiryService::class, function ($app) {
             return new ContractExpiryService(
                 $app->make(ReputationService::class)
+            );
+        });
+
+        // Flotilla system services
+        $this->app->singleton(FlotillaService::class, function ($app) {
+            return new FlotillaService();
+        });
+
+        $this->app->singleton(FlotillaMovementService::class, function ($app) {
+            return new FlotillaMovementService();
+        });
+
+        $this->app->singleton(FlotillaCombatService::class, function ($app) {
+            return new FlotillaCombatService();
+        });
+
+        $this->app->singleton(FlotillaSalvageService::class, function ($app) {
+            return new FlotillaSalvageService();
+        });
+
+        // Combat service (handles both single-ship and flotilla combat)
+        $this->app->singleton(CombatService::class, function ($app) {
+            return new CombatService(
+                $app->make(FlotillaCombatService::class)
             );
         });
 

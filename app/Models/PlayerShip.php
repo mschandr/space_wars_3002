@@ -30,6 +30,7 @@ class PlayerShip extends Model
         'player_id',
         'ship_id',
         'current_poi_id',
+        'flotilla_id',
         'name',
         'current_fuel',
         'max_fuel',
@@ -186,6 +187,30 @@ class PlayerShip extends Model
     }
 
     /**
+     * Relationship: Ship belongs to a flotilla (if in one)
+     */
+    public function flotilla(): BelongsTo
+    {
+        return $this->belongsTo(Flotilla::class);
+    }
+
+    /**
+     * Check if ship is in a flotilla
+     */
+    public function isInFlotilla(): bool
+    {
+        return !is_null($this->flotilla_id);
+    }
+
+    /**
+     * Check if this ship is the flagship of its flotilla
+     */
+    public function isFlagship(): bool
+    {
+        return $this->isInFlotilla() && $this->flotilla?->flagship_ship_id === $this->id;
+    }
+
+    /**
      * Get number of available slots for a given slot type.
      */
     public function getAvailableSlots(SlotType $type): int
@@ -283,6 +308,14 @@ class PlayerShip extends Model
     public function getAvailableCargoSpace(): int
     {
         return $this->getEffectiveCargoHold() - $this->current_cargo;
+    }
+
+    /**
+     * Get used cargo space (amount of cargo currently on ship).
+     */
+    public function getUsedCargoSpace(): int
+    {
+        return $this->current_cargo ?? 0;
     }
 
     /**

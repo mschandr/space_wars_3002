@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('blueprint_id')->constrained()->cascadeOnDelete();
             $table->foreignId('commodity_id')->constrained()->restrictOnDelete();
-            $table->unsignedDecimal('qty_required', 12, 4); // Units needed
+            $table->decimal('qty_required', 12, 4); // Units needed
 
             $table->timestamps();
 

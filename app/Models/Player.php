@@ -178,6 +178,14 @@ class Player extends Model
     }
 
     /**
+     * Get flotillas for this player
+     */
+    public function flotillas(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\Flotilla::class);
+    }
+
+    /**
      * Check if player knows about a specific warp gate.
      */
     public function knowsLane(WarpGate $gate): bool
