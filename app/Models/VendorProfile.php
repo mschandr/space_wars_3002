@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Enums\Vendor\VendorArchetype;
 use App\Models\Traits\HasUuid;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class VendorProfile extends Model
@@ -14,17 +14,17 @@ class VendorProfile extends Model
 
     protected $fillable = [
         'uuid',
-        'galaxy_id',
-        'poi_id',
-        'trading_post_id',
-        'service_type',      // 'trading_hub', 'salvage_yard', 'shipyard', 'market'
-        'criminality',        // 0.0-1.0, high = black market dealer
+        'name',
+        'archetype',
+        'service_type',
+        'criminality',
         'personality',
         'dialogue_pool',
         'markup_base',
     ];
 
     protected $casts = [
+        'archetype' => VendorArchetype::class,
         'criminality' => 'decimal:2',
         'personality' => 'array',
         'dialogue_pool' => 'array',
@@ -32,27 +32,11 @@ class VendorProfile extends Model
     ];
 
     /**
-     * Get the galaxy this vendor belongs to
+     * Get galaxy instances of this vendor profile template
      */
-    public function galaxy(): BelongsTo
+    public function galaxyInstances(): HasMany
     {
-        return $this->belongsTo(Galaxy::class);
-    }
-
-    /**
-     * Get the POI where this vendor operates
-     */
-    public function pointOfInterest(): BelongsTo
-    {
-        return $this->belongsTo(PointOfInterest::class, 'poi_id');
-    }
-
-    /**
-     * Get the trading post template this vendor is based on
-     */
-    public function tradingPost(): BelongsTo
-    {
-        return $this->belongsTo(TradingPost::class);
+        return $this->hasMany(GalaxyVendorProfile::class);
     }
 
     /**
@@ -101,7 +85,7 @@ class VendorProfile extends Model
      */
     private function getDefaultDialogue(string $context): string
     {
-        $name = $this->tradingPost?->name ?? 'Merchant';
+        $name = $this->name ?? 'Merchant';
 
         return match ($context) {
             'greeting' => "Welcome to {$name}.",

@@ -61,8 +61,10 @@ class VendorProfileService
             return 0.50;  // 50% markup for locked out players (prohibitive)
         }
 
-        // Start with archetype base
-        $markup = (float) $vendor->archetype->baseMarkup();
+        // Start with instance markup_base (falls back to archetype default if null)
+        $markup = $vendor->markup_base !== null
+            ? (float) $vendor->markup_base
+            : (float) $vendor->archetype->baseMarkup();
 
         // Apply goodwill discount
         $maxBonus = $vendor->archetype->maxGoodwillBonus();
@@ -76,16 +78,13 @@ class VendorProfileService
                 $markup -= $persona['vendor_bonuses']['trading_discount'];
             }
 
-            // Shady crew get discount from fence/pirate contacts
-            if (
-                $persona['overall_alignment'] === 'shady' &&
-                in_array($vendor->archetype, [
-                    \App\Enums\Vendor\VendorArchetype::FENCE,
-                    \App\Enums\Vendor\VendorArchetype::PIRATE_CONTACT,
-                    \App\Enums\Vendor\VendorArchetype::BLACK_MARKET_DEALER,
-                ])
-            ) {
-                $markup -= 0.05;  // Additional 5% discount
+            // High-criminality vendors: shady crew discount, lawful crew penalty
+            if ($vendor->isBlackMarketDealer()) {
+                if ($persona['overall_alignment'] === 'shady') {
+                    $markup -= 0.05;  // Shady crew are trusted here
+                } elseif ($persona['overall_alignment'] === 'lawful') {
+                    $markup += 0.05;  // Lawful crew are unwelcome
+                }
             }
         }
 

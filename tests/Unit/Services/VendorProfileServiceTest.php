@@ -8,7 +8,6 @@ use App\Models\Galaxy;
 use App\Models\Player;
 use App\Models\PlayerShip;
 use App\Models\PlayerVendorRelationship;
-use App\Models\TradingPost;
 use App\Models\VendorProfile;
 use App\Services\VendorProfileService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -21,7 +20,6 @@ class VendorProfileServiceTest extends TestCase
     private VendorProfileService $service;
     private Player $player;
     private VendorProfile $vendor;
-    private TradingPost $tradingPost;
 
     protected function setUp(): void
     {
@@ -31,14 +29,7 @@ class VendorProfileServiceTest extends TestCase
         $galaxy = Galaxy::factory()->create();
         $this->player = Player::factory()->create(['galaxy_id' => $galaxy->id]);
 
-        $this->tradingPost = TradingPost::factory()->create([
-            'service_type' => 'trading_hub',
-            'base_criminality' => 0.15,
-            'markup_base' => 0.05,
-        ]);
-
         $this->vendor = VendorProfile::factory()->create([
-            'trading_post_id' => $this->tradingPost->id,
             'service_type' => 'trading_hub',
             'criminality' => 0.15,
             'markup_base' => 0.05,
@@ -111,12 +102,13 @@ class VendorProfileServiceTest extends TestCase
         ]);
 
         // Create ship with shady crew
-        $ship = PlayerShip::factory()->create(['player_id' => $this->player->id]);
+        $ship = PlayerShip::factory()->create(['player_id' => $this->player->id, 'is_active' => true]);
         $this->player->update(['active_ship_id' => $ship->id]);
 
         CrewMember::factory()->create([
             'player_ship_id' => $ship->id,
             'alignment' => CrewAlignment::SHADY,
+            'role' => \App\Enums\Crew\CrewRole::HELMS_OFFICER,
         ]);
 
         $markup = $this->service->getEffectiveMarkup($shadyVendor, $this->player);
@@ -135,12 +127,13 @@ class VendorProfileServiceTest extends TestCase
         ]);
 
         // Create ship with lawful crew
-        $ship = PlayerShip::factory()->create(['player_id' => $this->player->id]);
+        $ship = PlayerShip::factory()->create(['player_id' => $this->player->id, 'is_active' => true]);
         $this->player->update(['active_ship_id' => $ship->id]);
 
         CrewMember::factory()->create([
             'player_ship_id' => $ship->id,
             'alignment' => CrewAlignment::LAWFUL,
+            'role' => \App\Enums\Crew\CrewRole::HELMS_OFFICER,
         ]);
 
         $markup = $this->service->getEffectiveMarkup($shadyVendor, $this->player);

@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\Auth\AuthController;
+use App\Http\Controllers\Api\V2\GalaxyCreationV2Controller;
+use App\Http\Controllers\Admin\AdminVendorDialogueController;
 use App\Http\Controllers\Api\CartographyController;
 use App\Http\Controllers\Api\ColonyBuildingController;
 use App\Http\Controllers\Api\ColonyCombatController;
@@ -73,6 +75,29 @@ Route::prefix('auth')->group(function () {
         Route::post('refresh', [AuthController::class, 'refresh']);
         Route::get('me', [AuthController::class, 'me']);
     });
+});
+
+// V2 API Routes (versioned galaxy generation)
+Route::prefix('v2')->middleware('auth:sanctum')->group(function () {
+    // V2 Galaxy creation (discrete, resumable phases)
+    Route::prefix('galaxies')->group(function () {
+        // Static routes before dynamic {uuid}
+        Route::post('create', [GalaxyCreationV2Controller::class, 'create']);
+        Route::get('tiers', [GalaxyCreationV2Controller::class, 'sizeTiers']);
+
+        // Dynamic routes with UUID
+        Route::get('{uuid}/status', [GalaxyCreationV2Controller::class, 'status'])
+            ->where('uuid', '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
+        Route::post('{uuid}/populate', [GalaxyCreationV2Controller::class, 'populate'])
+            ->where('uuid', '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
+    });
+});
+
+// Admin Routes (dialogue generation management)
+Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
+    Route::get('vendors/dialogue/pending', [AdminVendorDialogueController::class, 'pendingDialogue']);
+    Route::post('vendors/{uuid}/dialogue/regenerate', [AdminVendorDialogueController::class, 'regenerateDialogue']);
+    Route::get('vendors/{uuid}/dialogue', [AdminVendorDialogueController::class, 'inspectDialogue']);
 });
 
 // Galaxy information routes (public - detail views only)

@@ -338,6 +338,109 @@ return [
 
     /**
      * |--------------------------------------------------------------------------
+     * | Supernode Configuration (V2 Galaxy Generation)
+     * |--------------------------------------------------------------------------
+     * | Defines requirements for player starting supernodes and fallback chains.
+     * | Supernodes are large, service-rich systems in the core region.
+     */
+    'supernode' => [
+        'requirements' => [
+            'star_size' => ['large', 'giant'],              // Large or giant stars only
+            'services' => [
+                'shipyard' => true,                         // Must have shipyard
+                'salvage_yard' => true,                     // Must have salvage yard
+                'cartography' => true,                      // Must have cartographer
+                'trading_hub' => true,                      // Must have trading hub
+                'bar' => false,                             // Bar optional (future feature)
+            ],
+            'habitable_worlds' => 2,                        // Minimum 2 habitable planets
+            'gas_giant_mining' => true,                     // Must have gas giant with mining
+            'habitable_moons' => 1,                         // Minimum 1 habitable moon with mining
+            'orbital_defenses' => true,                     // Orbital defenses around capital
+        ],
+        'fallback_chain' => [
+            // Try requirements in this order; use first match
+            'strict',                                       // All requirements
+            'standard',                                     // Remove bar requirement
+            'minimal',                                      // Core services + 1 habitable world
+        ],
+        'fallback_definitions' => [
+            'strict' => [
+                'star_size' => ['large', 'giant'],
+                'shipyard' => true,
+                'salvage_yard' => true,
+                'cartography' => true,
+                'trading_hub' => true,
+                'habitable_worlds' => 2,
+                'gas_giant_mining' => true,
+                'habitable_moons' => 1,
+                'orbital_defenses' => true,
+            ],
+            'standard' => [
+                'star_size' => ['large', 'giant'],
+                'shipyard' => true,
+                'salvage_yard' => true,
+                'cartography' => true,
+                'trading_hub' => true,
+                'habitable_worlds' => 2,
+                'gas_giant_mining' => true,
+                'habitable_moons' => 0,
+                'orbital_defenses' => true,
+            ],
+            'minimal' => [
+                'star_size' => ['large'],
+                'shipyard' => true,
+                'salvage_yard' => true,
+                'cartography' => false,
+                'trading_hub' => true,
+                'habitable_worlds' => 1,
+                'gas_giant_mining' => false,
+                'habitable_moons' => 0,
+                'orbital_defenses' => false,
+            ],
+        ],
+        'free_salvage_vessel' => 'sparrow',                 // Ship class given free at salvage yard
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
+     * | Warp Lane Distribution (V2 Galaxy Generation)
+     * |--------------------------------------------------------------------------
+     * | Controls gate counts based on distance from core.
+     * | Core = central civilized region
+     * | Middle = transition zone
+     * | Outer = frontier wilderness
+     */
+    'gate_distribution' => [
+        'core_region' => [
+            'max_gates' => 8,                               // Max gates in core
+            'min_gates' => 2,                               // Minimum for connectivity
+            'inhabited_probability' => 0.95,                // 95% inhabited systems have gates
+            'uninhabited_probability' => 0.0,               // No gates for uninhabited
+        ],
+        'middle_region' => [
+            'max_gates' => 5,                               // Fewer gates in middle
+            'min_gates' => 1,                               // Minimum 1 for some connectivity
+            'inhabited_probability' => 0.70,                // 70% inhabited have gates
+            'uninhabited_probability' => 0.0,               // No gates for uninhabited
+        ],
+        'outer_region' => [
+            'max_gates' => 2,                               // Few gates in frontier
+            'min_gates' => 0,                               // Uninhabited can be dead ends
+            'inhabited_probability' => 0.40,                // 40% inhabited have gates
+            'uninhabited_probability' => 0.0,               // No gates for uninhabited
+        ],
+        'random_gates' => [
+            'enabled' => true,                              // Use random gate counts vs fixed
+            'distance_based_decay' => 0.95,                 // 5% reduction per distance band
+            'hidden_gate_chance' => 0.10,                   // 10% chance gate is hidden
+            'dead_end_chance' => 0.05,                      // 5% chance hidden gate is dead end
+            'jackpot_chance' => 0.01,                       // 1% chance leads to artifacts
+        ],
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
      * | Player Knowledge / Fog-of-War
      * |--------------------------------------------------------------------------
      * | Controls how players discover and retain galaxy information.

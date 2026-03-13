@@ -7,6 +7,7 @@ use Database\Seeders\CrewAssignmentSeeder;
 use Database\Seeders\CrewMemberSeeder;
 use Database\Seeders\CustomsOfficialSeeder;
 use Database\Seeders\GalaxyCustomsRecordSeeder;
+use Database\Seeders\GalaxyVendorProfileSeeder;
 use Database\Seeders\GalaxyVendorStateSeeder;
 use Database\Seeders\ReservePolicySeeder;
 use Database\Seeders\TradingPostSeeder;
@@ -51,9 +52,9 @@ class SeedTestData extends Command
         $seeder->setCommand($this);
         $seeder->run();
 
-        // Seed vendor instances
+        // Seed vendor profiles (global templates)
         $this->info('');
-        $this->info('--- Seeding Vendor Instances ---');
+        $this->info('--- Seeding Vendor Profiles (Templates) ---');
         $seeder = new VendorProfileSeeder();
         $seeder->setCommand($this);
         $seeder->run();
@@ -80,6 +81,12 @@ class SeedTestData extends Command
         $seeder->run();
 
         $this->info('');
+        $this->info('--- Seeding Galaxy Vendor Profiles (Instances) ---');
+        $seeder = new GalaxyVendorProfileSeeder();
+        $seeder->setCommand($this);
+        $seeder->run();
+
+        $this->info('');
         $this->info('--- Seeding Galaxy Vendor States ---');
         $seeder = new GalaxyVendorStateSeeder();
         $seeder->setCommand($this);
@@ -101,6 +108,7 @@ class SeedTestData extends Command
         $customsCount = \App\Models\CustomsOfficial::count();
         $reservePolicyCount = \App\Models\ReservePolicy::count();
         $crewAssignmentCount = \App\Models\CrewAssignment::count();
+        $galaxyVendorProfileCount = \App\Models\GalaxyVendorProfile::count();
         $vendorStateCount = \App\Models\GalaxyVendorState::count();
         $customsRecordCount = \App\Models\GalaxyCustomsRecord::count();
 
@@ -113,8 +121,12 @@ class SeedTestData extends Command
         $this->info("  ✓ Reserve policies: {$reservePolicyCount}");
 
         $this->info('');
-        $this->info('Galaxy-Specific State:');
+        $this->info('Galaxy-Specific Instances:');
         $this->info("  ✓ Crew assignments: {$crewAssignmentCount}");
+        $this->info("  ✓ Vendor profiles (instances): {$galaxyVendorProfileCount}");
+
+        $this->info('');
+        $this->info('Galaxy-Specific State:');
         $this->info("  ✓ Vendor states: {$vendorStateCount}");
         $this->info("  ✓ Customs records: {$customsRecordCount}");
 

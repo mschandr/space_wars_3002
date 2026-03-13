@@ -3,8 +3,6 @@
 namespace Database\Factories;
 
 use App\Enums\Vendor\VendorArchetype;
-use App\Models\Galaxy;
-use App\Models\PointOfInterest;
 use App\Models\VendorProfile;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -79,15 +77,18 @@ class VendorProfileFactory extends Factory
 
         return [
             'uuid' => fake()->uuid(),
-            'galaxy_id' => Galaxy::inRandomOrder()->first()?->id ?? Galaxy::factory(),
             'name' => fake()->randomElement(self::$vendorNames),
-            'archetype' => $archetype,
-            'poi_id' => PointOfInterest::inRandomOrder()->first()?->id ?? PointOfInterest::factory(),
+            'archetype' => $archetype->value,
+            'service_type' => fake()->randomElement(['trading_hub', 'salvage_yard', 'shipyard', 'market']),
+            'criminality' => fake()->randomFloat(2, 0.0, 1.0),
             'personality' => [
                 'honesty' => fake()->randomFloat(2, 0.1, 1.0),
                 'greed' => fake()->randomFloat(2, 0.1, 1.0),
                 'risk_tolerance' => fake()->randomFloat(2, 0.1, 1.0),
                 'charm' => fake()->randomFloat(2, 0.1, 1.0),
+                'ego_drive' => fake()->randomFloat(2, 0.1, 1.0),
+                'empathy' => fake()->randomFloat(2, 0.1, 1.0),
+                'curiosity' => fake()->randomFloat(2, 0.1, 1.0),
             ],
             'dialogue_pool' => $this->generateDialoguePool($archetype),
             'markup_base' => $archetype->baseMarkup(),

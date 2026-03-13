@@ -74,6 +74,7 @@ class GalaxyFlushCommand extends Command
 
         // Level 4a: Galaxy-specific state tables (Phase 5-9)
         ['crew_assignments', 'Crew assignments to trading hubs', 'direct galaxy_id'],
+        ['galaxy_vendor_profiles', 'Galaxy vendor profile instances', 'direct galaxy_id'],
         ['galaxy_vendor_states', 'Galaxy vendor state changes', 'direct galaxy_id'],
         ['galaxy_customs_records', 'Galaxy customs interaction records', 'direct galaxy_id'],
 
@@ -267,7 +268,7 @@ class GalaxyFlushCommand extends Command
                 + DB::table('galaxies')->where('mirror_galaxy_id', $galaxyId)->count(),
             'points_of_interest', 'warp_gates', 'sectors', 'players', 'npcs',
             'precursor_ships', 'trading_hub_ships', 'crew_assignments',
-            'galaxy_vendor_states', 'galaxy_customs_records' => DB::table($table)->whereIn('galaxy_id', $allGalaxyIds)->count(),
+            'galaxy_vendor_profiles', 'galaxy_vendor_states', 'galaxy_customs_records' => DB::table($table)->whereIn('galaxy_id', $allGalaxyIds)->count(),
 
             'pirate_factions' => DB::table('pirate_factions')
                 ->where('galaxy_id', $galaxyId)
@@ -479,7 +480,7 @@ class GalaxyFlushCommand extends Command
 
             'points_of_interest', 'warp_gates', 'sectors', 'players', 'npcs',
             'precursor_ships', 'trading_hub_ships', 'crew_assignments',
-            'galaxy_vendor_states', 'galaxy_customs_records' => DB::table($table)
+            'galaxy_vendor_profiles', 'galaxy_vendor_states', 'galaxy_customs_records' => DB::table($table)
                 ->whereIn('galaxy_id', $allGalaxyIds)
                 ->delete(),
 
