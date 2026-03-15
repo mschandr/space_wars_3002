@@ -15,7 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
 
         $middleware->alias([
-            'player.access' => \App\Http\Middleware\UpdatePlayerLastAccess::class,
+            'player.access'  => \App\Http\Middleware\UpdatePlayerLastAccess::class,
+            'internal.token' => \App\Http\Middleware\InternalApiTokenMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

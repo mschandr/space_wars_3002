@@ -20,17 +20,15 @@ class TradingPost extends Model
     protected $fillable = [
         'uuid',
         'name',
-        'service_type',      // 'trading_hub', 'salvage_yard', 'shipyard', 'market'
-        'base_criminality',  // Base criminality for this trading post (0.0-1.0)
-        'personality',       // Base personality traits
-        'dialogue_pool',
+        'service_type',
+        'base_criminality',
+        'personality',
         'markup_base',
     ];
 
     protected $casts = [
         'base_criminality' => 'decimal:2',
         'personality' => 'array',
-        'dialogue_pool' => 'array',
         'markup_base' => 'decimal:4',
     ];
 
@@ -51,25 +49,4 @@ class TradingPost extends Model
         return $personality[$traitName] ?? 0.5;
     }
 
-    /**
-     * Get dialogue for a specific context
-     */
-    public function getDialogue(string $context): string
-    {
-        $pool = $this->dialogue_pool ?? [];
-        $lines = $pool[$context] ?? [];
-
-        if (empty($lines)) {
-            return match ($context) {
-                'greeting' => "Welcome to {$this->name}.",
-                'deal_accepted' => 'Pleasure doing business with you.',
-                'deal_refused' => 'Your loss.',
-                'farewell' => 'Come again soon.',
-                'lockout' => 'I have nothing for you.',
-                default => 'Hmm?',
-            };
-        }
-
-        return $lines[array_rand($lines)];
-    }
 }

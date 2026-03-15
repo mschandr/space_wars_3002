@@ -19,7 +19,6 @@ class VendorProfile extends Model
         'service_type',
         'criminality',
         'personality',
-        'dialogue_pool',
         'markup_base',
     ];
 
@@ -27,7 +26,6 @@ class VendorProfile extends Model
         'archetype' => VendorArchetype::class,
         'criminality' => 'decimal:2',
         'personality' => 'array',
-        'dialogue_pool' => 'array',
         'markup_base' => 'decimal:4',
     ];
 
@@ -64,36 +62,4 @@ class VendorProfile extends Model
         return $personality[$traitName] ?? 0.5;  // Default to neutral
     }
 
-    /**
-     * Get dialogue for a specific context
-     * Returns a random line from the pool for that context, or fallback
-     */
-    public function getDialogue(string $context): string
-    {
-        $pool = $this->dialogue_pool ?? [];
-        $lines = $pool[$context] ?? [];
-
-        if (empty($lines)) {
-            return $this->getDefaultDialogue($context);
-        }
-
-        return $lines[array_rand($lines)];
-    }
-
-    /**
-     * Get default dialogue for common contexts
-     */
-    private function getDefaultDialogue(string $context): string
-    {
-        $name = $this->name ?? 'Merchant';
-
-        return match ($context) {
-            'greeting' => "Welcome to {$name}.",
-            'deal_accepted' => 'Pleasure doing business with you.',
-            'deal_refused' => 'Your loss.',
-            'farewell' => 'Come again soon.',
-            'lockout' => 'I have nothing for you.',
-            default => 'Hmm?',
-        };
-    }
 }

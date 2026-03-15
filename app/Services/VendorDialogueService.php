@@ -155,6 +155,11 @@ class VendorDialogueService
      * @param  int  $interactionCount
      * @return string
      */
+    public function mapInteractionBucketPublic(int $interactionCount): string
+    {
+        return $this->mapInteractionBucket($interactionCount);
+    }
+
     private function mapInteractionBucket(int $interactionCount): string
     {
         return match (true) {

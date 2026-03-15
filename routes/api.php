@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\V2\GalaxyCreationV2Controller;
 use App\Http\Controllers\Admin\AdminVendorDialogueController;
+use App\Http\Controllers\Internal\DialogueGeneratorController;
 use App\Http\Controllers\Api\CartographyController;
 use App\Http\Controllers\Api\ColonyBuildingController;
 use App\Http\Controllers\Api\ColonyCombatController;
@@ -45,6 +46,7 @@ use App\Http\Controllers\Api\ShipyardController;
 use App\Http\Controllers\Api\StarSystemController;
 use App\Http\Controllers\Api\TeamCombatController;
 use App\Http\Controllers\Api\TradingController;
+use App\Http\Controllers\Api\VendorDialogueController;
 use App\Http\Controllers\Api\TradingTransactionController;
 use App\Http\Controllers\Api\TravelCalculationController;
 use App\Http\Controllers\Api\TravelController;
@@ -91,6 +93,13 @@ Route::prefix('v2')->middleware('auth:sanctum')->group(function () {
         Route::post('{uuid}/populate', [GalaxyCreationV2Controller::class, 'populate'])
             ->where('uuid', '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}');
     });
+});
+
+// Internal Routes — authenticated by shared bearer token, used by Go dialogue generator
+Route::prefix('internal')->middleware('internal.token')->group(function () {
+    Route::get('vendor-dialogue/pending', [DialogueGeneratorController::class, 'pending']);
+    Route::patch('vendor-dialogue/{vendorUuid}/status', [DialogueGeneratorController::class, 'updateStatus']);
+    Route::post('vendor-dialogue/{vendorUuid}/lines', [DialogueGeneratorController::class, 'submitLines']);
 });
 
 // Admin Routes (dialogue generation management)
@@ -286,6 +295,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Trading history routes
     Route::get('players/{playerUuid}/price-history', [TradingController::class, 'getPriceHistory']);
     Route::get('players/{playerUuid}/trade-log', [TradingController::class, 'getTradeLog']);
+
+    // Vendor dialogue routes
+    Route::get('players/{playerUuid}/vendors/{vendorUuid}/dialogue', [VendorDialogueController::class, 'index']);
 
     // Construction routes
     Route::get('trading-hubs/{uuid}/blueprints', [ConstructionController::class, 'listAvailableBlueprints']);

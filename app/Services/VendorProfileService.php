@@ -96,13 +96,23 @@ class VendorProfileService
     }
 
     /**
-     * Get dialogue for a vendor in a specific context
+     * Get a static fallback dialogue line for a vendor profile template.
      *
-     * Architecture supports both static dialogue (current) and LLM-generated dialogue (future)
+     * VendorProfile is now a global template — structured dialogue lives in
+     * vendor_dialogue rows keyed to GalaxyVendorProfile instances.
+     * This method provides a basic fallback by service_type for contexts
+     * that have not yet been through the Go generator.
      */
     public function getDialogueLine(VendorProfile $vendor, string $context, Player $player): string
     {
-        return $vendor->getDialogue($context);
+        $fallbacks = [
+            'trading_hub'  => ['greeting' => 'Looking to trade?', 'farewell' => 'Safe travels.', 'deal_accepted' => 'Pleasure doing business.', 'deal_rejected' => 'Your decision.'],
+            'salvage_yard' => ['greeting' => 'See anything worth salvaging?', 'farewell' => 'Try not to get yourself spaced.', 'deal_accepted' => 'Not a bad deal.', 'deal_rejected' => 'Your loss.'],
+            'shipyard'     => ['greeting' => 'Looking for a new hull?', 'farewell' => 'Come back when you want something faster.', 'deal_accepted' => 'Fine choice.', 'deal_rejected' => 'Come back when you\'re ready.'],
+            'market'       => ['greeting' => 'Take a look around.', 'farewell' => 'Come again.', 'deal_accepted' => 'Good choice.', 'deal_rejected' => 'Suit yourself.'],
+        ];
+
+        return $fallbacks[$vendor->service_type][$context] ?? 'Hmph.';
     }
 
     /**

@@ -32,44 +32,6 @@ class VendorProfileFactory extends Factory
         'The Phantom Exchange',
     ];
 
-    private static array $dialoguePools = [
-        'honest_broker' => [
-            'greeting' => [
-                'Welcome! We offer fair prices for everything.',
-                'Greetings. Let me show you what we have.',
-                'Come in, come in. You\'ll find good deals here.',
-            ],
-            'deal_accepted' => [
-                'A pleasure doing business with you.',
-                'Excellent choice. Fair and square.',
-                'I appreciate your patronage.',
-            ],
-        ],
-        'hard_bargainer' => [
-            'greeting' => [
-                'Looking for a deal, eh? I got what you need.',
-                'You come to the right place. Everything must go.',
-                'Welcome back... or first time?',
-            ],
-            'deal_accepted' => [
-                'Good business today. Come again?',
-                'You got yourself a bargain there.',
-                'Not bad, not bad. We\'ll do business again.',
-            ],
-        ],
-        'fence' => [
-            'greeting' => [
-                'No questions asked, no names either.',
-                'I deal in... specialty items.',
-                'You look like someone who appreciates discretion.',
-            ],
-            'deal_accepted' => [
-                'Pleasure doing discrete business.',
-                'You understand the value of silence.',
-                'This never happened.',
-            ],
-        ],
-    ];
 
     public function definition(): array
     {
@@ -90,40 +52,8 @@ class VendorProfileFactory extends Factory
                 'empathy' => fake()->randomFloat(2, 0.1, 1.0),
                 'curiosity' => fake()->randomFloat(2, 0.1, 1.0),
             ],
-            'dialogue_pool' => $this->generateDialoguePool($archetype),
             'markup_base' => $archetype->baseMarkup(),
         ];
     }
 
-    /**
-     * Generate dialogue pool for an archetype
-     */
-    private function generateDialoguePool(VendorArchetype $archetype): array
-    {
-        // Return predefined pools for some archetypes, generic for others
-        $archetypeKey = $archetype->value;
-
-        if (isset(self::$dialoguePools[$archetypeKey])) {
-            return self::$dialoguePools[$archetypeKey];
-        }
-
-        // Generic dialogue pool
-        return [
-            'greeting' => [
-                'Welcome to my shop.',
-                'Looking for something?',
-                'Come in, don\'t be shy.',
-            ],
-            'deal_accepted' => [
-                'Great choice.',
-                'Pleasure doing business.',
-                'Thank you for your patronage.',
-            ],
-            'farewell' => [
-                'Come again soon.',
-                'Safe travels.',
-                'Until next time.',
-            ],
-        ];
-    }
 }

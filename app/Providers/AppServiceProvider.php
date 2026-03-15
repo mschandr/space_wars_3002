@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\GalaxyVendorProfile;
+use App\Observers\GalaxyVendorProfileObserver;
 use App\Services\Contracts\ContractExpiryService;
 use App\Services\Contracts\ContractGenerationService;
 use App\Services\Contracts\ContractService;
@@ -76,6 +78,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        GalaxyVendorProfile::observe(GalaxyVendorProfileObserver::class);
     }
 }

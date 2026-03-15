@@ -109,36 +109,4 @@ class GalaxyVendorProfile extends Model
         return $personality[$traitName] ?? 0.5;  // Default to neutral
     }
 
-    /**
-     * Get dialogue from the template vendor profile's pool
-     * Returns a random line from the pool for that context, or fallback
-     */
-    public function getDialogue(string $context): string
-    {
-        $pool = $this->vendorProfile?->dialogue_pool ?? [];
-        $lines = $pool[$context] ?? [];
-
-        if (empty($lines)) {
-            return $this->getDefaultDialogue($context);
-        }
-
-        return $lines[array_rand($lines)];
-    }
-
-    /**
-     * Get default dialogue for common contexts
-     */
-    private function getDefaultDialogue(string $context): string
-    {
-        $name = $this->tradingPost?->name ?? 'Merchant';
-
-        return match ($context) {
-            'greeting' => "Welcome to {$name}.",
-            'deal_accepted' => 'Pleasure doing business with you.',
-            'deal_refused' => 'Your loss.',
-            'farewell' => 'Come again soon.',
-            'lockout' => 'I have nothing for you.',
-            default => 'Hmm?',
-        };
-    }
 }
