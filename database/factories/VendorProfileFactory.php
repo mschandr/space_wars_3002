@@ -43,15 +43,7 @@ class VendorProfileFactory extends Factory
             'archetype' => $archetype->value,
             'service_type' => fake()->randomElement(['trading_hub', 'salvage_yard', 'shipyard', 'market']),
             'criminality' => fake()->randomFloat(2, 0.0, 1.0),
-            'personality' => [
-                'honesty' => fake()->randomFloat(2, 0.1, 1.0),
-                'greed' => fake()->randomFloat(2, 0.1, 1.0),
-                'risk_tolerance' => fake()->randomFloat(2, 0.1, 1.0),
-                'charm' => fake()->randomFloat(2, 0.1, 1.0),
-                'ego_drive' => fake()->randomFloat(2, 0.1, 1.0),
-                'empathy' => fake()->randomFloat(2, 0.1, 1.0),
-                'curiosity' => fake()->randomFloat(2, 0.1, 1.0),
-            ],
+            'personality' => $archetype->generatePersonality(),
             'markup_base' => $archetype->baseMarkup(),
         ];
     }

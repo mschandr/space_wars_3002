@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\GalaxyVendorProfile;
 use App\Models\Player;
+use App\Models\TradingHub;
 use App\Models\VendorProfile;
 use App\Services\VendorProfileService;
 use Illuminate\Http\JsonResponse;
@@ -13,6 +15,60 @@ class VendorController extends BaseApiController
     public function __construct(
         private readonly VendorProfileService $vendorService
     ) {}
+
+    /**
+     * Get vendor for a specific trading hub
+     *
+     * GET /api/trading-hubs/{uuid}/vendor
+     */
+    public function showForHub(Request $request, string $hubUuid): JsonResponse
+    {
+        $hub = TradingHub::where('uuid', $hubUuid)->first();
+
+        if (! $hub) {
+            return $this->notFound('Trading hub not found');
+        }
+
+        $serviceType = $request->query('service_type', 'trading_hub');
+
+        $galaxyVendor = GalaxyVendorProfile::where('poi_id', $hub->poi_id)
+            ->where('service_type', $serviceType)
+            ->with('vendorProfile', 'tradingPost')
+            ->first();
+
+        if (! $galaxyVendor) {
+            return $this->notFound('No vendor at this trading hub');
+        }
+
+        $profile = $galaxyVendor->vendorProfile;
+        $player = $request->user()?->player ?? null;
+
+        $relationship = null;
+        $effectiveMarkup = null;
+
+        if ($player && $profile) {
+            $relationship = $this->vendorService->findRelationship($player, $profile);
+            $effectiveMarkup = $this->vendorService->getEffectiveMarkup($profile, $player);
+        }
+
+        return $this->success([
+            'uuid' => $galaxyVendor->uuid,
+            'name' => $profile?->name ?? $galaxyVendor->tradingPost?->name,
+            'archetype' => $profile?->archetype?->value,
+            'archetype_label' => $profile?->archetype?->label(),
+            'service_type' => $galaxyVendor->service_type,
+            'criminality' => (float) $galaxyVendor->criminality,
+            'relationship' => $relationship ? [
+                'markup_escalation_pct' => $effectiveMarkup,
+                'goodwill' => $relationship->goodwill,
+                'interaction_count' => $relationship->visit_count,
+                'is_locked_out' => $relationship->is_locked_out,
+                'locked_until' => $relationship->locked_until?->toIso8601String(),
+            ] : null,
+            'greeting' => $profile ? $this->vendorService->getDialogueLine($profile, 'greeting', $player) : null,
+            'dialogue_status' => $galaxyVendor->dialogue_generation_status,
+        ]);
+    }
 
     /**
      * Get vendor profile and player's relationship with them

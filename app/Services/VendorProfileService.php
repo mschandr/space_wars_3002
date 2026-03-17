@@ -109,7 +109,10 @@ class VendorProfileService
             'trading_hub'  => ['greeting' => 'Looking to trade?', 'farewell' => 'Safe travels.', 'deal_accepted' => 'Pleasure doing business.', 'deal_rejected' => 'Your decision.'],
             'salvage_yard' => ['greeting' => 'See anything worth salvaging?', 'farewell' => 'Try not to get yourself spaced.', 'deal_accepted' => 'Not a bad deal.', 'deal_rejected' => 'Your loss.'],
             'shipyard'     => ['greeting' => 'Looking for a new hull?', 'farewell' => 'Come back when you want something faster.', 'deal_accepted' => 'Fine choice.', 'deal_rejected' => 'Come back when you\'re ready.'],
-            'market'       => ['greeting' => 'Take a look around.', 'farewell' => 'Come again.', 'deal_accepted' => 'Good choice.', 'deal_rejected' => 'Suit yourself.'],
+            'market'             => ['greeting' => 'Take a look around.', 'farewell' => 'Come again.', 'deal_accepted' => 'Good choice.', 'deal_rejected' => 'Suit yourself.'],
+            'repair_yard'        => ['greeting' => 'What needs fixing?', 'farewell' => 'Try not to break anything else.', 'deal_accepted' => 'I\'ll have it running.', 'deal_rejected' => 'Your ship, your problem.'],
+            'bartender'          => ['greeting' => 'What are you having?', 'farewell' => 'Safe travels.', 'deal_accepted' => 'Enjoy.', 'deal_rejected' => 'Suit yourself.'],
+            'information_broker' => ['greeting' => 'Information has a price.', 'farewell' => 'Watch your back.', 'deal_accepted' => 'Use it wisely.', 'deal_rejected' => 'You\'ll wish you had bought it.'],
         ];
 
         return $fallbacks[$vendor->service_type][$context] ?? 'Hmph.';

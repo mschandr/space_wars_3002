@@ -53,6 +53,27 @@ class VendorDialogueService
             'deal_rejected' => 'Suit yourself.',
             'farewell' => 'Come again.',
         ],
+        'repair_yard' => [
+            'greeting'         => 'What needs fixing?',
+            'inventory_pitch'  => 'I have the parts you need.',
+            'deal_accepted'    => 'I\'ll have it running.',
+            'deal_rejected'    => 'Your ship, your problem.',
+            'farewell'         => 'Try not to break anything else.',
+        ],
+        'bartender' => [
+            'greeting'         => 'What are you having?',
+            'inventory_pitch'  => 'I might know something about that.',
+            'deal_accepted'    => 'Enjoy.',
+            'deal_rejected'    => 'Suit yourself.',
+            'farewell'         => 'Safe travels.',
+        ],
+        'information_broker' => [
+            'greeting'         => 'Information has a price.',
+            'inventory_pitch'  => 'I have what you\'re looking for.',
+            'deal_accepted'    => 'Use it wisely.',
+            'deal_rejected'    => 'You\'ll wish you had bought it.',
+            'farewell'         => 'Watch your back.',
+        ],
     ];
 
     /**

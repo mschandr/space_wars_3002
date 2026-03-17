@@ -43,41 +43,63 @@ class GalaxyVendorProfileSeeder extends Seeder
             }
 
             foreach ($tradingHubPois as $poi) {
-                // Skip if vendor already exists at this POI in this galaxy
-                if (GalaxyVendorProfile::where('galaxy_id', $galaxy->id)
-                    ->where('poi_id', $poi->id)
-                    ->exists()) {
-                    continue;
+                $hub = $poi->tradingHub;
+
+                // Determine which shop types are present at this hub
+                $serviceTypes = ['trading_hub'];
+                if ($hub->has_salvage_yard) {
+                    $serviceTypes[] = 'salvage_yard';
+                }
+                if ($hub->hasShipyard()) {
+                    $serviceTypes[] = 'shipyard';
+                }
+                if (rand(1, 100) <= 80) {
+                    $serviceTypes[] = 'repair_yard';
+                }
+                if (rand(1, 100) <= 70) {
+                    $serviceTypes[] = 'bartender';
+                }
+                if (rand(1, 100) <= 30) {
+                    $serviceTypes[] = 'information_broker';
                 }
 
-                try {
-                    // Pick random vendor profile from global pool
-                    $vendorProfile = $vendorProfiles->random();
+                foreach ($serviceTypes as $serviceType) {
+                    // Skip if vendor already exists for this shop type at this POI
+                    if (GalaxyVendorProfile::where('galaxy_id', $galaxy->id)
+                        ->where('poi_id', $poi->id)
+                        ->where('service_type', $serviceType)
+                        ->exists()) {
+                        continue;
+                    }
 
-                    // Pick a trading post (for default dialogue fallback)
-                    $tradingPost = TradingPost::where('service_type', 'trading_hub')
-                        ->inRandomOrder()
-                        ->first();
+                    try {
+                        // Pick a vendor profile matching the shop type from the global pool
+                        $vendorProfile = $vendorProfiles->where('service_type', $serviceType)->random()
+                            ?? $vendorProfiles->random();
 
-                    // Criminality with variation
-                    $criminality = max(0, min(1, $vendorProfile->criminality + random_int(-5, 5) / 100));
+                        $tradingPost = TradingPost::where('service_type', $serviceType)
+                            ->inRandomOrder()
+                            ->first();
 
-                    GalaxyVendorProfile::create([
-                        'uuid' => \Illuminate\Support\Str::uuid(),
-                        'galaxy_id' => $galaxy->id,
-                        'poi_id' => $poi->id,
-                        'vendor_profile_id' => $vendorProfile->id,
-                        'trading_post_id' => $tradingPost?->id,
-                        'service_type' => $vendorProfile->service_type,
-                        'criminality' => $criminality,
-                        'dialogue_generation_status' => 'pending',
-                        'dialogue_generation_version' => 1,
-                        'dialogue_generated_at' => null,
-                    ]);
+                        $criminality = max(0, min(1, $vendorProfile->criminality + random_int(-5, 5) / 100));
 
-                    $totalCreated++;
-                } catch (\Exception $e) {
-                    $this->command->error("    Error creating vendor for {$poi->name}: {$e->getMessage()}");
+                        GalaxyVendorProfile::create([
+                            'uuid' => \Illuminate\Support\Str::uuid(),
+                            'galaxy_id' => $galaxy->id,
+                            'poi_id' => $poi->id,
+                            'vendor_profile_id' => $vendorProfile->id,
+                            'trading_post_id' => $tradingPost?->id,
+                            'service_type' => $serviceType,
+                            'criminality' => $criminality,
+                            'dialogue_generation_status' => 'pending',
+                            'dialogue_generation_version' => 1,
+                            'dialogue_generated_at' => null,
+                        ]);
+
+                        $totalCreated++;
+                    } catch (\Exception $e) {
+                        $this->command->error("    Error creating {$serviceType} vendor for {$poi->name}: {$e->getMessage()}");
+                    }
                 }
             }
         }

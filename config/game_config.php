@@ -216,10 +216,28 @@ return [
      * |--------------------------------------------------------------------------
      */
     'victory' => [
-        'merchant_credits' => 1_000_000_000, // credits to win as Merchant Empire
-        'colonization_share' => 0.5,           // 50% of galactic population
-        'conquest_share' => 0.6,           // 60% of systems controlled
-        'pirate_power' => 0.7,           // 70% of outlaw hubs seized
+        'merchant_credits' => 1_000_000_000_000, // 1 trillion credits to win as Merchant Empire
+        'colonization_share' => 0.5,              // 50% of galactic population
+        'conquest_share' => 0.6,                  // 60% of systems controlled
+        'pirate_power' => 0.7,                    // 70% of outlaw hubs seized
+    ],
+
+    /**
+     * |--------------------------------------------------------------------------
+     * | Galactic Betting Market (ADR-0008)
+     * |--------------------------------------------------------------------------
+     * | Jeraptha-operated betting markets on simulation events.
+     * | House commission is an economic sink; all wagers go into escrow immediately.
+     */
+    'betting' => [
+        'max_wager'         => 100_000,   // maximum credits per single bet
+        'house_commission'  => 0.02,      // 2% house take deducted at resolution
+        'max_active_bets'   => 50,        // maximum open bets per player
+        'min_odds'          => 1.05,      // floor odds (decimal multiplier)
+        'max_odds'          => 25.00,     // ceiling odds (decimal multiplier)
+        'sim_weight_floor'  => 0.30,      // minimum simulation influence on blended odds
+        'intel_shift_max'   => 0.15,      // max probability shift per intelligence event
+        'npc_tick_interval' => 300,       // seconds between NPC bet ticks (betting:tick-npcs)
     ],
 
     /**

@@ -33,11 +33,11 @@ class GalaxyInitialize extends Command
      */
     protected $signature = 'galaxy:initialize
                             {name? : The name of the galaxy (auto-generated if not provided)}
-                            {--width=1000 : Width of the galaxy}
-                            {--height=1000 : Height of the galaxy}
-                            {--stars=1000 : Number of stars to generate}
+                            {--width=2500 : Width of the galaxy}
+                            {--height=2500 : Height of the galaxy}
+                            {--stars=1250 : Number of stars to generate}
                             {--density=scatter : Distribution method (scatter, poisson, cluster)}
-                            {--grid-size=10 : Sector grid size (default 10x10)}
+                            {--grid-size=20 : Sector grid size (default 20x20)}
                             {--skip-gates : Skip warp gate generation}
                             {--skip-pirates : Skip pirate distribution (enabled by default)}
                             {--skip-inventory : Skip trading hub inventory population}

@@ -46,6 +46,7 @@ use App\Http\Controllers\Api\ShipyardController;
 use App\Http\Controllers\Api\StarSystemController;
 use App\Http\Controllers\Api\TeamCombatController;
 use App\Http\Controllers\Api\TradingController;
+use App\Http\Controllers\Api\VendorController;
 use App\Http\Controllers\Api\VendorDialogueController;
 use App\Http\Controllers\Api\TradingTransactionController;
 use App\Http\Controllers\Api\TravelCalculationController;
@@ -295,6 +296,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Trading history routes
     Route::get('players/{playerUuid}/price-history', [TradingController::class, 'getPriceHistory']);
     Route::get('players/{playerUuid}/trade-log', [TradingController::class, 'getTradeLog']);
+
+    // Vendor routes
+    Route::get('trading-hubs/{uuid}/vendor', [VendorController::class, 'showForHub']);
+    Route::get('vendors/{vendorUuid}', [VendorController::class, 'show']);
+    Route::post('vendors/{vendorUuid}/interact', [VendorController::class, 'interact']);
 
     // Vendor dialogue routes
     Route::get('players/{playerUuid}/vendors/{vendorUuid}/dialogue', [VendorDialogueController::class, 'index']);

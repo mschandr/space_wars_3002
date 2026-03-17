@@ -58,23 +58,6 @@ class TradingPostFactory extends Factory
                 'charm' => fake()->randomFloat(2, 0.1, 1.0),
                 'risk_tolerance' => fake()->randomFloat(2, 0.1, 1.0),
             ],
-            'dialogue_pool' => [
-                'greeting' => [
-                    "Welcome to {$name}.",
-                    "Looking for something?",
-                    "Come in, don't be shy.",
-                ],
-                'deal_accepted' => [
-                    "Pleasure doing business.",
-                    "Great choice.",
-                    "Thank you for your patronage.",
-                ],
-                'farewell' => [
-                    "Come again soon.",
-                    "Safe travels.",
-                    "Until next time.",
-                ],
-            ],
             'markup_base' => match ($serviceType) {
                 'trading_hub' => fake()->randomFloat(4, -0.05, 0.15),
                 'salvage_yard' => fake()->randomFloat(4, 0.20, 0.40),  // Higher margins
